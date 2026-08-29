@@ -39,6 +39,7 @@ public partial class CartLineViewModel(ProductVariant variant) : ObservableObjec
 {
     public ProductVariant Variant { get; } = variant;
     public string Label => string.Join(" - ", new[] { Variant.Product?.Name, Variant.Color, Variant.Size }.Where(x => !string.IsNullOrWhiteSpace(x)));
+    public IReadOnlyList<string> DiscountKindLabels { get; } = ["Aucune", "%", "FCFA"];
     public long UnitPriceXof
     {
         get
@@ -48,8 +49,22 @@ public partial class CartLineViewModel(ProductVariant variant) : ObservableObjec
         }
     }
     [ObservableProperty] private decimal quantity = 1;
-    public long TotalXof => decimal.ToInt64(Quantity * UnitPriceXof);
-    partial void OnQuantityChanged(decimal value) => OnPropertyChanged(nameof(TotalXof));
+    [ObservableProperty] private string discountKindLabel = "Aucune";
+    [ObservableProperty] private decimal discountValue;
+    public DiscountKind EffectiveDiscountKind => DiscountKindLabel switch { "%" => DiscountKind.Percentage, "FCFA" => DiscountKind.Amount, _ => DiscountKind.None };
+    public long GrossXof => decimal.ToInt64(Quantity * UnitPriceXof);
+    public long DiscountAmountXof => GrossXof - TotalXof;
+    public long TotalXof
+    {
+        get
+        {
+            try { return GrossXof - BusinessRules.CalculateDiscount(GrossXof, EffectiveDiscountKind, DiscountValue); }
+            catch { return GrossXof; }
+        }
+    }
+    partial void OnQuantityChanged(decimal value) { OnPropertyChanged(nameof(TotalXof)); OnPropertyChanged(nameof(GrossXof)); OnPropertyChanged(nameof(DiscountAmountXof)); }
+    partial void OnDiscountKindLabelChanged(string value) { OnPropertyChanged(nameof(TotalXof)); OnPropertyChanged(nameof(DiscountAmountXof)); }
+    partial void OnDiscountValueChanged(decimal value) { OnPropertyChanged(nameof(TotalXof)); OnPropertyChanged(nameof(DiscountAmountXof)); }
 }
 
 public partial class PaymentLineViewModel : ObservableObject { public IReadOnlyList<PaymentMode> Modes { get; } = Enum.GetValues<PaymentMode>(); [ObservableProperty] private PaymentMode mode = PaymentMode.Cash; [ObservableProperty] private long amountXof; [ObservableProperty] private string reference = string.Empty; }
@@ -125,7 +140,7 @@ public partial class SaleViewModel(ICatalogService catalog, ICustomerService cus
             var hasCredit = paymentDrafts.Any(x => x.Mode == PaymentMode.Credit);
             var key = Guid.NewGuid().ToString("N");
             DateTimeOffset? creditDue = hasCredit ? DateTimeOffset.Parse(CreditDueDate) : null;
-            var draft = new SaleDraft(key, Cart.Select(x => new SaleLineDraft(x.Variant.Id, x.Quantity)).ToArray(), paymentDrafts, SelectedCustomer?.Id, DiscountPercent == 0 ? DiscountKind.None : DiscountKind.Percentage, DiscountPercent, DiscountReason, ManagerPin, creditDue,
+            var draft = new SaleDraft(key, Cart.Select(x => new SaleLineDraft(x.Variant.Id, x.Quantity, x.EffectiveDiscountKind, x.DiscountValue)).ToArray(), paymentDrafts, SelectedCustomer?.Id, DiscountPercent == 0 ? DiscountKind.None : DiscountKind.Percentage, DiscountPercent, DiscountReason, ManagerPin, creditDue,
                 SelectedCustomer is null ? NullIfEmpty(NewCustomerName) : null,
                 SelectedCustomer is null ? NullIfEmpty(NewCustomerPhone) : null);
             var result = await sales.CreateAsync(draft);

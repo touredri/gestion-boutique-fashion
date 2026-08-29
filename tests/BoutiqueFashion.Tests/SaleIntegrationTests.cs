@@ -229,6 +229,14 @@ public sealed class SaleIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Line_discount_and_global_discount_combine_correctly()
+    {
+        var variant = await provider.GetRequiredService<ICatalogService>().CreateVariantAsync("Robe remise", "Vêtements", "ROB-R", null, "M", "Rouge", 10_000, 20_000, 5, 0);
+        var result = await provider.GetRequiredService<ISaleService>().CreateAsync(new SaleDraft("remises", [new SaleLineDraft(variant.Id, 2, DiscountKind.Amount, 5_000)], [new PaymentDraft(PaymentMode.Cash, 31_500)], DiscountKind: DiscountKind.Percentage, DiscountValue: 10));
+        Assert.Equal(31_500, result.TotalXof);
+    }
+
+    [Fact]
     public async Task Rotation_report_puts_dormant_articles_first()
     {
         var catalog = provider.GetRequiredService<ICatalogService>();
