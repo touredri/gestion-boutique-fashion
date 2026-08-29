@@ -70,7 +70,7 @@
             </Grid>
             <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/><ColumnDefinition Width="104"/></Grid.ColumnDefinitions>
               <StackPanel><TextBlock Text="Échéance crédit" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding CreditDueDate}" ToolTip="AAAA-MM-JJ"/></StackPanel>
-              <StackPanel Grid.Column="1"><TextBlock Text="Imprimante ticket" Style="{StaticResource FieldLabel}"/><ComboBox ItemsSource="{Binding Printers}" SelectedItem="{Binding SelectedPrinter}" DisplayMemberPath="Name"/></StackPanel>
+              <StackPanel Grid.Column="1"><TextBlock Text="Imprimante externe" Style="{StaticResource FieldLabel}"/><ComboBox ItemsSource="{Binding Printers}" SelectedItem="{Binding SelectedPrinter}" DisplayMemberPath="Name"/></StackPanel>
               <StackPanel Grid.Column="2"><TextBlock Text="PIN" Style="{StaticResource FieldLabel}"/><PasswordBox PasswordChanged="PinBox_OnPasswordChanged" AutomationProperties.Name="PIN responsable"/></StackPanel>
             </Grid>
             <Button Content="Encaisser et imprimer" Command="{Binding CompleteCommand}" Style="{StaticResource PrimaryButton}" Margin="4,8,4,4" MinHeight="56" FontSize="16"/>

@@ -61,7 +61,7 @@ public partial class SaleViewModel(ICatalogService catalog, ICustomerService cus
     public ObservableCollection<CustomerRow> Customers { get; } = [];
     public ObservableCollection<PaymentLineViewModel> Payments { get; } = [];
     public IReadOnlyList<PaymentMode> PaymentModes { get; } = Enum.GetValues<PaymentMode>();
-    public IReadOnlyList<PrinterProfile> Printers { get; } = printerService.Discover();
+    public ObservableCollection<PrinterProfile> Printers { get; } = [];
     [ObservableProperty] private string search = string.Empty;
     [ObservableProperty] private PaymentMode selectedPaymentMode = PaymentMode.Cash;
     [ObservableProperty] private PrinterProfile? selectedPrinter;
@@ -88,6 +88,10 @@ public partial class SaleViewModel(ICatalogService catalog, ICustomerService cus
     {
         var items = await catalog.SearchAsync(Search); Products.Clear(); foreach (var item in items) Products.Add(item);
         await RefreshCustomersAsync();
+        Printers.Clear();
+        foreach (var p in printerService.Discover()) Printers.Add(p);
+        var tcp = await settings.GetAsync("Printer.Tcp");
+        if (!string.IsNullOrWhiteSpace(tcp)) Printers.Add(new PrinterProfile($"Thermique réseau {tcp}", PrinterConnectionKind.TcpIp, tcp, PaperWidth.Mm80));
         if (SelectedPrinter is null) { var saved = await settings.GetAsync("Printer.Selected"); SelectedPrinter = saved is null ? Printers.FirstOrDefault() : JsonSerializer.Deserialize<PrinterProfile>(saved); }
     }
 
@@ -457,8 +461,11 @@ public partial class ReportsViewModel(IReportService reports) : ObservableObject
 
 public partial class SettingsViewModel(IAuthorizationService authorization, IAppSettingsService settings, IBackupService backup, IThermalPrinterService printer, IDocumentService documents, IA4DocumentService a4) : ObservableObject, ILoadable
 {
-    public IReadOnlyList<PrinterProfile> Printers { get; } = printer.Discover();
+    public ObservableCollection<PrinterProfile> Printers { get; } = [];
     public IReadOnlyList<DocumentType> DocumentTypes { get; } = Enum.GetValues<DocumentType>();
+    public IReadOnlyList<string> Styles { get; } = ["Classique", "Moderne", "Minimal"];
+    [ObservableProperty] private string selectedStyle = "Moderne";
+    [ObservableProperty] private string networkPrinter = "";
     [ObservableProperty] private PrinterProfile? selectedPrinter;
     [ObservableProperty] private string shopName = string.Empty; [ObservableProperty] private string pin = string.Empty; [ObservableProperty] private string newPin = string.Empty; [ObservableProperty] private string status = string.Empty;
     [ObservableProperty] private string address = ""; [ObservableProperty] private string phone = ""; [ObservableProperty] private string email = ""; [ObservableProperty] private string taxId = ""; [ObservableProperty] private string slogan = ""; [ObservableProperty] private string footer = "Merci de votre visite"; [ObservableProperty] private string returnPolicy = "Échange ou avoir sous 7 jours"; [ObservableProperty] private string logoPath = ""; [ObservableProperty] private string stampPath = ""; [ObservableProperty] private string signaturePath = "";
@@ -473,8 +480,33 @@ public partial class SettingsViewModel(IAuthorizationService authorization, IApp
         SeqReceipt = await settings.GetAsync($"Seq.{DocumentType.Receipt}") ?? SeqReceipt; SeqInvoice = await settings.GetAsync($"Seq.{DocumentType.Invoice}") ?? SeqInvoice; SeqProforma = await settings.GetAsync($"Seq.{DocumentType.Proforma}") ?? SeqProforma; SeqDeposit = await settings.GetAsync($"Seq.{DocumentType.DepositReceipt}") ?? SeqDeposit; SeqCreditPayment = await settings.GetAsync($"Seq.{DocumentType.CreditPaymentReceipt}") ?? SeqCreditPayment; SeqBalance = await settings.GetAsync($"Seq.{DocumentType.BalanceReceipt}") ?? SeqBalance; SeqCreditNote = await settings.GetAsync($"Seq.{DocumentType.CreditNote}") ?? SeqCreditNote; SeqReturnNote = await settings.GetAsync($"Seq.{DocumentType.ReturnNote}") ?? SeqReturnNote;
         VarianceTolerance = await settings.GetAsync("Cash.VarianceToleranceXof") ?? VarianceTolerance;
         VipRevenue = await settings.GetAsync("Loyalty.VipRevenueXof") ?? VipRevenue; LoyalPurchases = await settings.GetAsync("Loyalty.LoyalPurchases") ?? LoyalPurchases; InactiveDays = await settings.GetAsync("Loyalty.InactiveDays") ?? InactiveDays; NewDays = await settings.GetAsync("Loyalty.NewDays") ?? NewDays;
+        await LoadPrintersAsync();
         var saved = await settings.GetAsync("Printer.Selected"); SelectedPrinter = saved is null ? Printers.FirstOrDefault() : JsonSerializer.Deserialize<PrinterProfile>(saved);
+        NetworkPrinter = await settings.GetAsync("Printer.Tcp") ?? "";
         await LoadFlagsAsync();
+    }
+
+    private async Task LoadPrintersAsync()
+    {
+        Printers.Clear();
+        foreach (var p in printer.Discover()) Printers.Add(p);
+        var tcp = await settings.GetAsync("Printer.Tcp");
+        if (!string.IsNullOrWhiteSpace(tcp)) Printers.Add(new PrinterProfile($"Thermique réseau {tcp}", PrinterConnectionKind.TcpIp, tcp, PaperWidth.Mm80));
+    }
+
+    [RelayCommand] private async Task AddNetworkPrinter()
+    {
+        try
+        {
+            var address = NetworkPrinter.Trim();
+            var parts = address.Split(':');
+            if (string.IsNullOrWhiteSpace(parts[0]) || (parts.Length > 1 && !int.TryParse(parts[1], out _))) throw new FormatException();
+            await settings.SetAsync("Printer.Tcp", address);
+            await LoadPrintersAsync();
+            SelectedPrinter = Printers.FirstOrDefault(x => x.ConnectionKind == PrinterConnectionKind.TcpIp);
+            Status = $"Imprimante externe {address} ajoutée";
+        }
+        catch { Status = "Adresse invalide. Format attendu : 192.168.1.50 ou 192.168.1.50:9100"; }
     }
 
     partial void OnSelectedDocTypeChanged(DocumentType value) => _ = LoadFlagsAsync();
@@ -487,6 +519,8 @@ public partial class SettingsViewModel(IAuthorizationService authorization, IApp
             FlagSlogan = (await settings.GetAsync($"Doc.{SelectedDocType}.Slogan") ?? "1") == "1";
             FlagStamp = (await settings.GetAsync($"Doc.{SelectedDocType}.Stamp") ?? "1") == "1";
             FlagSignature = (await settings.GetAsync($"Doc.{SelectedDocType}.Signature") ?? "1") == "1";
+            var style = await settings.GetAsync($"Doc.{SelectedDocType}.Style") ?? "Moderne";
+            SelectedStyle = Styles.Contains(style) ? style : "Moderne";
         }
         catch { }
     }
@@ -502,7 +536,7 @@ public partial class SettingsViewModel(IAuthorizationService authorization, IApp
                 {"Shop.Name", ShopName}, {"Shop.Address", Address}, {"Shop.Phone", Phone}, {"Shop.Email", Email}, {"Shop.TaxId", TaxId}, {"Shop.Slogan", Slogan}, {"Shop.Footer", Footer}, {"Shop.ReturnPolicy", ReturnPolicy}, {"Shop.Logo", LogoPath}, {"Shop.Stamp", StampPath}, {"Shop.Signature", SignaturePath},
                 {$"Seq.{DocumentType.Receipt}", SeqReceipt}, {$"Seq.{DocumentType.Invoice}", SeqInvoice}, {$"Seq.{DocumentType.Proforma}", SeqProforma}, {$"Seq.{DocumentType.DepositReceipt}", SeqDeposit}, {$"Seq.{DocumentType.CreditPaymentReceipt}", SeqCreditPayment}, {$"Seq.{DocumentType.BalanceReceipt}", SeqBalance}, {$"Seq.{DocumentType.CreditNote}", SeqCreditNote}, {$"Seq.{DocumentType.ReturnNote}", SeqReturnNote},
                 {"Cash.VarianceToleranceXof", VarianceTolerance}, {"Loyalty.VipRevenueXof", VipRevenue}, {"Loyalty.LoyalPurchases", LoyalPurchases}, {"Loyalty.InactiveDays", InactiveDays}, {"Loyalty.NewDays", NewDays},
-                {$"Doc.{SelectedDocType}.Logo", FlagLogo ? "1" : "0"}, {$"Doc.{SelectedDocType}.Slogan", FlagSlogan ? "1" : "0"}, {$"Doc.{SelectedDocType}.Stamp", FlagStamp ? "1" : "0"}, {$"Doc.{SelectedDocType}.Signature", FlagSignature ? "1" : "0"}
+                {$"Doc.{SelectedDocType}.Logo", FlagLogo ? "1" : "0"}, {$"Doc.{SelectedDocType}.Slogan", FlagSlogan ? "1" : "0"}, {$"Doc.{SelectedDocType}.Stamp", FlagStamp ? "1" : "0"}, {$"Doc.{SelectedDocType}.Signature", FlagSignature ? "1" : "0"}, {$"Doc.{SelectedDocType}.Style", SelectedStyle}
             };
             foreach (var pair in values) await settings.SetAsync(pair.Key, pair.Value);
             if (SelectedPrinter is not null) await settings.SetAsync("Printer.Selected", JsonSerializer.Serialize(SelectedPrinter));
