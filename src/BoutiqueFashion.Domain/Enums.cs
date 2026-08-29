@@ -11,6 +11,8 @@ public enum CashSessionStatus { Open, Closed }
 public enum DocumentType { Receipt, Invoice, Proforma, PaymentReceipt, DepositReceipt, CreditPaymentReceipt, BalanceReceipt, CreditNote, ReturnNote }
 public enum CustomerSegment { New, Active, Loyal, Vip, Inactive, Debtor }
 public enum PrintJobStatus { Pending, Printing, Completed, Failed }
-public enum PrinterConnectionKind { WindowsQueue, SerialPort }
+public enum PrinterConnectionKind { WindowsQueue, SerialPort, TcpIp }
 public enum PaperWidth { Mm58 = 58, Mm80 = 80 }
+public enum DocumentStyle { Classique, Moderne, Minimal }
+public enum PurchaseOrderStatus { Open, Closed }
 

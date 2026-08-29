@@ -202,4 +202,43 @@ public sealed class SaleIntegrationTests : IAsyncLifetime
         Assert.Equal(CustomerSegment.New, rows.Single(x => x.Name == "Fatou").Segment);
         Assert.Equal(CustomerSegment.Debtor, rows.Single(x => x.Name == "Idriss").Segment);
     }
+
+    [Fact]
+    public async Task Purchase_order_reception_tracks_expected_vs_received()
+    {
+        var variant = await provider.GetRequiredService<ICatalogService>().CreateVariantAsync("Chemise réception", "Vêtements", "REC-01", null, "M", "Blanc", 8_000, 15_000, 0, 1);
+        var purchases = provider.GetRequiredService<IPurchaseService>();
+        await purchases.CreateOrderAsync("Fournisseur A", [new PurchaseLineDraft(variant.Id, 10)]);
+        var open = await purchases.ListOpenAsync();
+        var line = open.Single();
+        Assert.Equal(10, line.Expected);
+        await purchases.ReceiveAsync(line.LineId, 8, 9_000);
+        Assert.Equal(8, (await provider.GetRequiredService<ICatalogService>().SearchAsync("REC-01")).Single().QuantityOnHand);
+        var remaining = await purchases.ListOpenAsync();
+        Assert.Equal(8, remaining.Single().Received);
+        await purchases.ReceiveAsync(remaining.Single().LineId, 2);
+        Assert.Empty(await purchases.ListOpenAsync());
+    }
+
+    [Fact]
+    public async Task Price_below_cost_requires_manager_pin()
+    {
+        var catalog = provider.GetRequiredService<ICatalogService>();
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => catalog.CreateVariantAsync("Bradé", "Vêtements", "BRA-01", null, null, null, 10_000, 5_000, 1, 0));
+        var created = await catalog.CreateVariantAsync("Bradé", "Vêtements", "BRA-01", null, null, null, 10_000, 5_000, 1, 0, managerPin: "123456");
+        Assert.Equal(5_000, created.PriceXof);
+    }
+
+    [Fact]
+    public async Task Rotation_report_puts_dormant_articles_first()
+    {
+        var catalog = provider.GetRequiredService<ICatalogService>();
+        var active = await catalog.CreateVariantAsync("Tourne", "Vêtements", "TOU-01", null, "M", "Noir", 5_000, 10_000, 3, 0);
+        await catalog.CreateVariantAsync("Dort", "Vêtements", "DOR-01", null, "M", "Noir", 5_000, 10_000, 3, 0);
+        await provider.GetRequiredService<ISaleService>().CreateAsync(new SaleDraft("rotation", [new SaleLineDraft(active.Id, 2)], [new PaymentDraft(PaymentMode.Cash, 20_000)]));
+        var rows = await provider.GetRequiredService<IReportService>().RotationAsync(DateTimeOffset.Now.AddDays(-1), DateTimeOffset.Now.AddDays(1));
+        Assert.Equal("Dort · DOR-01", rows[0].Label);
+        Assert.Equal(0, rows[0].Quantity);
+        Assert.True(rows.Single(x => x.Label == "Tourne · TOU-01").Quantity > 0);
+    }
 }

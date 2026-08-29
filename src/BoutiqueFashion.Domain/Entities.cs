@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace BoutiqueFashion.Domain;
 
@@ -37,6 +38,8 @@ public sealed class ProductImage : Entity
 {
     public Guid ProductId { get; set; }
     public Product? Product { get; set; }
+    public Guid? VariantId { get; set; }
+    public ProductVariant? Variant { get; set; }
     [MaxLength(500)] public string RelativePath { get; set; } = string.Empty;
     public bool IsPrimary { get; set; }
 }
@@ -62,6 +65,9 @@ public sealed class ProductVariant : Entity
     public decimal LowStockThreshold { get; set; }
     public bool IsActive { get; set; } = true;
     public ICollection<StockMovement> StockMovements { get; set; } = [];
+    public ICollection<ProductImage> Images { get; set; } = [];
+    [NotMapped] public string? PrimaryImagePath => Images?.FirstOrDefault(x => x.IsPrimary)?.RelativePath ?? Images?.FirstOrDefault()?.RelativePath ?? Product?.PrimaryImagePath;
+    [NotMapped] public long MarginXof => PriceXof - CostXof;
 }
 
 public sealed class StockMovement : Entity
@@ -183,6 +189,24 @@ public sealed class Expense : Entity
     public long AmountXof { get; set; }
     public PaymentMode Mode { get; set; }
     [MaxLength(500)] public string? ReceiptPath { get; set; }
+}
+
+public sealed class PurchaseOrder : Entity
+{
+    [MaxLength(160)] public string Supplier { get; set; } = string.Empty;
+    [MaxLength(500)] public string? Note { get; set; }
+    public PurchaseOrderStatus Status { get; set; } = PurchaseOrderStatus.Open;
+    public ICollection<PurchaseOrderLine> Lines { get; set; } = [];
+}
+
+public sealed class PurchaseOrderLine : Entity
+{
+    public Guid PurchaseOrderId { get; set; }
+    public PurchaseOrder? Order { get; set; }
+    public Guid VariantId { get; set; }
+    public ProductVariant? Variant { get; set; }
+    public decimal ExpectedQuantity { get; set; }
+    public decimal ReceivedQuantity { get; set; }
 }
 
 public sealed class DocumentSnapshot : Entity

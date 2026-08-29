@@ -10,7 +10,7 @@ public sealed class CatalogService(IDbContextFactory<BoutiqueDbContext> factory,
     public async Task<IReadOnlyList<ProductVariant>> SearchAsync(string? query, CancellationToken cancellationToken = default)
     {
         await using var db = await factory.CreateDbContextAsync(cancellationToken);
-        var variants = db.ProductVariants.AsNoTracking().Include(x => x.Product).ThenInclude(x => x!.Category).Include(x => x.Product!.Images).Where(x => x.IsActive && x.Product!.IsActive);
+        var variants = db.ProductVariants.AsNoTracking().Include(x => x.Product).ThenInclude(x => x!.Category).Include(x => x.Product!.Images).Include(x => x.Images).Where(x => x.IsActive && x.Product!.IsActive);
         if (!string.IsNullOrWhiteSpace(query))
         {
             var term = query.Trim();
@@ -19,10 +19,12 @@ public sealed class CatalogService(IDbContextFactory<BoutiqueDbContext> factory,
         return await variants.OrderBy(x => x.Product!.Name).ThenBy(x => x.Size).Take(250).ToListAsync(cancellationToken);
     }
 
-    public async Task<ProductVariant> CreateVariantAsync(string productName, string categoryName, string sku, string? barcode, string? size, string? color, long costXof, long priceXof, decimal initialQuantity, decimal alertThreshold, CancellationToken cancellationToken = default, string? subCategory = null, string? gender = null, string? season = null, string? material = null, string? location = null, string? supplier = null, ProductType type = ProductType.Clothing)
+    public async Task<ProductVariant> CreateVariantAsync(string productName, string categoryName, string sku, string? barcode, string? size, string? color, long costXof, long priceXof, decimal initialQuantity, decimal alertThreshold, CancellationToken cancellationToken = default, string? subCategory = null, string? gender = null, string? season = null, string? material = null, string? location = null, string? supplier = null, ProductType type = ProductType.Clothing, string? description = null, string? photoPath = null, string? managerPin = null)
     {
         if (string.IsNullOrWhiteSpace(productName) || string.IsNullOrWhiteSpace(sku)) throw new ArgumentException("Le produit et le SKU sont obligatoires.");
         if (costXof < 0 || priceXof < 0) throw new ArgumentOutOfRangeException(nameof(priceXof));
+        if (priceXof < costXof && (managerPin is null || !await authorization.AuthorizeSensitiveActionAsync(managerPin, "Prix de vente inférieur au coût", cancellationToken: cancellationToken)))
+            throw new UnauthorizedAccessException("Prix inférieur au coût d'achat : PIN responsable requis.");
         await using var db = await factory.CreateDbContextAsync(cancellationToken);
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
         if (await db.ProductVariants.AnyAsync(x => x.Sku == sku || (barcode != null && x.Barcode == barcode), cancellationToken))
@@ -32,15 +34,22 @@ public sealed class CatalogService(IDbContextFactory<BoutiqueDbContext> factory,
         var product = await db.Products.SingleOrDefaultAsync(x => x.Name == productName && x.CategoryId == category.Id, cancellationToken);
         if (product is null)
         {
-            product = new Product { Name = productName.Trim(), Category = category, CategoryId = category.Id, SubCategory = subCategory, Gender = gender, Season = season, Type = type };
+            product = new Product { Name = productName.Trim(), Category = category, CategoryId = category.Id, SubCategory = subCategory, Gender = gender, Season = season, Type = type, Description = description };
             db.Products.Add(product);
         }
         else
         {
-            product.SubCategory ??= subCategory; product.Gender ??= gender; product.Season ??= season; product.Type = type;
+            product.SubCategory ??= subCategory; product.Gender ??= gender; product.Season ??= season; product.Type = type; product.Description ??= description;
         }
         var variant = new ProductVariant { Product = product, ProductId = product.Id, Sku = sku.Trim(), Barcode = string.IsNullOrWhiteSpace(barcode) ? null : barcode.Trim(), Size = size, Color = color, Material = material, Location = location, Supplier = supplier, CostXof = costXof, PriceXof = priceXof, QuantityOnHand = initialQuantity, WeightedAverageCostXof = costXof, LowStockThreshold = alertThreshold };
         db.ProductVariants.Add(variant);
+        if (!string.IsNullOrWhiteSpace(photoPath) && File.Exists(photoPath))
+        {
+            var extension = Path.GetExtension(photoPath);
+            var destination = Path.Combine(paths.Assets, $"variant-{variant.Id:N}-{Guid.NewGuid():N}{extension}");
+            File.Copy(photoPath, destination);
+            db.ProductImages.Add(new ProductImage { ProductId = product.Id, VariantId = variant.Id, RelativePath = destination, IsPrimary = true });
+        }
         if (initialQuantity != 0)
             db.StockMovements.Add(new StockMovement { Variant = variant, VariantId = variant.Id, Type = StockMovementType.Inventory, QuantityDelta = initialQuantity, UnitCostXof = costXof, Reason = "Stock initial", SourceType = "InitialInventory", Actor = "Responsable" });
         db.AuditEntries.Add(new AuditEntry { Actor = "Responsable", Action = "Créer variante", EntityType = nameof(ProductVariant), EntityId = variant.Id.ToString(), AfterJson = JsonSerializer.Serialize(new { sku, productName }) });
@@ -53,6 +62,8 @@ public sealed class CatalogService(IDbContextFactory<BoutiqueDbContext> factory,
     {
         if (string.IsNullOrWhiteSpace(draft.ProductName) || string.IsNullOrWhiteSpace(draft.SkuPrefix)) throw new ArgumentException("Le produit et le préfixe SKU sont obligatoires.");
         if (draft.Colors.Count == 0 || draft.Sizes.Count == 0) throw new ArgumentException("La matrice requiert au moins une couleur et une taille.");
+        if (draft.PriceXof < draft.CostXof && (draft.ManagerPin is null || !await authorization.AuthorizeSensitiveActionAsync(draft.ManagerPin, "Prix de vente inférieur au coût", cancellationToken: cancellationToken)))
+            throw new UnauthorizedAccessException("Prix inférieur au coût d'achat : PIN responsable requis.");
         await using var db = await factory.CreateDbContextAsync(cancellationToken);
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
         var category = await db.Categories.SingleOrDefaultAsync(x => x.Name == draft.CategoryName, cancellationToken) ?? new Category { Name = draft.CategoryName.Trim() };
@@ -104,8 +115,9 @@ public sealed class CatalogService(IDbContextFactory<BoutiqueDbContext> factory,
         var category = await db.Categories.SingleOrDefaultAsync(x => x.Name == update.Category, cancellationToken) ?? new Category { Name = update.Category };
         variant.Product!.Name = update.ProductName; variant.Product.Category = category; variant.Product.CategoryId = category.Id;
         variant.Product.SubCategory = update.SubCategory; variant.Product.Gender = update.Gender; variant.Product.Season = update.Season; variant.Product.Type = update.Type;
+        if (update.Description is not null) variant.Product.Description = update.Description;
         variant.Sku = update.Sku; variant.Barcode = update.Barcode; variant.Size = update.Size; variant.Color = update.Color; variant.Material = update.Material; variant.Location = update.Location; variant.Supplier = update.Supplier; variant.CostXof = update.CostXof; variant.PriceXof = update.PriceXof; variant.PromotionalPriceXof = update.PromotionalPriceXof; variant.PromotionStartsAt = update.PromotionStartsAt; variant.PromotionEndsAt = update.PromotionEndsAt; variant.LowStockThreshold = update.AlertThreshold; variant.IsActive = update.IsActive; variant.UpdatedAt = DateTimeOffset.UtcNow;
-        if (!string.IsNullOrWhiteSpace(update.PhotoPath) && File.Exists(update.PhotoPath)) { var extension = Path.GetExtension(update.PhotoPath); var destination = Path.Combine(paths.Assets, $"product-{variant.ProductId:N}-{Guid.NewGuid():N}{extension}"); File.Copy(update.PhotoPath, destination); db.ProductImages.Add(new ProductImage { ProductId = variant.ProductId, RelativePath = destination, IsPrimary = true }); }
+        if (!string.IsNullOrWhiteSpace(update.PhotoPath) && File.Exists(update.PhotoPath)) { var extension = Path.GetExtension(update.PhotoPath); var destination = Path.Combine(paths.Assets, $"variant-{variant.Id:N}-{Guid.NewGuid():N}{extension}"); File.Copy(update.PhotoPath, destination); db.ProductImages.Add(new ProductImage { ProductId = variant.ProductId, VariantId = variant.Id, RelativePath = destination, IsPrimary = true }); }
         db.AuditEntries.Add(new AuditEntry { Actor = "Responsable", Action = update.IsActive ? "Modifier variante" : "Archiver variante", EntityType = nameof(ProductVariant), EntityId = variant.Id.ToString(), BeforeJson = before, AfterJson = JsonSerializer.Serialize(new { update.ProductName, update.Sku, update.Barcode, update.Size, update.Color, update.CostXof, update.PriceXof, update.IsActive, update.Location, update.Supplier }) });
         await db.SaveChangesAsync(cancellationToken); await transaction.CommitAsync(cancellationToken); return variant;
     }

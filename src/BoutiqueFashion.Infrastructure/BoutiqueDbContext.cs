@@ -35,6 +35,8 @@ public sealed class BoutiqueDbContext(DbContextOptions<BoutiqueDbContext> option
     public DbSet<CreditPayment> CreditPayments => Set<CreditPayment>();
     public DbSet<CashSession> CashSessions => Set<CashSession>();
     public DbSet<Expense> Expenses => Set<Expense>();
+    public DbSet<PurchaseOrder> PurchaseOrders => Set<PurchaseOrder>();
+    public DbSet<PurchaseOrderLine> PurchaseOrderLines => Set<PurchaseOrderLine>();
     public DbSet<DocumentSnapshot> DocumentSnapshots => Set<DocumentSnapshot>();
     public DbSet<PrintJob> PrintJobs => Set<PrintJob>();
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();

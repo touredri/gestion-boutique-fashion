@@ -40,6 +40,7 @@
             <TextBlock Text="MODÈLES PAR TYPE DE DOCUMENT" Style="{StaticResource Eyebrow}" Margin="0,10,0,0"/>
             <WrapPanel>
               <StackPanel Width="220"><TextBlock Text="Type de document" Style="{StaticResource FieldLabel}"/><ComboBox ItemsSource="{Binding DocumentTypes}" SelectedItem="{Binding SelectedDocType}"/></StackPanel>
+              <StackPanel Width="160"><TextBlock Text="Modèle prédéfini" Style="{StaticResource FieldLabel}"/><ComboBox ItemsSource="{Binding Styles}" SelectedItem="{Binding SelectedStyle}"/></StackPanel>
               <StackPanel Orientation="Horizontal" VerticalAlignment="Bottom">
                 <CheckBox Content="Logo" IsChecked="{Binding FlagLogo}" Margin="8,12,4,4"/>
                 <CheckBox Content="Slogan" IsChecked="{Binding FlagSlogan}" Margin="8,12,4,4"/>
@@ -81,10 +82,12 @@
         <Border Style="{StaticResource Card}">
           <StackPanel>
             <TextBlock Text="IMPRESSION" Style="{StaticResource Eyebrow}"/>
-            <TextBlock Text="Imprimante ticket" Style="{StaticResource SectionTitle}"/>
-            <TextBlock Text="Ce choix reste mémorisé sur le terminal." Style="{StaticResource HelperText}" Margin="0,0,0,8"/>
+            <TextBlock Text="Imprimante thermique externe" Style="{StaticResource SectionTitle}"/>
+            <TextBlock Text="L'imprimante intégrée du terminal n'est pas utilisée : choisissez une imprimante externe USB, série ou réseau." Style="{StaticResource HelperText}" Margin="0,0,0,8"/>
             <TextBlock Text="Imprimante thermique" Style="{StaticResource FieldLabel}"/>
             <ComboBox ItemsSource="{Binding Printers}" SelectedItem="{Binding SelectedPrinter}" DisplayMemberPath="Name"/>
+            <TextBlock Text="Ajouter une imprimante réseau (IP ou IP:port)" Style="{StaticResource FieldLabel}"/>
+            <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox Text="{Binding NetworkPrinter}" ToolTip="Ex. 192.168.1.50:9100"/><Button Grid.Column="1" Content="Ajouter" Command="{Binding AddNetworkPrinterCommand}" Margin="4,0,0,0"/></Grid>
             <Button Content="Imprimer un ticket test" Command="{Binding TestPrinterCommand}"/>
           </StackPanel>
         </Border>

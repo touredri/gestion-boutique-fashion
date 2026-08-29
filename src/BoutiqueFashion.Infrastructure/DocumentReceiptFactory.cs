@@ -83,12 +83,15 @@ internal static class DocumentReceiptFactory
         async Task<bool> Flag(string element) =>
             (await db.AppSettings.Where(x => x.Key == $"Doc.{type}.{element}").Select(x => x.Value).SingleOrDefaultAsync(cancellationToken) ?? "1") == "1";
 
+        var styleValue = await db.AppSettings.Where(x => x.Key == $"Doc.{type}.Style").Select(x => x.Value).SingleOrDefaultAsync(cancellationToken);
+        var style = Enum.TryParse<DocumentStyle>(styleValue, true, out var parsed) ? parsed : DocumentStyle.Moderne;
         return receipt with
         {
             LogoPath = await Flag("Logo") ? receipt.LogoPath : null,
             Slogan = await Flag("Slogan") ? receipt.Slogan : null,
             StampPath = await Flag("Stamp") ? receipt.StampPath : null,
-            SignaturePath = await Flag("Signature") ? receipt.SignaturePath : null
+            SignaturePath = await Flag("Signature") ? receipt.SignaturePath : null,
+            Style = style
         };
     }
 
