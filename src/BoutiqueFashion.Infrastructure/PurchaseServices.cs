@@ -54,7 +54,8 @@ public sealed class PurchaseService(IDbContextFactory<BoutiqueDbContext> factory
         variant.UpdatedAt = DateTimeOffset.UtcNow;
         line.ReceivedQuantity += receivedQuantity;
         db.StockMovements.Add(new StockMovement { VariantId = variant.Id, Type = StockMovementType.Receipt, QuantityDelta = receivedQuantity, UnitCostXof = cost, Reason = $"Réception {line.Order.Supplier} · attendu {line.ExpectedQuantity:0.###} reçu {line.ReceivedQuantity:0.###}", SourceType = "PurchaseOrder", SourceId = line.Order.Id, Actor = actor });
-        var allReceived = await db.PurchaseOrderLines.Where(x => x.PurchaseOrderId == line.PurchaseOrderId).AllAsync(x => x.ReceivedQuantity >= x.ExpectedQuantity, cancellationToken);
+        var orderLines = await db.PurchaseOrderLines.Where(x => x.PurchaseOrderId == line.PurchaseOrderId).ToListAsync(cancellationToken);
+        var allReceived = orderLines.All(x => x.ReceivedQuantity >= x.ExpectedQuantity);
         if (allReceived) line.Order.Status = PurchaseOrderStatus.Closed;
         db.AuditEntries.Add(new AuditEntry { Actor = actor, Action = "Réception fournisseur", EntityType = nameof(PurchaseOrderLine), EntityId = line.Id.ToString(), AfterJson = JsonSerializer.Serialize(new { received = receivedQuantity, totalReceived = line.ReceivedQuantity, expected = line.ExpectedQuantity, ecart = line.ReceivedQuantity - line.ExpectedQuantity }) });
         await db.SaveChangesAsync(cancellationToken);

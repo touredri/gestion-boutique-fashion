@@ -64,11 +64,13 @@ public sealed class ThermalPrinterService(IPrintQueueService queue) : IThermalPr
                     }
                     break;
                 default:
+                {
                     using var serial = new SerialPort(printer.Address, 9600, Parity.None, 8, StopBits.One) { WriteTimeout = 10_000 };
                     serial.Open();
                     await serial.BaseStream.WriteAsync(bytes, token);
                     await serial.BaseStream.FlushAsync(token);
                     break;
+                }
             }
         }, cancellationToken);
 
@@ -282,7 +284,7 @@ public sealed class A4DocumentService(AppPaths paths) : IA4DocumentService
         var table = section.AddTable(); table.Borders.Width = 0; table.TopPadding = Unit.FromCentimeter(0.12); table.BottomPadding = Unit.FromCentimeter(0.12);
         table.AddColumn(Unit.FromCentimeter(8.6)); table.AddColumn(Unit.FromCentimeter(2)); table.AddColumn(Unit.FromCentimeter(3.5)); table.AddColumn(Unit.FromCentimeter(3.5));
         var head = table.AddRow(); head.Shading.Color = Terracotta; head.Height = Unit.FromCentimeter(0.8);
-        for (var i = 0; i < 4; i++) { var cell = head.Cells[i]; cell.VerticalAlignment = VerticalAlignment.Center; var p = cell.AddParagraph(["Article", "Qté", "Prix", "Total"][i]); p.Format.Font.Bold = true; p.Format.Font.Color = Colors.White; p.Format.Font.Size = 10; if (i > 0) p.Format.Alignment = ParagraphAlignment.Right; }
+        for (var i = 0; i < 4; i++) { var cell = head.Cells[i]; cell.VerticalAlignment = VerticalAlignment.Center; var p = cell.AddParagraph(new[] { "Article", "Qté", "Prix", "Total" }[i]); p.Format.Font.Bold = true; p.Format.Font.Color = Colors.White; p.Format.Font.Size = 10; if (i > 0) p.Format.Alignment = ParagraphAlignment.Right; }
         var alternate = false;
         foreach (var item in data.Items)
         {
