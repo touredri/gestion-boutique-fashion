@@ -7,6 +7,13 @@ public static class BusinessRules
     public const decimal SellerDiscountLimitPercent = 10m;
     public const int ReturnWindowDays = 7;
 
+    public static IReadOnlyList<string> SizePresets(ProductType type) => type switch
+    {
+        ProductType.Clothing => ["S", "M", "L", "XL", "XXL"],
+        ProductType.Shoes => ["36", "37", "38", "39", "40", "41", "42", "43", "44", "45"],
+        _ => ["Unique"]
+    };
+
     public static CustomerSegment ComputeSegment(
         DateTimeOffset now,
         DateTimeOffset createdAt,

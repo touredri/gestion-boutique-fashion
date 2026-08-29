@@ -3,6 +3,12 @@
   <Grid Margin="18">
     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
     <WrapPanel Margin="0,0,0,8">
+      <StackPanel Orientation="Horizontal" VerticalAlignment="Bottom">
+        <Button Content="Aujourd'hui" Command="{Binding SetPeriodCommand}" CommandParameter="today"/>
+        <Button Content="7 jours" Command="{Binding SetPeriodCommand}" CommandParameter="7"/>
+        <Button Content="Ce mois" Command="{Binding SetPeriodCommand}" CommandParameter="month"/>
+        <Button Content="30 jours" Command="{Binding SetPeriodCommand}" CommandParameter="30"/>
+      </StackPanel>
       <StackPanel Width="150"><TextBlock Text="Du" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding FromDate}" ToolTip="AAAA-MM-JJ"/></StackPanel>
       <StackPanel Width="150"><TextBlock Text="Au" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding ToDate}" ToolTip="AAAA-MM-JJ"/></StackPanel>
       <StackPanel Width="220"><TextBlock Text="Rapport" Style="{StaticResource FieldLabel}"/><ComboBox ItemsSource="{Binding ReportKinds}" SelectedItem="{Binding SelectedReportKind}"/></StackPanel>

@@ -10,7 +10,7 @@
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
         <WrapPanel Margin="0,0,0,4">
           <TextBlock Text="INVENTAIRE COMPLET OU PAR CATÉGORIE" Style="{StaticResource Eyebrow}" VerticalAlignment="Center"/>
-          <TextBox Width="180" Text="{Binding CategoryFilter}" ToolTip="Filtre catégorie (vide = tout)"/>
+          <StackPanel Width="200"><TextBlock Text="Catégorie (vide = tout)" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding CategoryFilter}"/></StackPanel>
           <Button Content="Charger" Command="{Binding LoadFullInventoryCommand}"/>
           <Button Content="Valider les écarts comptés" Command="{Binding ApplyFullInventoryCommand}" Style="{StaticResource PrimaryButton}"/>
         </WrapPanel>
@@ -20,13 +20,14 @@
     <Border Grid.Column="1" Style="{StaticResource Card}">
       <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel>
-          <TextBlock Text="Stock et inventaire" FontSize="19" FontWeight="Bold"/>
-          <TextBlock Text="Quantité (mouvement)" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding Quantity}" ToolTip="Mouvement"/>
-          <TextBlock Text="Quantité comptée (article sélectionné)" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding CountedQuantity}" ToolTip="Quantité réellement comptée"/>
-          <TextBlock Text="Motif obligatoire" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding Reason}" ToolTip="Motif"/>
+          <TextBlock Text="Stock réel et mouvements" FontSize="19" FontWeight="Bold"/>
+          <TextBlock Text="Article sélectionné dans la liste de gauche" Style="{StaticResource HelperText}" Margin="4,0,4,8"/>
+          <TextBlock Text="Quantité du mouvement" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding Quantity}"/>
+          <TextBlock Text="Quantité comptée (inventaire unitaire)" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding CountedQuantity}"/>
+          <TextBlock Text="Motif obligatoire" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding Reason}"/>
           <TextBlock Text="PIN responsable" Style="{StaticResource FieldLabel}"/><PasswordBox PasswordChanged="PinBox_OnPasswordChanged" Padding="10" Margin="4"/>
           <Button Content="Réception fournisseur" Command="{Binding ReceiveCommand}"/>
-          <Button Content="Ajustement" Command="{Binding AdjustCommand}"/>
+          <Button Content="Ajustement validé" Command="{Binding AdjustCommand}"/>
           <Button Content="Endommagé (sortie)" Command="{Binding DamageCommand}" Style="{StaticResource DangerButton}"/>
           <Button Content="Perdu (sortie)" Command="{Binding LoseCommand}" Style="{StaticResource DangerButton}"/>
           <Button Content="Valider inventaire compté" Command="{Binding ApplyInventoryCommand}" Style="{StaticResource PrimaryButton}"/>

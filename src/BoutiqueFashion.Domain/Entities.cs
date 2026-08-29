@@ -24,6 +24,7 @@ public sealed class Product : Entity
     [MaxLength(120)] public string? SubCategory { get; set; }
     [MaxLength(60)] public string? Gender { get; set; }
     [MaxLength(60)] public string? Season { get; set; }
+    public ProductType Type { get; set; } = ProductType.Clothing;
     public Guid CategoryId { get; set; }
     public Category? Category { get; set; }
     public bool IsActive { get; set; } = true;

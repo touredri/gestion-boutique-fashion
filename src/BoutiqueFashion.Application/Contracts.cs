@@ -52,13 +52,14 @@ public sealed record MatrixDraft(
     long PriceXof,
     decimal InitialQuantity,
     decimal AlertThreshold,
+    ProductType Type = ProductType.Clothing,
     string? Brand = null,
     string? SubCategory = null,
     string? Gender = null,
     string? Season = null,
     string? Material = null,
     string? Supplier = null);
-public sealed record ProductUpdate(Guid VariantId, string ProductName, string Category, string Sku, string? Barcode, string? Size, string? Color, long CostXof, long PriceXof, long? PromotionalPriceXof, DateTimeOffset? PromotionStartsAt, DateTimeOffset? PromotionEndsAt, decimal AlertThreshold, string? PhotoPath, bool IsActive, string? SubCategory = null, string? Gender = null, string? Season = null, string? Material = null, string? Location = null, string? Supplier = null);
+public sealed record ProductUpdate(Guid VariantId, string ProductName, string Category, string Sku, string? Barcode, string? Size, string? Color, long CostXof, long PriceXof, long? PromotionalPriceXof, DateTimeOffset? PromotionStartsAt, DateTimeOffset? PromotionEndsAt, decimal AlertThreshold, string? PhotoPath, bool IsActive, string? SubCategory = null, string? Gender = null, string? Season = null, string? Material = null, string? Location = null, string? Supplier = null, ProductType Type = ProductType.Clothing);
 
 public interface ISaleService
 {
@@ -135,7 +136,7 @@ public interface IReportService
 public interface ICatalogService
 {
     Task<IReadOnlyList<ProductVariant>> SearchAsync(string? query, CancellationToken cancellationToken = default);
-    Task<ProductVariant> CreateVariantAsync(string productName, string categoryName, string sku, string? barcode, string? size, string? color, long costXof, long priceXof, decimal initialQuantity, decimal alertThreshold, CancellationToken cancellationToken = default, string? subCategory = null, string? gender = null, string? season = null, string? material = null, string? location = null, string? supplier = null);
+    Task<ProductVariant> CreateVariantAsync(string productName, string categoryName, string sku, string? barcode, string? size, string? color, long costXof, long priceXof, decimal initialQuantity, decimal alertThreshold, CancellationToken cancellationToken = default, string? subCategory = null, string? gender = null, string? season = null, string? material = null, string? location = null, string? supplier = null, ProductType type = ProductType.Clothing);
     Task<IReadOnlyList<ProductVariant>> CreateMatrixAsync(MatrixDraft draft, CancellationToken cancellationToken = default);
     Task<ProductVariant> UpdateVariantAsync(ProductUpdate update, string managerPin, CancellationToken cancellationToken = default);
 }

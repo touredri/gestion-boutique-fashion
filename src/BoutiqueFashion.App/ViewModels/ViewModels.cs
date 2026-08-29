@@ -77,25 +77,38 @@ public partial class SaleViewModel(ICatalogService catalog, ICustomerService cus
     [ObservableProperty] private string countedCash = "";
     [ObservableProperty] private string cashDifferenceReason = "";
     [ObservableProperty] private string openingFloat = "0";
+    [ObservableProperty] private string customerSearch = string.Empty;
+    partial void OnCustomerSearchChanged(string value) => _ = RefreshCustomersAsync();
     public long TotalXof => Cart.Sum(x => x.TotalXof);
     public long PayableXof => TotalXof - BusinessRules.CalculateDiscount(TotalXof, DiscountPercent == 0 ? DiscountKind.None : DiscountKind.Percentage, DiscountPercent);
-    partial void OnDiscountPercentChanged(decimal value) => OnPropertyChanged(nameof(PayableXof));
+    public long ChangePreview { get { var sum = Payments.Sum(x => x.AmountXof); return sum > PayableXof ? sum - PayableXof : 0; } }
+    partial void OnDiscountPercentChanged(decimal value) { OnPropertyChanged(nameof(PayableXof)); OnPropertyChanged(nameof(ChangePreview)); }
 
     public async Task LoadAsync()
     {
         var items = await catalog.SearchAsync(Search); Products.Clear(); foreach (var item in items) Products.Add(item);
-        Customers.Clear(); foreach (var item in await customers.SearchAsync(null)) Customers.Add(item);
+        await RefreshCustomersAsync();
         if (SelectedPrinter is null) { var saved = await settings.GetAsync("Printer.Selected"); SelectedPrinter = saved is null ? Printers.FirstOrDefault() : JsonSerializer.Deserialize<PrinterProfile>(saved); }
     }
 
+    private async Task RefreshCustomersAsync()
+    {
+        Customers.Clear();
+        foreach (var item in await customers.SearchAsync(string.IsNullOrWhiteSpace(CustomerSearch) ? null : CustomerSearch)) Customers.Add(item);
+    }
+
+    [RelayCommand] private async Task FilterCustomers() => await RefreshCustomersAsync();
     [RelayCommand] private async Task SearchProducts() => await LoadAsync();
-    [RelayCommand] private void Add(ProductVariant variant) { var existing = Cart.FirstOrDefault(x => x.Variant.Id == variant.Id); if (existing is null) { var line = new CartLineViewModel(variant); line.PropertyChanged += (_, _) => OnPropertyChanged(nameof(TotalXof)); Cart.Add(line); } else existing.Quantity++; OnPropertyChanged(nameof(TotalXof)); }
-    [RelayCommand] private void Remove(CartLineViewModel line) { Cart.Remove(line); OnPropertyChanged(nameof(TotalXof)); }
+    [RelayCommand] private void Add(ProductVariant variant) { var existing = Cart.FirstOrDefault(x => x.Variant.Id == variant.Id); if (existing is null) { var line = new CartLineViewModel(variant); line.PropertyChanged += (_, _) => { OnPropertyChanged(nameof(TotalXof)); OnPropertyChanged(nameof(ChangePreview)); }; Cart.Add(line); } else existing.Quantity++; OnPropertyChanged(nameof(TotalXof)); OnPropertyChanged(nameof(ChangePreview)); }
+    [RelayCommand] private void Remove(CartLineViewModel line) { Cart.Remove(line); OnPropertyChanged(nameof(TotalXof)); OnPropertyChanged(nameof(ChangePreview)); }
+    [RelayCommand] private void Increment(CartLineViewModel line) { line.Quantity++; }
+    [RelayCommand] private void Decrement(CartLineViewModel line) { if (line.Quantity > 1) line.Quantity--; }
+    [RelayCommand] private void QuickPay(PaymentMode mode) { Payments.Clear(); var line = new PaymentLineViewModel { Mode = mode, AmountXof = PayableXof }; line.PropertyChanged += (_, _) => { OnPropertyChanged(nameof(PaymentTotalXof)); OnPropertyChanged(nameof(ChangePreview)); }; Payments.Add(line); OnPropertyChanged(nameof(PaymentTotalXof)); OnPropertyChanged(nameof(ChangePreview)); }
     partial void OnSelectedPrinterChanged(PrinterProfile? value) { if (value is not null) _ = PersistPrinterAsync(value); }
     private async Task PersistPrinterAsync(PrinterProfile value) { try { await settings.SetAsync("Printer.Selected", JsonSerializer.Serialize(value), "Vendeur boutique"); } catch { } }
     [RelayCommand] private async Task OpenCash() { try { await cash.OpenAsync(long.Parse(OpeningFloat)); Status = "Caisse ouverte"; } catch (Exception e) { Status = e.Message; } }
-    [RelayCommand] private void AddPayment() { var line = new PaymentLineViewModel { AmountXof = Math.Max(0, PayableXof - Payments.Sum(x => x.AmountXof)) }; line.PropertyChanged += (_, _) => OnPropertyChanged(nameof(PaymentTotalXof)); Payments.Add(line); OnPropertyChanged(nameof(PaymentTotalXof)); }
-    [RelayCommand] private void RemovePayment(PaymentLineViewModel line) { Payments.Remove(line); OnPropertyChanged(nameof(PaymentTotalXof)); }
+    [RelayCommand] private void AddPayment() { var line = new PaymentLineViewModel { AmountXof = Math.Max(0, PayableXof - Payments.Sum(x => x.AmountXof)) }; line.PropertyChanged += (_, _) => { OnPropertyChanged(nameof(PaymentTotalXof)); OnPropertyChanged(nameof(ChangePreview)); }; Payments.Add(line); OnPropertyChanged(nameof(PaymentTotalXof)); OnPropertyChanged(nameof(ChangePreview)); }
+    [RelayCommand] private void RemovePayment(PaymentLineViewModel line) { Payments.Remove(line); OnPropertyChanged(nameof(PaymentTotalXof)); OnPropertyChanged(nameof(ChangePreview)); }
     public long PaymentTotalXof => Payments.Sum(x => x.AmountXof);
     [RelayCommand] private async Task CloseCash() { try { var result = await cash.CloseAsync(long.Parse(CountedCash), CashDifferenceReason, ManagerPin); Status = $"Caisse clôturée • Écart {result.DifferenceXof:N0} FCFA"; } catch (Exception e) { Status = e.Message; } }
 
@@ -133,32 +146,49 @@ public partial class SaleViewModel(ICatalogService catalog, ICustomerService cus
 public partial class CatalogViewModel(ICatalogService catalog) : ObservableObject, ILoadable
 {
     public ObservableCollection<ProductVariant> Items { get; } = [];
+    public IReadOnlyList<ProductType> ProductTypes { get; } = Enum.GetValues<ProductType>();
     [ObservableProperty] private string productName = string.Empty; [ObservableProperty] private string category = "Vêtements"; [ObservableProperty] private string sku = string.Empty; [ObservableProperty] private string price = string.Empty; [ObservableProperty] private string cost = string.Empty; [ObservableProperty] private string status = string.Empty;
+    [ObservableProperty] private ProductType selectedType = ProductType.Clothing; [ObservableProperty] private string brand = string.Empty; [ObservableProperty] private string productNotice = string.Empty;
     [ObservableProperty] private string subCategory = string.Empty; [ObservableProperty] private string gender = string.Empty; [ObservableProperty] private string season = string.Empty;
     [ObservableProperty] private string material = string.Empty; [ObservableProperty] private string location = string.Empty; [ObservableProperty] private string supplier = string.Empty;
-    [ObservableProperty] private string matrixPrefix = string.Empty; [ObservableProperty] private string matrixColors = string.Empty; [ObservableProperty] private string matrixSizes = string.Empty; [ObservableProperty] private string matrixQuantity = "0";
+    [ObservableProperty] private string variantSize = string.Empty; [ObservableProperty] private string variantColor = string.Empty;
+    [ObservableProperty] private string matrixPrefix = string.Empty; [ObservableProperty] private string matrixColors = string.Empty; [ObservableProperty] private string matrixSizes = string.Join(", ", BusinessRules.SizePresets(ProductType.Clothing)); [ObservableProperty] private string matrixQuantity = "0";
     [ObservableProperty] private ProductVariant? selected; [ObservableProperty] private string managerPin = ""; [ObservableProperty] private string promotionPrice = ""; [ObservableProperty] private string photoPath = "";
     public async Task LoadAsync() { var rows = await catalog.SearchAsync(null); Items.Clear(); foreach (var row in rows) Items.Add(row); }
+    partial void OnSelectedTypeChanged(ProductType value) => MatrixSizes = string.Join(", ", BusinessRules.SizePresets(value));
+    partial void OnProductNameChanged(string value) => _ = CheckExistingProductAsync(value);
+    private async Task CheckExistingProductAsync(string name)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(name)) { ProductNotice = string.Empty; return; }
+            var rows = await catalog.SearchAsync(name);
+            var existing = rows.FirstOrDefault(x => string.Equals(x.Product?.Name, name.Trim(), StringComparison.OrdinalIgnoreCase));
+            ProductNotice = existing is null ? string.Empty : $"Un produit « {existing.Product!.Name } » existe déjà : ses variantes seront complétées, pas dupliquées.";
+        }
+        catch { ProductNotice = string.Empty; }
+    }
     partial void OnSelectedChanged(ProductVariant? value)
     {
         PhotoPath = value?.Product?.PrimaryImagePath ?? string.Empty;
         if (value is not null)
         {
             ProductName = value.Product?.Name ?? string.Empty; Category = value.Product?.Category?.Name ?? category;
+            SelectedType = value.Product?.Type ?? SelectedType; Brand = value.Product?.Brand ?? string.Empty;
             SubCategory = value.Product?.SubCategory ?? string.Empty; Gender = value.Product?.Gender ?? string.Empty; Season = value.Product?.Season ?? string.Empty;
             Material = value.Material ?? string.Empty; Location = value.Location ?? string.Empty; Supplier = value.Supplier ?? string.Empty;
         }
     }
     private static string? NullIfEmpty(string value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
-    [RelayCommand] private async Task Create() { try { await catalog.CreateVariantAsync(ProductName, Category, Sku, null, null, null, long.Parse(Cost), long.Parse(Price), 0, 2, default, NullIfEmpty(SubCategory), NullIfEmpty(Gender), NullIfEmpty(Season), NullIfEmpty(Material), NullIfEmpty(Location), NullIfEmpty(Supplier)); Status = "Produit ajouté"; ProductName = Sku = Price = Cost = string.Empty; await LoadAsync(); } catch (Exception e) { Status = e.Message; } }
+    [RelayCommand] private async Task Create() { try { await catalog.CreateVariantAsync(ProductName, Category, Sku, null, NullIfEmpty(VariantSize), NullIfEmpty(VariantColor), long.Parse(Cost), long.Parse(Price), 0, 2, default, NullIfEmpty(SubCategory), NullIfEmpty(Gender), NullIfEmpty(Season), NullIfEmpty(Material), NullIfEmpty(Location), NullIfEmpty(Supplier), SelectedType); Status = "Produit ajouté"; ProductName = Sku = Price = Cost = string.Empty; await LoadAsync(); } catch (Exception e) { Status = e.Message; } }
 
     [RelayCommand] private async Task CreateMatrix()
     {
         try
         {
             var colors = SplitList(MatrixColors); var sizes = SplitList(MatrixSizes);
-            var created = await catalog.CreateMatrixAsync(new MatrixDraft(ProductName, Category, MatrixPrefix, colors, sizes, long.Parse(Cost), long.Parse(Price), decimal.Parse(MatrixQuantity), 2, null, NullIfEmpty(SubCategory), NullIfEmpty(Gender), NullIfEmpty(Season), NullIfEmpty(Material), NullIfEmpty(Supplier)));
+            var created = await catalog.CreateMatrixAsync(new MatrixDraft(ProductName, Category, MatrixPrefix, colors, sizes, long.Parse(Cost), long.Parse(Price), decimal.Parse(MatrixQuantity), 2, SelectedType, NullIfEmpty(Brand), NullIfEmpty(SubCategory), NullIfEmpty(Gender), NullIfEmpty(Season), NullIfEmpty(Material), NullIfEmpty(Supplier)));
             Status = $"{created.Count} variantes uniques créées";
             await LoadAsync();
         }
@@ -167,9 +197,9 @@ public partial class CatalogViewModel(ICatalogService catalog) : ObservableObjec
 
     private static List<string> SplitList(string value) => value.Split([';', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
 
-    [RelayCommand] private async Task Update() { if (Selected is null) return; try { var u = new ProductUpdate(Selected.Id, string.IsNullOrWhiteSpace(ProductName) ? Selected.Product!.Name : ProductName, Category, string.IsNullOrWhiteSpace(Sku) ? Selected.Sku : Sku, Selected.Barcode, Selected.Size, Selected.Color, string.IsNullOrWhiteSpace(Cost) ? Selected.CostXof : long.Parse(Cost), string.IsNullOrWhiteSpace(Price) ? Selected.PriceXof : long.Parse(Price), string.IsNullOrWhiteSpace(PromotionPrice) ? null : long.Parse(PromotionPrice), DateTimeOffset.Now, DateTimeOffset.Now.AddMonths(1), Selected.LowStockThreshold, PhotoPath, true, NullIfEmpty(SubCategory), NullIfEmpty(Gender), NullIfEmpty(Season), NullIfEmpty(Material), NullIfEmpty(Location), NullIfEmpty(Supplier)); await catalog.UpdateVariantAsync(u, ManagerPin); Status = "Produit modifié"; PhotoPath = string.Empty; await LoadAsync(); } catch (Exception e) { Status = e.Message; } }
+    [RelayCommand] private async Task Update() { if (Selected is null) return; try { var u = new ProductUpdate(Selected.Id, string.IsNullOrWhiteSpace(ProductName) ? Selected.Product!.Name : ProductName, Category, string.IsNullOrWhiteSpace(Sku) ? Selected.Sku : Sku, Selected.Barcode, Selected.Size, Selected.Color, string.IsNullOrWhiteSpace(Cost) ? Selected.CostXof : long.Parse(Cost), string.IsNullOrWhiteSpace(Price) ? Selected.PriceXof : long.Parse(Price), string.IsNullOrWhiteSpace(PromotionPrice) ? null : long.Parse(PromotionPrice), DateTimeOffset.Now, DateTimeOffset.Now.AddMonths(1), Selected.LowStockThreshold, PhotoPath, true, NullIfEmpty(SubCategory), NullIfEmpty(Gender), NullIfEmpty(Season), NullIfEmpty(Material), NullIfEmpty(Location), NullIfEmpty(Supplier), SelectedType); await catalog.UpdateVariantAsync(u, ManagerPin); Status = "Produit modifié"; PhotoPath = string.Empty; await LoadAsync(); } catch (Exception e) { Status = e.Message; } }
 
-    [RelayCommand] private async Task Archive() { if (Selected is null) return; if (!UiConfirm.Ask($"Archiver la variante {Selected.Sku} ? Elle restera dans l'historique mais ne pourra plus être vendue.")) return; try { await catalog.UpdateVariantAsync(new ProductUpdate(Selected.Id, Selected.Product!.Name, Selected.Product.Category?.Name ?? Category, Selected.Sku, Selected.Barcode, Selected.Size, Selected.Color, Selected.CostXof, Selected.PriceXof, Selected.PromotionalPriceXof, Selected.PromotionStartsAt, Selected.PromotionEndsAt, Selected.LowStockThreshold, null, false, Selected.Product.SubCategory, Selected.Product.Gender, Selected.Product.Season, Selected.Material, Selected.Location, Selected.Supplier), ManagerPin); Status = "Produit archivé"; await LoadAsync(); } catch (Exception e) { Status = e.Message; } }
+    [RelayCommand] private async Task Archive() { if (Selected is null) return; if (!UiConfirm.Ask($"Archiver la variante {Selected.Sku} ? Elle restera dans l'historique mais ne pourra plus être vendue.")) return; try { await catalog.UpdateVariantAsync(new ProductUpdate(Selected.Id, Selected.Product!.Name, Selected.Product.Category?.Name ?? Category, Selected.Sku, Selected.Barcode, Selected.Size, Selected.Color, Selected.CostXof, Selected.PriceXof, Selected.PromotionalPriceXof, Selected.PromotionStartsAt, Selected.PromotionEndsAt, Selected.LowStockThreshold, null, false, Selected.Product.SubCategory, Selected.Product.Gender, Selected.Product.Season, Selected.Material, Selected.Location, Selected.Supplier, Selected.Product.Type), ManagerPin); Status = "Produit archivé"; await LoadAsync(); } catch (Exception e) { Status = e.Message; } }
 }
 
 public partial class InventoryLineViewModel(ProductVariant variant) : ObservableObject
@@ -235,6 +265,7 @@ public partial class CustomersViewModel(ICustomerService customers, ICreditServi
     public IReadOnlyList<PaymentMode> PaymentModes { get; } = Enum.GetValues<PaymentMode>().Where(x => x != PaymentMode.Credit).ToArray();
 
     [ObservableProperty] private string search = string.Empty;
+    partial void OnSearchChanged(string value) => _ = LoadAsync();
     [ObservableProperty] private string name = string.Empty; [ObservableProperty] private string phone = string.Empty; [ObservableProperty] private string creditLimit = "0"; [ObservableProperty] private string status = string.Empty;
     [ObservableProperty] private string gender = string.Empty; [ObservableProperty] private string preferences = string.Empty; [ObservableProperty] private string channel = string.Empty; [ObservableProperty] private bool marketingConsent;
     [ObservableProperty] private CustomerRow? selectedCustomer;
@@ -322,6 +353,7 @@ public partial class DocumentsViewModel(IDocumentService documents, IReturnServi
     public ObservableCollection<DocumentListItem> Items { get; } = [];
     public IReadOnlyList<PaymentMode> PaymentModes { get; } = Enum.GetValues<PaymentMode>().Where(x => x != PaymentMode.Credit).ToArray();
     [ObservableProperty] private string search = string.Empty;
+    partial void OnSearchChanged(string value) => _ = LoadAsync();
     [ObservableProperty] private DocumentListItem? selectedDocument; [ObservableProperty] private string saleNumber = ""; [ObservableProperty] private string returnedSku = ""; [ObservableProperty] private string returnedQuantity = "1"; [ObservableProperty] private string replacementSku = ""; [ObservableProperty] private string replacementQuantity = "1"; [ObservableProperty] private string exchangePaymentAmount = "0"; [ObservableProperty] private PaymentMode exchangePaymentMode = PaymentMode.Cash; [ObservableProperty] private string exchangePaymentReference = ""; [ObservableProperty] private string reason = ""; [ObservableProperty] private string managerPin = ""; [ObservableProperty] private bool restock = true; [ObservableProperty] private string proformaDescription = "Article"; [ObservableProperty] private string proformaTotal = "0"; [ObservableProperty] private string status = "";
     private PrinterProfile? printer;
 
@@ -392,6 +424,21 @@ public partial class ReportsViewModel(IReportService reports) : ObservableObject
     }
 
     [RelayCommand] private async Task Refresh() => await LoadAsync();
+
+    [RelayCommand] private async Task SetPeriod(string kind)
+    {
+        var today = DateTime.Today;
+        var (from, to) = kind switch
+        {
+            "today" => (today, today),
+            "7" => (today.AddDays(-6), today),
+            "month" => (new DateTime(today.Year, today.Month, 1), today),
+            _ => (today.AddDays(-30), today)
+        };
+        FromDate = from.ToString("yyyy-MM-dd");
+        ToDate = to.ToString("yyyy-MM-dd");
+        await LoadAsync();
+    }
 
     [RelayCommand] private async Task ExportCsv()
     {

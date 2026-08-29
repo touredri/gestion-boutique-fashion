@@ -1,20 +1,20 @@
-<UserControl x:Class="BoutiqueFashion.App.Views.SaleView" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+<UserControl x:Class="BoutiqueFashion.App.Views.SaleView" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:domain="clr-namespace:BoutiqueFashion.Domain;assembly=BoutiqueFashion.Domain">
   <Grid Margin="14">
-    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="400"/></Grid.ColumnDefinitions>
+    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="420"/></Grid.ColumnDefinitions>
     <Grid Margin="0,0,8,0">
       <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
       <Border Style="{StaticResource Card}" Margin="0,0,0,10" Padding="14">
         <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-          <StackPanel><TextBlock Text="Rechercher ou scanner" Style="{StaticResource FieldLabel}" Margin="4,0,4,1"/><TextBox Text="{Binding Search, UpdateSourceTrigger=PropertyChanged}" ToolTip="Nom, SKU ou code-barres" AutomationProperties.Name="Recherche produit"/></StackPanel>
+          <StackPanel><TextBlock Text="Rechercher ou scanner (nom, SKU, code-barres)" Style="{StaticResource FieldLabel}" Margin="4,0,4,1"/><TextBox Text="{Binding Search, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Recherche produit"/></StackPanel>
           <Button Grid.Column="1" Content="Rechercher" Command="{Binding SearchProductsCommand}" Style="{StaticResource PrimaryButton}" VerticalAlignment="Bottom"/>
         </Grid>
       </Border>
       <ListBox Grid.Row="1" ItemsSource="{Binding Products}" ScrollViewer.VerticalScrollBarVisibility="Auto">
         <ListBox.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ListBox.ItemsPanel>
         <ListBox.ItemTemplate><DataTemplate>
-          <Button Width="176" Height="182" Margin="5" Padding="14" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" Command="{Binding DataContext.AddCommand, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding}">
+          <Button Width="186" Height="196" Margin="5" Padding="14" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" Command="{Binding DataContext.AddCommand, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding}">
             <Grid><Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-              <Border Height="86" CornerRadius="8" Background="{StaticResource Ivory}" BorderBrush="{StaticResource Line}" BorderThickness="1" Margin="0,0,0,6" HorizontalAlignment="Stretch">
+              <Border Height="92" CornerRadius="8" Background="{StaticResource Ivory}" BorderBrush="{StaticResource Line}" BorderThickness="1" Margin="0,0,0,6" HorizontalAlignment="Stretch">
                 <Image Source="{Binding Product.PrimaryImagePath, Converter={StaticResource ImagePathConverter}}" Stretch="UniformToFill" Margin="3">
                   <Image.Style><Style TargetType="Image"><Setter Property="Visibility" Value="Visible"/><Style.Triggers><Trigger Property="Source" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed"/></Trigger></Style.Triggers></Style></Image.Style>
                 </Image>
@@ -34,34 +34,46 @@
           <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"><TextBox Width="92" Text="{Binding OpeningFloat}" ToolTip="Fond initial FCFA" AutomationProperties.Name="Fond initial de caisse"/><Button Content="Ouvrir caisse" Command="{Binding OpenCashCommand}" Style="{StaticResource QuietButton}"/></StackPanel>
         </Grid>
         <ListBox Grid.Row="1" ItemsSource="{Binding Cart}" Margin="12,0" ScrollViewer.VerticalScrollBarVisibility="Auto">
-          <ListBox.ItemTemplate><DataTemplate><Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="4,7"><Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="62"/><ColumnDefinition Width="92"/><ColumnDefinition Width="48"/></Grid.ColumnDefinitions>
+          <ListBox.ItemTemplate><DataTemplate><Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="4,6"><Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="44"/><ColumnDefinition Width="56"/><ColumnDefinition Width="44"/><ColumnDefinition Width="88"/><ColumnDefinition Width="44"/></Grid.ColumnDefinitions>
             <TextBlock Text="{Binding Label}" TextWrapping="Wrap" VerticalAlignment="Center" FontWeight="SemiBold"/>
-            <TextBox Grid.Column="1" Text="{Binding Quantity}" AutomationProperties.Name="Quantité"/>
-            <TextBlock Grid.Column="2" Text="{Binding TotalXof, StringFormat={}{0:N0}}" HorizontalAlignment="Right" VerticalAlignment="Center" Style="{StaticResource Money}"/>
-            <Button Grid.Column="3" Content="×" ToolTip="Retirer l’article" AutomationProperties.Name="Retirer l’article" Style="{StaticResource QuietButton}" Command="{Binding DataContext.RemoveCommand, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding}"/>
+            <Button Grid.Column="1" Content="−" MinWidth="0" Width="40" Style="{StaticResource QuietButton}" Command="{Binding DataContext.DecrementCommand, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding}" AutomationProperties.Name="Diminuer la quantité"/>
+            <TextBox Grid.Column="2" Text="{Binding Quantity}" AutomationProperties.Name="Quantité"/>
+            <Button Grid.Column="3" Content="+" MinWidth="0" Width="40" Style="{StaticResource QuietButton}" Command="{Binding DataContext.IncrementCommand, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding}" AutomationProperties.Name="Augmenter la quantité"/>
+            <TextBlock Grid.Column="4" Text="{Binding TotalXof, StringFormat={}{0:N0}}" HorizontalAlignment="Right" VerticalAlignment="Center" Style="{StaticResource Money}"/>
+            <Button Grid.Column="5" Content="×" MinWidth="0" Width="40" ToolTip="Retirer l’article" AutomationProperties.Name="Retirer l’article" Style="{StaticResource QuietButton}" Command="{Binding DataContext.RemoveCommand, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding}"/>
           </Grid></Border></DataTemplate></ListBox.ItemTemplate>
         </ListBox>
         <Border Grid.Row="2" Background="{StaticResource Ivory}" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" CornerRadius="0,0,12,12" Padding="16,12">
-          <ScrollViewer MaxHeight="430" VerticalScrollBarVisibility="Auto"><StackPanel>
-            <Grid Margin="4,0,4,8"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><StackPanel><TextBlock Text="TOTAL À PAYER" Style="{StaticResource Eyebrow}"/><TextBlock Text="Remises et monnaie calculées automatiquement" Foreground="{StaticResource Muted}" FontSize="11"/></StackPanel><TextBlock Grid.Column="1" Text="{Binding PayableXof, StringFormat={}{0:N0} FCFA}" FontSize="24" Foreground="{StaticResource Terracotta}" Style="{StaticResource Money}" VerticalAlignment="Center"/></Grid>
+          <ScrollViewer MaxHeight="470" VerticalScrollBarVisibility="Auto"><StackPanel>
+            <Grid Margin="4,0,4,8"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><StackPanel><TextBlock Text="TOTAL À PAYER" Style="{StaticResource Eyebrow}"/><TextBlock Text="Sous-total, remises et monnaie calculés" Foreground="{StaticResource Muted}" FontSize="11"/></StackPanel><TextBlock Grid.Column="1" Text="{Binding PayableXof, StringFormat={}{0:N0} FCFA}" FontSize="26" Foreground="{StaticResource Terracotta}" Style="{StaticResource Money}" VerticalAlignment="Center"/></Grid>
+            <TextBlock Text="PAIEMENT RAPIDE (1 appui = montant exact)" Style="{StaticResource FieldLabel}"/>
+            <WrapPanel>
+              <Button Content="Espèces" Command="{Binding QuickPayCommand}" CommandParameter="{x:Static domain:PaymentMode.Cash}"/>
+              <Button Content="Orange Money" Command="{Binding QuickPayCommand}" CommandParameter="{x:Static domain:PaymentMode.OrangeMoney}"/>
+              <Button Content="Moov Money" Command="{Binding QuickPayCommand}" CommandParameter="{x:Static domain:PaymentMode.MoovMoney}"/>
+              <Button Content="Wave" Command="{Binding QuickPayCommand}" CommandParameter="{x:Static domain:PaymentMode.Wave}"/>
+              <Button Content="Carte" Command="{Binding QuickPayCommand}" CommandParameter="{x:Static domain:PaymentMode.Card}"/>
+              <Button Content="Crédit" Command="{Binding QuickPayCommand}" CommandParameter="{x:Static domain:PaymentMode.Credit}" Style="{StaticResource DangerButton}"/>
+            </WrapPanel>
             <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="90"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
               <StackPanel><TextBlock Text="Remise %" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding DiscountPercent}" AutomationProperties.Name="Remise en pourcentage"/></StackPanel>
               <StackPanel Grid.Column="1"><TextBlock Text="Motif de la remise" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding DiscountReason}"/></StackPanel>
-              <Button Grid.Column="2" Content="+ Paiement" Command="{Binding AddPaymentCommand}" VerticalAlignment="Bottom"/>
+              <Button Grid.Column="2" Content="+ Paiement mixte" Command="{Binding AddPaymentCommand}" VerticalAlignment="Bottom"/>
             </Grid>
-            <ItemsControl ItemsSource="{Binding Payments}"><ItemsControl.ItemTemplate><DataTemplate><Grid Margin="0,2"><Grid.ColumnDefinitions><ColumnDefinition Width="126"/><ColumnDefinition Width="105"/><ColumnDefinition Width="*"/><ColumnDefinition Width="48"/></Grid.ColumnDefinitions><ComboBox ItemsSource="{Binding Modes}" SelectedItem="{Binding Mode}" AutomationProperties.Name="Mode de paiement"/><TextBox Grid.Column="1" Text="{Binding AmountXof}" AutomationProperties.Name="Montant du paiement"/><TextBox Grid.Column="2" Text="{Binding Reference}" AutomationProperties.Name="Référence du paiement"/><Button Grid.Column="3" Content="×" ToolTip="Retirer ce paiement" AutomationProperties.Name="Retirer ce paiement" Style="{StaticResource QuietButton}" Command="{Binding DataContext.RemovePaymentCommand,RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}"/></Grid></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
-            <TextBlock Text="Client (ou nouveau client ci-dessous)" Style="{StaticResource FieldLabel}"/><ComboBox ItemsSource="{Binding Customers}" SelectedItem="{Binding SelectedCustomer}" DisplayMemberPath="Name" AutomationProperties.Name="Client"/>
+            <ItemsControl ItemsSource="{Binding Payments}"><ItemsControl.ItemTemplate><DataTemplate><Grid Margin="0,2"><Grid.ColumnDefinitions><ColumnDefinition Width="126"/><ColumnDefinition Width="105"/><ColumnDefinition Width="*"/><ColumnDefinition Width="48"/></Grid.ColumnDefinitions><ComboBox ItemsSource="{Binding Modes}" SelectedItem="{Binding Mode}" AutomationProperties.Name="Mode de paiement"/><TextBox Grid.Column="1" Text="{Binding AmountXof}" AutomationProperties.Name="Montant reçu"/><TextBox Grid.Column="2" Text="{Binding Reference}" AutomationProperties.Name="Référence du paiement"/><Button Grid.Column="3" Content="×" ToolTip="Retirer ce paiement" AutomationProperties.Name="Retirer ce paiement" Style="{StaticResource QuietButton}" Command="{Binding DataContext.RemovePaymentCommand,RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}"/></Grid></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+            <TextBlock Text="{Binding ChangePreview, StringFormat=Monnaie à rendre : {0:N0} FCFA}" FontWeight="SemiBold" Foreground="{StaticResource Success}" Margin="4,2"/>
+            <TextBlock Text="Client (recherche par nom ou téléphone)" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding CustomerSearch, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Recherche client"/>
+            <ComboBox ItemsSource="{Binding Customers}" SelectedItem="{Binding SelectedCustomer}" DisplayMemberPath="Name" AutomationProperties.Name="Client sélectionné"/>
             <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
               <StackPanel><TextBlock Text="Nouveau client · nom" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding NewCustomerName}" ToolTip="Fiche créée automatiquement à la validation"/></StackPanel>
               <StackPanel Grid.Column="1"><TextBlock Text="Nouveau client · téléphone" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding NewCustomerPhone}" ToolTip="Fiche créée automatiquement à la validation"/></StackPanel>
             </Grid>
             <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/><ColumnDefinition Width="104"/></Grid.ColumnDefinitions>
-              <StackPanel><TextBlock Text="Mode principal" Style="{StaticResource FieldLabel}"/><ComboBox ItemsSource="{Binding PaymentModes}" SelectedItem="{Binding SelectedPaymentMode}"/></StackPanel>
-              <StackPanel Grid.Column="1"><TextBlock Text="Échéance crédit" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding CreditDueDate}" ToolTip="AAAA-MM-JJ"/></StackPanel>
+              <StackPanel><TextBlock Text="Échéance crédit" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding CreditDueDate}" ToolTip="AAAA-MM-JJ"/></StackPanel>
+              <StackPanel Grid.Column="1"><TextBlock Text="Imprimante ticket" Style="{StaticResource FieldLabel}"/><ComboBox ItemsSource="{Binding Printers}" SelectedItem="{Binding SelectedPrinter}" DisplayMemberPath="Name"/></StackPanel>
               <StackPanel Grid.Column="2"><TextBlock Text="PIN" Style="{StaticResource FieldLabel}"/><PasswordBox PasswordChanged="PinBox_OnPasswordChanged" AutomationProperties.Name="PIN responsable"/></StackPanel>
             </Grid>
-            <TextBlock Text="Imprimante ticket" Style="{StaticResource FieldLabel}"/><ComboBox ItemsSource="{Binding Printers}" SelectedItem="{Binding SelectedPrinter}" DisplayMemberPath="Name"/>
-            <Button Content="Encaisser et imprimer" Command="{Binding CompleteCommand}" Style="{StaticResource PrimaryButton}" Margin="4,8,4,4"/>
+            <Button Content="Encaisser et imprimer" Command="{Binding CompleteCommand}" Style="{StaticResource PrimaryButton}" Margin="4,8,4,4" MinHeight="56" FontSize="16"/>
             <Expander Header="Clôture de caisse" Margin="4,6"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><StackPanel><TextBlock Text="Espèces comptées" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding CountedCash}"/></StackPanel><StackPanel Grid.Column="1"><TextBlock Text="Motif de l’écart" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding CashDifferenceReason}"/></StackPanel><Button Grid.Column="2" Content="Clôturer" Command="{Binding CloseCashCommand}" VerticalAlignment="Bottom"/></Grid></Expander>
             <TextBlock Text="{Binding Status}" Style="{StaticResource HelperText}" Margin="5,6" AutomationProperties.LiveSetting="Polite"/>
           </StackPanel></ScrollViewer>

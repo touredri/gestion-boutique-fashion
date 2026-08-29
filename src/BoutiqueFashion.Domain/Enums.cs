@@ -1,6 +1,7 @@
 namespace BoutiqueFashion.Domain;
 
 public enum UserRole { Seller, Manager, Administrator, ReadOnly }
+public enum ProductType { Clothing, Shoes, Accessories }
 public enum DiscountKind { None, Amount, Percentage }
 public enum PaymentMode { Cash, OrangeMoney, MoovMoney, Wave, Card, BankTransfer, Credit, Custom }
 public enum StockMovementType { Receipt, Sale, Return, Damaged, Lost, Adjustment, Inventory, Reversal }
