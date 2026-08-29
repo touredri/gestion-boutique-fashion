@@ -11,6 +11,15 @@ public sealed class SaleService(IDbContextFactory<BoutiqueDbContext> factory, IA
     {
         if (string.IsNullOrWhiteSpace(draft.IdempotencyKey)) throw new ArgumentException("Une clé d'idempotence est obligatoire.");
         if (draft.Lines.Count == 0) throw new InvalidOperationException("Le panier est vide.");
+
+        var sensitiveDiscount = draft.DiscountKind == DiscountKind.Percentage && draft.DiscountValue > BusinessRules.SellerDiscountLimitPercent;
+        sensitiveDiscount |= draft.Lines.Any(x => x.DiscountKind == DiscountKind.Percentage && x.DiscountValue > BusinessRules.SellerDiscountLimitPercent);
+        var hasCredit = draft.Payments.Any(x => x.Mode == PaymentMode.Credit && x.AmountXof > 0);
+        if (sensitiveDiscount && (draft.ManagerPin is null || !await authorization.AuthorizeSensitiveActionAsync(draft.ManagerPin, "Remise supérieure à 10 %", cancellationToken: cancellationToken)))
+            throw new UnauthorizedAccessException("PIN responsable requis pour cette remise.");
+        if (hasCredit && (draft.ManagerPin is null || !await authorization.AuthorizeSensitiveActionAsync(draft.ManagerPin, "Vente à crédit", cancellationToken: cancellationToken)))
+            throw new UnauthorizedAccessException("PIN responsable requis pour le crédit.");
+
         await using var db = await factory.CreateDbContextAsync(cancellationToken);
         var previous = await db.Sales.AsNoTracking().SingleOrDefaultAsync(x => x.IdempotencyKey == draft.IdempotencyKey, cancellationToken);
         if (previous is not null)
@@ -25,14 +34,6 @@ public sealed class SaleService(IDbContextFactory<BoutiqueDbContext> factory, IA
         var ids = draft.Lines.Select(x => x.VariantId).Distinct().ToArray();
         var variants = await db.ProductVariants.Include(x => x.Product).Where(x => ids.Contains(x.Id)).ToDictionaryAsync(x => x.Id, cancellationToken);
         if (variants.Count != ids.Length) throw new KeyNotFoundException("Un article du panier est introuvable.");
-
-        var sensitiveDiscount = draft.DiscountKind == DiscountKind.Percentage && draft.DiscountValue > BusinessRules.SellerDiscountLimitPercent;
-        sensitiveDiscount |= draft.Lines.Any(x => x.DiscountKind == DiscountKind.Percentage && x.DiscountValue > BusinessRules.SellerDiscountLimitPercent);
-        var hasCredit = draft.Payments.Any(x => x.Mode == PaymentMode.Credit && x.AmountXof > 0);
-        if (sensitiveDiscount && (draft.ManagerPin is null || !await authorization.AuthorizeSensitiveActionAsync(draft.ManagerPin, "Remise supérieure à 10 %", cancellationToken: cancellationToken)))
-            throw new UnauthorizedAccessException("PIN responsable requis pour cette remise.");
-        if (hasCredit && (draft.ManagerPin is null || !await authorization.AuthorizeSensitiveActionAsync(draft.ManagerPin, "Vente à crédit", cancellationToken: cancellationToken)))
-            throw new UnauthorizedAccessException("PIN responsable requis pour le crédit.");
 
         var sale = new Sale { IdempotencyKey = draft.IdempotencyKey, CashSessionId = cashSession.Id, CustomerId = draft.CustomerId };
         long subtotal = 0;

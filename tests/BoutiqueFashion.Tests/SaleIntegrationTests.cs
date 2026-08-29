@@ -1,6 +1,7 @@
 using BoutiqueFashion.Application;
 using BoutiqueFashion.Domain;
 using BoutiqueFashion.Infrastructure;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace BoutiqueFashion.Tests;
@@ -18,7 +19,7 @@ public sealed class SaleIntegrationTests : IAsyncLifetime
         await provider.GetRequiredService<ICashSessionService>().OpenAsync(10_000);
     }
 
-    public Task DisposeAsync() { provider.Dispose(); if (Directory.Exists(root)) Directory.Delete(root, true); return Task.CompletedTask; }
+    public Task DisposeAsync() { provider.Dispose(); SqliteConnection.ClearAllPools(); if (Directory.Exists(root)) Directory.Delete(root, true); return Task.CompletedTask; }
 
     [Fact]
     public async Task Sale_is_atomic_decrements_stock_and_is_idempotent()

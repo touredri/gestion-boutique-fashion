@@ -1,4 +1,4 @@
-#define MyAppName "Boutique Fashion POS"
+﻿#define MyAppName "Boutique Fashion POS"
 #define MyAppVersion "1.0.0"
 #define MyAppPublisher "Boutique Fashion"
 #define MyAppExeName "BoutiqueFashion.exe"
@@ -21,15 +21,15 @@ PrivilegesRequired=admin
 UninstallDisplayIcon={app}\{#MyAppExeName}
 
 [Files]
-Source="..\artifacts\win-x64\*"; DestDir="{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\artifacts\win-x64\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name="{autoprograms}\{#MyAppName}"; Filename="{app}\{#MyAppExeName}"
-Name="{autodesktop}\{#MyAppName}"; Filename="{app}\{#MyAppExeName}"; Tasks: desktopicon
+Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Tasks]
-Name="desktopicon"; Description="Créer un raccourci sur le Bureau"; GroupDescription="Raccourcis :"
+Name: "desktopicon"; Description: "Créer un raccourci sur le Bureau"; GroupDescription: "Raccourcis :"
 
 [Run]
-Filename="{app}\{#MyAppExeName}"; Description="Lancer {#MyAppName}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#MyAppExeName}"; Description: "Lancer {#MyAppName}"; Flags: nowait postinstall skipifsilent
 
