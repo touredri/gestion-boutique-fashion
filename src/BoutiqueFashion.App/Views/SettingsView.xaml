@@ -89,6 +89,8 @@
               <Button Grid.Column="1" Content="Ajouter" Command="{Binding AddNetworkPrinterCommand}" Margin="4,0,0,0"/>
               <Button Grid.Column="2" Content="Imprimer un ticket test" Command="{Binding TestPrinterCommand}" Style="{StaticResource PrimaryButton}" Margin="4,0,0,0"/>
             </Grid>
+            <TextBlock Text="{Binding Status}" Style="{StaticResource HelperText}" Margin="4,8,4,0" AutomationProperties.LiveSetting="Polite"/>
+            <TextBlock Text="Si rien ne sort : vérifiez que l'imprimante externe est allumée, branchée (USB ou réseau) et que son pilote Windows est installé ; le message ci-dessus indique le résultat du test." Style="{StaticResource HelperText}" Margin="4,2,4,0" TextWrapping="Wrap"/>
           </StackPanel>
         </Border>
       </TabItem>

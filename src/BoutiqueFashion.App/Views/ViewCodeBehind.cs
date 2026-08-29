@@ -8,18 +8,18 @@ public partial class SaleView : UserControl { public SaleView() => InitializeCom
 public partial class CatalogView : UserControl
 {
     public CatalogView() => InitializeComponent();
-    private void BrowsePhoto_OnClick(object sender, System.Windows.RoutedEventArgs e)
+    private void BrowseRowPhoto_OnClick(object sender, System.Windows.RoutedEventArgs e)
     {
-        if (DataContext is not CatalogViewModel vm) return;
+        if ((sender as System.Windows.FrameworkElement)?.DataContext is not VariantRowViewModel row) return;
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
-            Title = "Choisir une photo de produit",
+            Title = "Choisir une photo de variante",
             Filter = "Images (*.jpg;*.jpeg;*.png;*.bmp;*.gif;*.webp)|*.jpg;*.jpeg;*.png;*.bmp;*.gif;*.webp|Tous les fichiers (*.*)|*.*",
             CheckFileExists = true,
             Multiselect = false
         };
         if (dialog.ShowDialog() == true)
-            vm.PhotoPath = dialog.FileName;
+            row.PhotoPath = dialog.FileName;
     }
 }
 public partial class CustomersView : UserControl { public CustomersView() => InitializeComponent(); }

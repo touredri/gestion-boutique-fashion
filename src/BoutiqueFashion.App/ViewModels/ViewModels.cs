@@ -184,7 +184,6 @@ public partial class CatalogViewModel(ICatalogService catalog, IProductImportSer
     public ObservableCollection<string> SizeOptions { get; } = [];
     public IReadOnlyList<ProductType> ProductTypes { get; } = Enum.GetValues<ProductType>();
     public IReadOnlyList<string> GenderOptions { get; } = ["Femme", "Homme", "Enfant", "Mixte"];
-    public IReadOnlyList<string> SeasonOptions { get; } = ["Toutes saisons", "Été", "Hiver", "Mi-saison"];
     public IReadOnlyList<string> MaterialOptions { get; } = ["Coton", "Polyester", "Lin", "Soie", "Laine", "Denim", "Cuir", "Synthétique", "Autre"];
     private static readonly string[] PredefinedCategories = ["Vêtements", "Chaussures", "Accessoires", "Sacs", "Bijoux", "Cosmétiques"];
     private ImportPreview? importPreview;
@@ -192,16 +191,17 @@ public partial class CatalogViewModel(ICatalogService catalog, IProductImportSer
     [ObservableProperty] private bool hasImportPreview;
     [ObservableProperty] private int selectedTab;
     [ObservableProperty] private bool showNewCategory;
-    [ObservableProperty] private bool showVariantEntry;
     [ObservableProperty] private string newCategoryText = string.Empty;
-    [ObservableProperty] private string productName = string.Empty; [ObservableProperty] private string category = "Vêtements"; [ObservableProperty] private string sku = string.Empty; [ObservableProperty] private string price = string.Empty; [ObservableProperty] private string cost = string.Empty; [ObservableProperty] private string status = string.Empty;
-    [ObservableProperty] private string description = string.Empty; [ObservableProperty] private string barcode = string.Empty; [ObservableProperty] private string promoStart = string.Empty; [ObservableProperty] private string promoEnd = string.Empty;
+    [ObservableProperty] private string productName = string.Empty; [ObservableProperty] private string category = "Vêtements"; [ObservableProperty] private string price = string.Empty; [ObservableProperty] private string cost = string.Empty; [ObservableProperty] private string status = string.Empty;
+    [ObservableProperty] private string description = string.Empty;
     [ObservableProperty] private ProductType selectedType = ProductType.Clothing; [ObservableProperty] private string brand = string.Empty; [ObservableProperty] private string productNotice = string.Empty;
-    [ObservableProperty] private string subCategory = string.Empty; [ObservableProperty] private string gender = string.Empty; [ObservableProperty] private string season = string.Empty;
-    [ObservableProperty] private string material = string.Empty; [ObservableProperty] private string location = string.Empty; [ObservableProperty] private string supplier = string.Empty;
-    [ObservableProperty] private string variantSize = string.Empty; [ObservableProperty] private string variantColor = string.Empty;
+    [ObservableProperty] private string subCategory = string.Empty; [ObservableProperty] private string gender = string.Empty;
+    [ObservableProperty] private bool isEditing;
+    public string SaveButtonLabel => IsEditing ? "Enregistrer" : "Ajouter";
+    partial void OnIsEditingChanged(bool value) => OnPropertyChanged(nameof(SaveButtonLabel));
+    public ObservableCollection<VariantRowViewModel> VariantRows { get; } = [];
     [ObservableProperty] private string matrixPrefix = string.Empty; [ObservableProperty] private string matrixColors = string.Empty; [ObservableProperty] private string matrixSizes = string.Join(", ", BusinessRules.SizePresets(ProductType.Clothing)); [ObservableProperty] private string matrixQuantity = "0";
-    [ObservableProperty] private ProductVariant? selected; [ObservableProperty] private string managerPin = ""; [ObservableProperty] private string promotionPrice = ""; [ObservableProperty] private string photoPath = "";
+    [ObservableProperty] private ProductVariant? selected; [ObservableProperty] private string managerPin = "";
     public async Task LoadAsync()
     {
         var rows = await catalog.SearchAsync(null); Items.Clear(); foreach (var row in rows) Items.Add(row);
@@ -233,34 +233,54 @@ public partial class CatalogViewModel(ICatalogService catalog, IProductImportSer
     }
     partial void OnSelectedChanged(ProductVariant? value)
     {
-        PhotoPath = value?.PrimaryImagePath ?? string.Empty;
         if (value is not null)
         {
             ProductName = value.Product?.Name ?? string.Empty; Category = value.Product?.Category?.Name ?? category;
             SelectedType = value.Product?.Type ?? SelectedType; Brand = value.Product?.Brand ?? string.Empty;
-            Description = value.Product?.Description ?? string.Empty; Barcode = value.Barcode ?? string.Empty;
-            PromoStart = value.PromotionStartsAt?.ToLocalTime().ToString("yyyy-MM-dd") ?? string.Empty;
-            PromoEnd = value.PromotionEndsAt?.ToLocalTime().ToString("yyyy-MM-dd") ?? string.Empty;
-            SubCategory = value.Product?.SubCategory ?? string.Empty; Gender = value.Product?.Gender ?? string.Empty; Season = value.Product?.Season ?? string.Empty;
-            Material = value.Material ?? string.Empty; Location = value.Location ?? string.Empty; Supplier = value.Supplier ?? string.Empty;
+            Description = value.Product?.Description ?? string.Empty;
+            SubCategory = value.Product?.SubCategory ?? string.Empty; Gender = value.Product?.Gender ?? string.Empty;
         }
     }
     private static string? NullIfEmpty(string value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
-    [RelayCommand] private void ToggleVariantEntry() => ShowVariantEntry = !ShowVariantEntry;
+    [RelayCommand] private void AddVariantRow() => VariantRows.Add(new VariantRowViewModel());
 
-    [RelayCommand] private async Task Create()
+    [RelayCommand] private void RemoveVariantRow(VariantRowViewModel row) => VariantRows.Remove(row);
+
+    [RelayCommand] private async Task SaveVariants()
     {
         try
         {
             if (string.IsNullOrWhiteSpace(ProductName)) { Status = "Renseignez le nom du produit."; return; }
-            if (string.IsNullOrWhiteSpace(Sku)) { Status = "Renseignez le SKU (ouvrez « + Variante »)."; return; }
             if (!long.TryParse(Cost, out var cost)) { Status = "Renseignez le coût d'achat."; return; }
             if (!long.TryParse(Price, out var price)) { Status = "Renseignez le prix de vente."; return; }
-            await catalog.CreateVariantAsync(ProductName, EffectiveCategory, Sku, NullIfEmpty(Barcode), NullIfEmpty(VariantSize), NullIfEmpty(VariantColor), cost, price, string.IsNullOrWhiteSpace(MatrixQuantity) ? 0 : decimal.Parse(MatrixQuantity), 2, default, NullIfEmpty(SubCategory), NullIfEmpty(Gender), NullIfEmpty(Season), NullIfEmpty(Material), NullIfEmpty(Location), NullIfEmpty(Supplier), SelectedType, NullIfEmpty(Description), NullIfEmpty(PhotoPath), NullIfEmpty(ManagerPin));
-            Status = "Produit ajouté"; ProductName = Sku = Price = Cost = string.Empty; await LoadAsync();
+            var rows = VariantRows.Where(r => !string.IsNullOrWhiteSpace(r.Sku)).ToList();
+            if (rows.Count == 0) { Status = "Ajoutez au moins une variante avec un SKU (« Variante + »)."; return; }
+            var initial = string.IsNullOrWhiteSpace(MatrixQuantity) ? 0 : decimal.Parse(MatrixQuantity);
+            foreach (var row in rows)
+            {
+                if (row.VariantId == Guid.Empty)
+                {
+                    await catalog.CreateVariantAsync(ProductName, EffectiveCategory, row.Sku.Trim(), NullIfEmpty(row.Barcode), NullIfEmpty(row.Size), NullIfEmpty(row.Color), cost, price, initial, 2, default, NullIfEmpty(SubCategory), NullIfEmpty(Gender), null, NullIfEmpty(row.Material), null, NullIfEmpty(row.Supplier), SelectedType, NullIfEmpty(Description), NullIfEmpty(row.PhotoPath), NullIfEmpty(ManagerPin));
+                }
+                else
+                {
+                    await catalog.UpdateVariantAsync(new ProductUpdate(row.VariantId, ProductName, EffectiveCategory, row.Sku.Trim(), NullIfEmpty(row.Barcode), NullIfEmpty(row.Size), NullIfEmpty(row.Color), cost, price, null, null, null, 2, NullIfEmpty(row.PhotoPath), true, NullIfEmpty(SubCategory), NullIfEmpty(Gender), null, NullIfEmpty(row.Material), null, NullIfEmpty(row.Supplier), SelectedType, NullIfEmpty(Description)), ManagerPin);
+                }
+            }
+            Status = IsEditing ? "Modifications enregistrées" : $"{rows.Count} variante(s) ajoutée(s)";
+            ResetForm();
+            await LoadAsync();
         }
         catch (Exception e) { Status = e.Message; }
+    }
+
+    private void ResetForm()
+    {
+        IsEditing = false;
+        VariantRows.Clear();
+        VariantRows.Add(new VariantRowViewModel());
+        ProductName = Description = Brand = Cost = Price = string.Empty;
     }
 
     [RelayCommand] private async Task CreateMatrix()
@@ -276,19 +296,6 @@ public partial class CatalogViewModel(ICatalogService catalog, IProductImportSer
     }
 
     private static List<string> SplitList(string value) => value.Split([';', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
-
-    [RelayCommand] private async Task Update()
-    {
-        if (Selected is null) return;
-        try
-        {
-            DateTimeOffset? promoStart = DateTimeOffset.TryParse(PromoStart, out var ps) ? ps : Selected.PromotionStartsAt;
-            DateTimeOffset? promoEnd = DateTimeOffset.TryParse(PromoEnd, out var pe) ? pe : Selected.PromotionEndsAt;
-            var u = new ProductUpdate(Selected.Id, string.IsNullOrWhiteSpace(ProductName) ? Selected.Product!.Name : ProductName, EffectiveCategory, string.IsNullOrWhiteSpace(Sku) ? Selected.Sku : Sku, NullIfEmpty(Barcode) ?? Selected.Barcode, Selected.Size, Selected.Color, string.IsNullOrWhiteSpace(Cost) ? Selected.CostXof : long.Parse(Cost), string.IsNullOrWhiteSpace(Price) ? Selected.PriceXof : long.Parse(Price), string.IsNullOrWhiteSpace(PromotionPrice) ? null : long.Parse(PromotionPrice), promoStart, promoEnd, Selected.LowStockThreshold, PhotoPath, true, NullIfEmpty(SubCategory), NullIfEmpty(Gender), NullIfEmpty(Season), NullIfEmpty(Material), NullIfEmpty(Location), NullIfEmpty(Supplier), SelectedType, NullIfEmpty(Description));
-            await catalog.UpdateVariantAsync(u, ManagerPin); Status = "Produit modifié"; PhotoPath = string.Empty; await LoadAsync();
-        }
-        catch (Exception e) { Status = e.Message; }
-    }
 
     [RelayCommand] private async Task BrowseImportFile()
     {
@@ -320,7 +327,25 @@ public partial class CatalogViewModel(ICatalogService catalog, IProductImportSer
 
     [RelayCommand] private void ToggleNewCategory() => ShowNewCategory = !ShowNewCategory;
 
-    [RelayCommand] private void EditSelected() { if (Selected is null) return; SelectedTab = 0; }
+    [RelayCommand] private void EditSelected()
+    {
+        if (Selected is null) return;
+        ProductName = Selected.Product?.Name ?? string.Empty;
+        Category = Selected.Product?.Category?.Name ?? Category;
+        SelectedType = Selected.Product?.Type ?? SelectedType;
+        Brand = Selected.Product?.Brand ?? string.Empty;
+        Description = Selected.Product?.Description ?? string.Empty;
+        SubCategory = Selected.Product?.SubCategory ?? string.Empty;
+        Gender = Selected.Product?.Gender ?? string.Empty;
+        Cost = Selected.CostXof.ToString();
+        Price = Selected.PriceXof.ToString();
+        VariantRows.Clear();
+        foreach (var v in Items.Where(x => x.Product?.Id == Selected.Product?.Id))
+            VariantRows.Add(new VariantRowViewModel { VariantId = v.Id, Sku = v.Sku, Barcode = v.Barcode ?? string.Empty, Size = v.Size ?? string.Empty, Color = v.Color ?? string.Empty, Material = v.Material ?? string.Empty, Supplier = v.Supplier ?? string.Empty, PhotoPath = v.PrimaryImagePath ?? string.Empty });
+        if (VariantRows.Count == 0) VariantRows.Add(new VariantRowViewModel());
+        IsEditing = true;
+        SelectedTab = 0;
+    }
 
     [RelayCommand] private async Task DeleteSelected()
     {
@@ -331,6 +356,18 @@ public partial class CatalogViewModel(ICatalogService catalog, IProductImportSer
     }
 
     [RelayCommand] private async Task Archive() { if (Selected is null) return; if (!UiConfirm.Ask($"Archiver la variante {Selected.Sku} ? Elle restera dans l'historique mais ne pourra plus être vendue.")) return; try { await catalog.UpdateVariantAsync(new ProductUpdate(Selected.Id, Selected.Product!.Name, Selected.Product.Category?.Name ?? Category, Selected.Sku, Selected.Barcode, Selected.Size, Selected.Color, Selected.CostXof, Selected.PriceXof, Selected.PromotionalPriceXof, Selected.PromotionStartsAt, Selected.PromotionEndsAt, Selected.LowStockThreshold, null, false, Selected.Product.SubCategory, Selected.Product.Gender, Selected.Product.Season, Selected.Material, Selected.Location, Selected.Supplier, Selected.Product.Type), ManagerPin); Status = "Produit archivé"; await LoadAsync(); } catch (Exception e) { Status = e.Message; } }
+}
+
+public partial class VariantRowViewModel : ObservableObject
+{
+    [ObservableProperty] private Guid variantId = Guid.Empty;
+    [ObservableProperty] private string sku = string.Empty;
+    [ObservableProperty] private string barcode = string.Empty;
+    [ObservableProperty] private string size = string.Empty;
+    [ObservableProperty] private string color = string.Empty;
+    [ObservableProperty] private string material = string.Empty;
+    [ObservableProperty] private string supplier = string.Empty;
+    [ObservableProperty] private string photoPath = string.Empty;
 }
 
 public partial class InventoryLineViewModel(ProductVariant variant) : ObservableObject
