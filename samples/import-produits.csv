@@ -1,0 +1,4 @@
+produit,categorie,marque,sku,code_barres,taille,couleur,cout_xof,prix_xof,quantite,seuil_alerte
+Chemise Classic,Vêtements,Exemple,CHE-CLA-BLA-M,100000000001,M,Blanc,8000,15000,8,2
+Basket Urban,Chaussures,Exemple,BAS-URB-NOI-42,100000000002,42,Noir,18000,35000,5,1
+

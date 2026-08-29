@@ -1,0 +1,64 @@
+<Window x:Class="BoutiqueFashion.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:BoutiqueFashion.App.ViewModels"
+        xmlns:views="clr-namespace:BoutiqueFashion.App.Views"
+        Title="Boutique Fashion" Width="1280" Height="760" MinWidth="1024" MinHeight="600"
+        WindowStartupLocation="CenterScreen" UseLayoutRounding="True" SnapsToDevicePixels="True">
+  <Window.Resources>
+    <DataTemplate DataType="{x:Type vm:DashboardViewModel}"><views:DashboardView/></DataTemplate>
+    <DataTemplate DataType="{x:Type vm:SaleViewModel}"><views:SaleView/></DataTemplate>
+    <DataTemplate DataType="{x:Type vm:CatalogViewModel}"><views:CatalogView/></DataTemplate>
+    <DataTemplate DataType="{x:Type vm:StockViewModel}"><views:StockView/></DataTemplate>
+    <DataTemplate DataType="{x:Type vm:CustomersViewModel}"><views:CustomersView/></DataTemplate>
+    <DataTemplate DataType="{x:Type vm:ExpensesViewModel}"><views:ExpensesView/></DataTemplate>
+    <DataTemplate DataType="{x:Type vm:DocumentsViewModel}"><views:DocumentsView/></DataTemplate>
+    <DataTemplate DataType="{x:Type vm:ReportsViewModel}"><views:ReportsView/></DataTemplate>
+    <DataTemplate DataType="{x:Type vm:SettingsViewModel}"><views:SettingsView/></DataTemplate>
+  </Window.Resources>
+  <Grid>
+    <Grid.ColumnDefinitions><ColumnDefinition Width="244"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+    <Border Background="{StaticResource Nav}" Padding="16,14">
+      <DockPanel LastChildFill="True">
+        <StackPanel DockPanel.Dock="Top">
+          <Grid Margin="6,4,4,18">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="46"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+            <Border Width="40" Height="40" Background="{StaticResource Terracotta}" CornerRadius="10">
+              <TextBlock Text="BF" Foreground="White" FontWeight="Bold" FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="10,0,0,0">
+              <TextBlock Text="BOUTIQUE FASHION" Foreground="White" FontWeight="Bold" FontSize="14"/>
+              <TextBlock Text="POINT DE VENTE" Foreground="{StaticResource Gold}" FontSize="10" FontWeight="SemiBold"/>
+            </StackPanel>
+          </Grid>
+          <TextBlock Text="ESPACE DE TRAVAIL" Foreground="#FF8F8880" FontSize="10" FontWeight="SemiBold" Margin="10,0,0,6"/>
+          <RadioButton Content="Tableau de bord" Tag="&#xE80F;" GroupName="Navigation" IsChecked="True" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Dashboard"/>
+          <RadioButton Content="Vente / Caisse" Tag="&#xE719;" GroupName="Navigation" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Sale"/>
+          <RadioButton Content="Produits" Tag="&#xE7BF;" GroupName="Navigation" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Catalog"/>
+          <RadioButton Content="Stock" Tag="&#xE8B7;" GroupName="Navigation" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Stock"/>
+          <RadioButton Content="Clients" Tag="&#xE77B;" GroupName="Navigation" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Customers"/>
+          <RadioButton Content="Dépenses" Tag="&#xE8C7;" GroupName="Navigation" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Expenses"/>
+          <RadioButton Content="Documents" Tag="&#xE8A5;" GroupName="Navigation" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Documents"/>
+          <RadioButton Content="Rapports" Tag="&#xE9D2;" GroupName="Navigation" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Reports"/>
+          <RadioButton Content="Paramètres" Tag="&#xE713;" GroupName="Navigation" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Settings"/>
+        </StackPanel>
+        <Border DockPanel.Dock="Bottom" Background="#FF2C2925" CornerRadius="10" Padding="12" Margin="0,14,0,0">
+          <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="34"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+            <Border Width="30" Height="30" Background="{StaticResource GoldSoft}" CornerRadius="15"><TextBlock Text="V" Foreground="{StaticResource TerracottaDark}" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+            <StackPanel Grid.Column="1" Margin="8,0,0,0"><TextBlock Text="Vendeur boutique" Foreground="White" FontWeight="SemiBold" FontSize="12"/><TextBlock Text="Session active" Foreground="#FF9B948C" FontSize="11"/></StackPanel>
+          </Grid>
+        </Border>
+      </DockPanel>
+    </Border>
+    <Grid Grid.Column="1">
+      <Grid.RowDefinitions><RowDefinition Height="76"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+      <Border Background="{StaticResource Paper}" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
+        <Grid Margin="24,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+          <StackPanel VerticalAlignment="Center"><TextBlock Text="{Binding PageTitle}" Style="{StaticResource PageTitle}"/><TextBlock Text="Gestion locale de la boutique" Foreground="{StaticResource Muted}" FontSize="12"/></StackPanel>
+          <Border Grid.Column="1" Style="{StaticResource StatusPill}" VerticalAlignment="Center"><StackPanel Orientation="Horizontal"><Ellipse Width="7" Height="7" Fill="{StaticResource Success}" Margin="0,0,7,0"/><TextBlock Text="Hors ligne · Données locales" Foreground="{StaticResource Success}" FontWeight="SemiBold" FontSize="12"/></StackPanel></Border>
+        </Grid>
+      </Border>
+      <ContentControl Grid.Row="1" Content="{Binding CurrentPage}" Focusable="False"/>
+    </Grid>
+  </Grid>
+</Window>
