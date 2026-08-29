@@ -105,6 +105,28 @@ public sealed class CatalogService(IDbContextFactory<BoutiqueDbContext> factory,
         return cleaned.Length == 0 ? "X" : cleaned.Length <= 3 ? cleaned : cleaned[..3];
     }
 
+    public async Task DeleteVariantAsync(Guid variantId, string managerPin, CancellationToken cancellationToken = default)
+    {
+        if (!await authorization.AuthorizeSensitiveActionAsync(managerPin, "Supprimer variante", cancellationToken: cancellationToken)) throw new UnauthorizedAccessException("PIN responsable invalide.");
+        await using var db = await factory.CreateDbContextAsync(cancellationToken);
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        var variant = await db.ProductVariants.SingleOrDefaultAsync(x => x.Id == variantId, cancellationToken) ?? throw new KeyNotFoundException("Variante introuvable.");
+        var hasHistory = await db.StockMovements.AnyAsync(x => x.VariantId == variantId, cancellationToken)
+            || await db.SaleLines.AnyAsync(x => x.VariantId == variantId, cancellationToken);
+        if (hasHistory) throw new InvalidOperationException("Suppression impossible : la variante a un historique. Utilisez « Archiver ».");
+        db.ProductImages.RemoveRange(db.ProductImages.Where(x => x.VariantId == variantId));
+        db.ProductVariants.Remove(variant);
+        db.AuditEntries.Add(new AuditEntry { Actor = "Responsable", Action = "Supprimer variante", EntityType = nameof(ProductVariant), EntityId = variant.Id.ToString(), BeforeJson = JsonSerializer.Serialize(new { variant.Sku }) });
+        await db.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<string>> CategoriesAsync(CancellationToken cancellationToken = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(cancellationToken);
+        return await db.Categories.AsNoTracking().OrderBy(x => x.Name).Select(x => x.Name).ToListAsync(cancellationToken);
+    }
+
     public async Task<ProductVariant> UpdateVariantAsync(ProductUpdate update, string managerPin, CancellationToken cancellationToken = default)
     {
         if (!await authorization.AuthorizeSensitiveActionAsync(managerPin, "Modifier produit", cancellationToken: cancellationToken)) throw new UnauthorizedAccessException("PIN responsable invalide.");

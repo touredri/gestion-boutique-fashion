@@ -124,7 +124,7 @@ internal static class EscPosReceiptBuilder
         Add(bytes, encoding, Columns("Sous-total", $"{receipt.SubtotalXof:N0}", width));
         if (receipt.DiscountXof > 0) Add(bytes, encoding, Columns("Remise", $"-{receipt.DiscountXof:N0}", width));
         Add(bytes, encoding, Columns("TOTAL", $"{receipt.TotalXof:N0} FCFA", width), true, true);
-        foreach (var payment in receipt.Payments) Add(bytes, encoding, Columns(payment.Mode.ToString(), $"{payment.AmountXof:N0}", width));
+        foreach (var payment in receipt.Payments) Add(bytes, encoding, Columns(Libelles.Text(payment.Mode), $"{payment.AmountXof:N0}", width));
         if (receipt.ChangeXof > 0) Add(bytes, encoding, Columns("Monnaie rendue", $"{receipt.ChangeXof:N0}", width), true);
         Add(bytes, encoding, ""); Add(bytes, encoding, Center(receipt.Footer, width));
         return Finish(bytes, profile);
@@ -157,7 +157,7 @@ internal static class EscPosReceiptBuilder
         Add(bytes, encoding, new string('-', width));
         Add(bytes, encoding, Columns("TOTAL", $"{receipt.TotalXof:N0} FCFA", width), true, true);
         Add(bytes, encoding, new string('-', width));
-        foreach (var payment in receipt.Payments) Add(bytes, encoding, Columns(payment.Mode.ToString(), $"{payment.AmountXof:N0}", width));
+        foreach (var payment in receipt.Payments) Add(bytes, encoding, Columns(Libelles.Text(payment.Mode), $"{payment.AmountXof:N0}", width));
         if (receipt.ChangeXof > 0) Add(bytes, encoding, Columns("Monnaie rendue", $"{receipt.ChangeXof:N0}", width), true);
         Add(bytes, encoding, "");
         if (!string.IsNullOrWhiteSpace(receipt.ReturnPolicy)) Add(bytes, encoding, Center(Fit(receipt.ReturnPolicy, width), width));
@@ -186,7 +186,7 @@ internal static class EscPosReceiptBuilder
         }
         Add(bytes, encoding, "");
         Add(bytes, encoding, Columns("TOTAL", $"{receipt.TotalXof:N0} FCFA", width), true);
-        foreach (var payment in receipt.Payments) Add(bytes, encoding, Columns(payment.Mode.ToString(), $"{payment.AmountXof:N0}", width));
+        foreach (var payment in receipt.Payments) Add(bytes, encoding, Columns(Libelles.Text(payment.Mode), $"{payment.AmountXof:N0}", width));
         if (receipt.ChangeXof > 0) Add(bytes, encoding, Columns("Monnaie", $"{receipt.ChangeXof:N0}", width));
         Add(bytes, encoding, "");
         Add(bytes, encoding, Fit(receipt.Footer, width));

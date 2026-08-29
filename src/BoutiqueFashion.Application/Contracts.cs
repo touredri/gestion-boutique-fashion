@@ -19,7 +19,8 @@ public sealed record SaleDraft(
 
 public sealed record SaleResult(Guid SaleId, string Number, long TotalXof, Guid DocumentId, bool AlreadyExisted, bool HasNegativeStock, long ChangeXof = 0);
 public sealed record StockAdjustment(Guid VariantId, decimal QuantityDelta, StockMovementType Type, long UnitCostXof, string Reason, string Actor);
-public sealed record DashboardSummary(long SalesXof, long CollectedXof, long GrossMarginXof, long ExpensesXof, long CreditBalanceXof, int LowStockCount, long EstimatedProfitXof = 0, bool CostWarning = false);
+public sealed record DashboardSummary(long SalesXof, long CollectedXof, long GrossMarginXof, long ExpensesXof, long CreditBalanceXof, int LowStockCount, long EstimatedProfitXof = 0, bool CostWarning = false, int SalesCount = 0);
+public sealed record RecentSaleRow(string Number, string Time, string Customer, long TotalXof);
 public sealed record PrinterProfile(string Name, PrinterConnectionKind ConnectionKind, string Address, PaperWidth PaperWidth, bool CutPaper = true);
 public sealed record ReceiptItem(string Description, decimal Quantity, long UnitPriceXof, long DiscountXof, long TotalXof);
 public sealed record ReceiptData(string ShopName, string? Address, string? Phone, string Number, DateTimeOffset IssuedAt, string? Customer, IReadOnlyList<ReceiptItem> Items, long SubtotalXof, long DiscountXof, long TotalXof, IReadOnlyList<PaymentDraft> Payments, string Footer, bool IsDuplicate = false, string? Email = null, string? TaxId = null, string? Slogan = null, string? LogoPath = null, string? StampPath = null, string? SignaturePath = null, string? ReturnPolicy = null, long ChangeXof = 0, DocumentStyle Style = DocumentStyle.Moderne);
@@ -142,6 +143,7 @@ public interface IReportService
     Task<IReadOnlyList<ReportRow>> RotationAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<CashClosingRow>> CashClosingsAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<StockAlertRow>> StockAlertsAsync(CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<RecentSaleRow>> RecentSalesAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default);
 }
 
 public interface ICatalogService
@@ -150,6 +152,8 @@ public interface ICatalogService
     Task<ProductVariant> CreateVariantAsync(string productName, string categoryName, string sku, string? barcode, string? size, string? color, long costXof, long priceXof, decimal initialQuantity, decimal alertThreshold, CancellationToken cancellationToken = default, string? subCategory = null, string? gender = null, string? season = null, string? material = null, string? location = null, string? supplier = null, ProductType type = ProductType.Clothing, string? description = null, string? photoPath = null, string? managerPin = null);
     Task<IReadOnlyList<ProductVariant>> CreateMatrixAsync(MatrixDraft draft, CancellationToken cancellationToken = default);
     Task<ProductVariant> UpdateVariantAsync(ProductUpdate update, string managerPin, CancellationToken cancellationToken = default);
+    Task DeleteVariantAsync(Guid variantId, string managerPin, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<string>> CategoriesAsync(CancellationToken cancellationToken = default);
 }
 
 public interface ICustomerService

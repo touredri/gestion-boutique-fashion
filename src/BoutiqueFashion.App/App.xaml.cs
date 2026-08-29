@@ -23,8 +23,19 @@ public partial class App : System.Windows.Application
         base.OnStartup(e); await host.StartAsync();
         await host.Services.GetRequiredService<DatabaseInitializer>().InitializeAsync();
         await TryBackupAsync(); backupTimer.Tick += async (_, _) => await TryBackupAsync(); backupTimer.Start();
+        OpenTouchKeyboard();
         var window = host.Services.GetRequiredService<MainWindow>(); window.Show();
         await host.Services.GetRequiredService<ShellViewModel>().InitializeAsync();
+    }
+
+    private static void OpenTouchKeyboard()
+    {
+        try
+        {
+            var tabTip = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesCommon), "microsoft shared", "ink", "TabTip.exe");
+            if (System.IO.File.Exists(tabTip)) System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(tabTip) { UseShellExecute = true });
+        }
+        catch { /* terminal avec clavier physique : rien à faire */ }
     }
 
     private async Task TryBackupAsync() { try { await host.Services.GetRequiredService<IBackupService>().CreateAsync(); } catch { /* L'échec reste non bloquant; la sauvegarde manuelle affiche l'erreur. */ } }

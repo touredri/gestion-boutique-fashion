@@ -190,8 +190,20 @@ public sealed class ReportService(IDbContextFactory<BoutiqueDbContext> factory) 
         var credit = await db.CustomerCredits.Where(x => x.Status != CreditStatus.Paid && x.Status != CreditStatus.Cancelled).SumAsync(x => x.BalanceXof, cancellationToken);
         var stocks = await db.ProductVariants.AsNoTracking().Where(x => x.IsActive).Select(x => new { x.QuantityOnHand, x.LowStockThreshold }).ToListAsync(cancellationToken);
         var low = stocks.Count(x => x.QuantityOnHand <= x.LowStockThreshold);
+        var salesCount = await sales.CountAsync(cancellationToken);
         var grossMargin = salesXof - cost;
-        return new DashboardSummary(salesXof, collected, grossMargin, expenses, credit, low, grossMargin - expenses, soldLines.Any(x => x.FrozenUnitCostXof <= 0));
+        return new DashboardSummary(salesXof, collected, grossMargin, expenses, credit, low, grossMargin - expenses, soldLines.Any(x => x.FrozenUnitCostXof <= 0), salesCount);
+    }
+
+    public async Task<IReadOnlyList<RecentSaleRow>> RecentSalesAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(cancellationToken);
+        var rows = await db.Sales.AsNoTracking()
+            .Where(x => x.CreatedAt >= from && x.CreatedAt < to && x.Status != SaleStatus.Cancelled)
+            .OrderByDescending(x => x.CreatedAt).Take(8)
+            .Select(x => new { x.Number, x.CreatedAt, x.TotalXof, Customer = x.Customer != null ? x.Customer.Name : null })
+            .ToListAsync(cancellationToken);
+        return rows.Select(x => new RecentSaleRow(x.Number, x.CreatedAt.ToLocalTime().ToString("HH:mm"), x.Customer ?? "Client de passage", x.TotalXof)).ToArray();
     }
 
     public async Task<IReadOnlyList<ReportRow>> SalesByPaymentModeAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default)

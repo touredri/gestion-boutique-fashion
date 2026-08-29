@@ -13,7 +13,7 @@ namespace BoutiqueFashion.App.ViewModels;
 public partial class ShellViewModel(DashboardViewModel dashboard, SaleViewModel sale, CatalogViewModel catalog, StockViewModel stock, CustomersViewModel customers, ExpensesViewModel expenses, DocumentsViewModel documents, ReportsViewModel reports, SettingsViewModel settings) : ObservableObject
 {
     [ObservableProperty] private object currentPage = dashboard; [ObservableProperty] private string pageTitle = "Tableau de bord";
-    public async Task InitializeAsync() { await dashboard.LoadAsync(); await sale.LoadAsync(); }
+    public async Task InitializeAsync() { AppNavigator.Go = Navigate; await dashboard.LoadAsync(); await sale.LoadAsync(); }
     [RelayCommand] private async Task Navigate(string target)
     {
         (object Page, string Title) next = target switch { "Sale" => (sale, "Vente / Caisse"), "Catalog" => (catalog, "Produits et variantes"), "Stock" => (stock, "Gestion du stock"), "Customers" => (customers, "Clients et crédits"), "Expenses" => (expenses, "Dépenses"), "Documents" => (documents, "Documents et opérations"), "Reports" => (reports, "Rapports"), "Settings" => (settings, "Paramètres"), _ => (dashboard, "Tableau de bord") };
@@ -29,10 +29,26 @@ internal static class UiConfirm
     public static bool Ask(string message) => MessageBox.Show(message, "Confirmation requise", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
 }
 
+internal static class AppNavigator
+{
+    public static Func<string, Task>? Go { get; set; }
+}
+
 public partial class DashboardViewModel(IReportService reports) : ObservableObject, ILoadable
 {
+    public ObservableCollection<RecentSaleRow> RecentSales { get; } = [];
     [ObservableProperty] private DashboardSummary summary = new(0, 0, 0, 0, 0, 0);
-    public async Task LoadAsync() { var now = DateTimeOffset.Now; Summary = await reports.DashboardAsync(new DateTimeOffset(now.Date, now.Offset), new DateTimeOffset(now.Date.AddDays(1), now.Offset)); }
+    public async Task LoadAsync()
+    {
+        var now = DateTimeOffset.Now;
+        var from = new DateTimeOffset(now.Date, now.Offset);
+        var to = new DateTimeOffset(now.Date.AddDays(1), now.Offset);
+        Summary = await reports.DashboardAsync(from, to);
+        RecentSales.Clear();
+        foreach (var sale in await reports.RecentSalesAsync(from, to)) RecentSales.Add(sale);
+    }
+    [RelayCommand] private async Task QuickSell() { if (AppNavigator.Go is not null) await AppNavigator.Go("Sale"); }
+    [RelayCommand] private async Task QuickProducts() { if (AppNavigator.Go is not null) await AppNavigator.Go("Catalog"); }
 }
 
 public partial class CartLineViewModel(ProductVariant variant) : ObservableObject
@@ -166,9 +182,17 @@ public partial class CatalogViewModel(ICatalogService catalog, IProductImportSer
 {
     public ObservableCollection<ProductVariant> Items { get; } = [];
     public ObservableCollection<ImportIssue> ImportIssues { get; } = [];
+    public ObservableCollection<string> Categories { get; } = [];
+    public ObservableCollection<string> SizeOptions { get; } = [];
     public IReadOnlyList<ProductType> ProductTypes { get; } = Enum.GetValues<ProductType>();
+    public IReadOnlyList<string> GenderOptions { get; } = ["Femme", "Homme", "Enfant", "Mixte"];
+    public IReadOnlyList<string> SeasonOptions { get; } = ["Toutes saisons", "Été", "Hiver", "Mi-saison"];
     private ImportPreview? importPreview;
     [ObservableProperty] private int importRowsCount;
+    [ObservableProperty] private bool hasImportPreview;
+    [ObservableProperty] private int selectedTab;
+    [ObservableProperty] private bool showNewCategory;
+    [ObservableProperty] private string newCategoryText = string.Empty;
     [ObservableProperty] private string productName = string.Empty; [ObservableProperty] private string category = "Vêtements"; [ObservableProperty] private string sku = string.Empty; [ObservableProperty] private string price = string.Empty; [ObservableProperty] private string cost = string.Empty; [ObservableProperty] private string status = string.Empty;
     [ObservableProperty] private string description = string.Empty; [ObservableProperty] private string barcode = string.Empty; [ObservableProperty] private string promoStart = string.Empty; [ObservableProperty] private string promoEnd = string.Empty;
     [ObservableProperty] private ProductType selectedType = ProductType.Clothing; [ObservableProperty] private string brand = string.Empty; [ObservableProperty] private string productNotice = string.Empty;
@@ -177,8 +201,21 @@ public partial class CatalogViewModel(ICatalogService catalog, IProductImportSer
     [ObservableProperty] private string variantSize = string.Empty; [ObservableProperty] private string variantColor = string.Empty;
     [ObservableProperty] private string matrixPrefix = string.Empty; [ObservableProperty] private string matrixColors = string.Empty; [ObservableProperty] private string matrixSizes = string.Join(", ", BusinessRules.SizePresets(ProductType.Clothing)); [ObservableProperty] private string matrixQuantity = "0";
     [ObservableProperty] private ProductVariant? selected; [ObservableProperty] private string managerPin = ""; [ObservableProperty] private string promotionPrice = ""; [ObservableProperty] private string photoPath = "";
-    public async Task LoadAsync() { var rows = await catalog.SearchAsync(null); Items.Clear(); foreach (var row in rows) Items.Add(row); }
-    partial void OnSelectedTypeChanged(ProductType value) => MatrixSizes = string.Join(", ", BusinessRules.SizePresets(value));
+    public async Task LoadAsync()
+    {
+        var rows = await catalog.SearchAsync(null); Items.Clear(); foreach (var row in rows) Items.Add(row);
+        Categories.Clear(); foreach (var c in await catalog.CategoriesAsync()) Categories.Add(c);
+        RefreshSizeOptions();
+    }
+
+    private void RefreshSizeOptions()
+    {
+        SizeOptions.Clear();
+        foreach (var s in BusinessRules.SizePresets(SelectedType)) SizeOptions.Add(s);
+    }
+
+    partial void OnSelectedTypeChanged(ProductType value) { MatrixSizes = string.Join(", ", BusinessRules.SizePresets(value)); RefreshSizeOptions(); }
+    private string EffectiveCategory => ShowNewCategory && !string.IsNullOrWhiteSpace(NewCategoryText) ? NewCategoryText.Trim() : Category;
     partial void OnProductNameChanged(string value) => _ = CheckExistingProductAsync(value);
     private async Task CheckExistingProductAsync(string name)
     {
@@ -207,14 +244,14 @@ public partial class CatalogViewModel(ICatalogService catalog, IProductImportSer
     }
     private static string? NullIfEmpty(string value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
-    [RelayCommand] private async Task Create() { try { await catalog.CreateVariantAsync(ProductName, Category, Sku, NullIfEmpty(Barcode), NullIfEmpty(VariantSize), NullIfEmpty(VariantColor), long.Parse(Cost), long.Parse(Price), 0, 2, default, NullIfEmpty(SubCategory), NullIfEmpty(Gender), NullIfEmpty(Season), NullIfEmpty(Material), NullIfEmpty(Location), NullIfEmpty(Supplier), SelectedType, NullIfEmpty(Description), NullIfEmpty(PhotoPath), NullIfEmpty(ManagerPin)); Status = "Produit ajouté"; ProductName = Sku = Price = Cost = string.Empty; await LoadAsync(); } catch (Exception e) { Status = e.Message; } }
+    [RelayCommand] private async Task Create() { try { await catalog.CreateVariantAsync(ProductName, EffectiveCategory, Sku, NullIfEmpty(Barcode), NullIfEmpty(VariantSize), NullIfEmpty(VariantColor), long.Parse(Cost), long.Parse(Price), 0, 2, default, NullIfEmpty(SubCategory), NullIfEmpty(Gender), NullIfEmpty(Season), NullIfEmpty(Material), NullIfEmpty(Location), NullIfEmpty(Supplier), SelectedType, NullIfEmpty(Description), NullIfEmpty(PhotoPath), NullIfEmpty(ManagerPin)); Status = "Produit ajouté"; ProductName = Sku = Price = Cost = string.Empty; await LoadAsync(); } catch (Exception e) { Status = e.Message; } }
 
     [RelayCommand] private async Task CreateMatrix()
     {
         try
         {
             var colors = SplitList(MatrixColors); var sizes = SplitList(MatrixSizes);
-            var created = await catalog.CreateMatrixAsync(new MatrixDraft(ProductName, Category, MatrixPrefix, colors, sizes, long.Parse(Cost), long.Parse(Price), decimal.Parse(MatrixQuantity), 2, SelectedType, NullIfEmpty(Brand), NullIfEmpty(SubCategory), NullIfEmpty(Gender), NullIfEmpty(Season), NullIfEmpty(Material), NullIfEmpty(Supplier), NullIfEmpty(ManagerPin)));
+            var created = await catalog.CreateMatrixAsync(new MatrixDraft(ProductName, EffectiveCategory, MatrixPrefix, colors, sizes, long.Parse(Cost), long.Parse(Price), decimal.Parse(MatrixQuantity), 2, SelectedType, NullIfEmpty(Brand), NullIfEmpty(SubCategory), NullIfEmpty(Gender), NullIfEmpty(Season), NullIfEmpty(Material), NullIfEmpty(Supplier), NullIfEmpty(ManagerPin)));
             Status = $"{created.Count} variantes uniques créées";
             await LoadAsync();
         }
@@ -230,7 +267,7 @@ public partial class CatalogViewModel(ICatalogService catalog, IProductImportSer
         {
             DateTimeOffset? promoStart = DateTimeOffset.TryParse(PromoStart, out var ps) ? ps : Selected.PromotionStartsAt;
             DateTimeOffset? promoEnd = DateTimeOffset.TryParse(PromoEnd, out var pe) ? pe : Selected.PromotionEndsAt;
-            var u = new ProductUpdate(Selected.Id, string.IsNullOrWhiteSpace(ProductName) ? Selected.Product!.Name : ProductName, Category, string.IsNullOrWhiteSpace(Sku) ? Selected.Sku : Sku, NullIfEmpty(Barcode) ?? Selected.Barcode, Selected.Size, Selected.Color, string.IsNullOrWhiteSpace(Cost) ? Selected.CostXof : long.Parse(Cost), string.IsNullOrWhiteSpace(Price) ? Selected.PriceXof : long.Parse(Price), string.IsNullOrWhiteSpace(PromotionPrice) ? null : long.Parse(PromotionPrice), promoStart, promoEnd, Selected.LowStockThreshold, PhotoPath, true, NullIfEmpty(SubCategory), NullIfEmpty(Gender), NullIfEmpty(Season), NullIfEmpty(Material), NullIfEmpty(Location), NullIfEmpty(Supplier), SelectedType, NullIfEmpty(Description));
+            var u = new ProductUpdate(Selected.Id, string.IsNullOrWhiteSpace(ProductName) ? Selected.Product!.Name : ProductName, EffectiveCategory, string.IsNullOrWhiteSpace(Sku) ? Selected.Sku : Sku, NullIfEmpty(Barcode) ?? Selected.Barcode, Selected.Size, Selected.Color, string.IsNullOrWhiteSpace(Cost) ? Selected.CostXof : long.Parse(Cost), string.IsNullOrWhiteSpace(Price) ? Selected.PriceXof : long.Parse(Price), string.IsNullOrWhiteSpace(PromotionPrice) ? null : long.Parse(PromotionPrice), promoStart, promoEnd, Selected.LowStockThreshold, PhotoPath, true, NullIfEmpty(SubCategory), NullIfEmpty(Gender), NullIfEmpty(Season), NullIfEmpty(Material), NullIfEmpty(Location), NullIfEmpty(Supplier), SelectedType, NullIfEmpty(Description));
             await catalog.UpdateVariantAsync(u, ManagerPin); Status = "Produit modifié"; PhotoPath = string.Empty; await LoadAsync();
         }
         catch (Exception e) { Status = e.Message; }
@@ -245,6 +282,7 @@ public partial class CatalogViewModel(ICatalogService catalog, IProductImportSer
             importPreview = await import.PreviewAsync(dialog.FileName);
             ImportIssues.Clear(); foreach (var issue in importPreview.Issues) ImportIssues.Add(issue);
             ImportRowsCount = importPreview.Rows.Count;
+            HasImportPreview = true;
             Status = importPreview.Issues.Count == 0 ? $"{importPreview.Rows.Count} lignes prêtes à importer" : $"{importPreview.Issues.Count} problème(s) à corriger avant l'import";
         }
         catch (Exception e) { Status = e.Message; }
@@ -257,9 +295,21 @@ public partial class CatalogViewModel(ICatalogService catalog, IProductImportSer
         {
             var count = await import.ImportAsync(importPreview);
             Status = $"{count} variantes importées";
-            importPreview = null; ImportIssues.Clear(); ImportRowsCount = 0;
+            importPreview = null; ImportIssues.Clear(); ImportRowsCount = 0; HasImportPreview = false;
             await LoadAsync();
         }
+        catch (Exception e) { Status = e.Message; }
+    }
+
+    [RelayCommand] private void ToggleNewCategory() => ShowNewCategory = !ShowNewCategory;
+
+    [RelayCommand] private void EditSelected() { if (Selected is null) return; SelectedTab = 0; }
+
+    [RelayCommand] private async Task DeleteSelected()
+    {
+        if (Selected is null) return;
+        if (!UiConfirm.Ask($"Supprimer définitivement la variante {Selected.Sku} ? Impossible si elle a un historique (utilisez Archiver dans ce cas).")) return;
+        try { await catalog.DeleteVariantAsync(Selected.Id, ManagerPin); Status = "Variante supprimée"; Selected = null; await LoadAsync(); }
         catch (Exception e) { Status = e.Message; }
     }
 

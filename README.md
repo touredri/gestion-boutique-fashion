@@ -77,3 +77,6 @@ Le premier script restaure, teste et publie une application autonome dans `artif
 ## Recette matérielle obligatoire
 
 Tester sur le POSIKEX : vente en moins d'une minute, double appui, scanner, accents, ticket long, formats 58/80 mm, imprimante éteinte, USB, Bluetooth, A4 et duplicata.
+
+
+l'ecran du terminal est 1366 x 768, je veux le design soit coherent avec cell ci, eviter la saisie le plus possible au detriment de selection liste, puisque y a pas de clavier connecté, on doit eviter aussi les scroll pour voir des partie non visible tout doit etre vue du premier coup sans scroll(saut les liste de produit, clients etc.. mais pas les actions), gerere un logo sympa pour le logiciel qui sera sur son installeur aussi(afficher sur le bureau), la taille des bouton doit etre coherent, la page client trop melanger/encombré, dans la selection imprimante on doit pouvoir selectionner l'imprimante interne du terminal pour les test, dans la page paramètre les modèles de reçu et autre sont pas bien seul le premier de la liste est disponible en aperçu

@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:BoutiqueFashion.App.ViewModels"
         xmlns:views="clr-namespace:BoutiqueFashion.App.Views"
-        Title="Boutique Fashion" Width="1280" Height="760" MinWidth="1024" MinHeight="600"
+        Title="Boutique" MinWidth="1024" MinHeight="600" WindowState="Maximized"
         WindowStartupLocation="CenterScreen" UseLayoutRounding="True" SnapsToDevicePixels="True">
   <Window.Resources>
     <DataTemplate DataType="{x:Type vm:DashboardViewModel}"><views:DashboardView/></DataTemplate>
@@ -27,7 +27,7 @@
               <TextBlock Text="BF" Foreground="White" FontWeight="Bold" FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
             <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="10,0,0,0">
-              <TextBlock Text="BOUTIQUE FASHION" Foreground="White" FontWeight="Bold" FontSize="14"/>
+              <TextBlock Text="BOUTIQUE" Foreground="White" FontWeight="Bold" FontSize="14"/>
               <TextBlock Text="POINT DE VENTE" Foreground="{StaticResource Gold}" FontSize="10" FontWeight="SemiBold"/>
             </StackPanel>
           </Grid>
@@ -55,7 +55,6 @@
       <Border Background="{StaticResource Paper}" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
         <Grid Margin="24,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
           <StackPanel VerticalAlignment="Center"><TextBlock Text="{Binding PageTitle}" Style="{StaticResource PageTitle}"/><TextBlock Text="Gestion locale de la boutique" Foreground="{StaticResource Muted}" FontSize="12"/></StackPanel>
-          <Border Grid.Column="1" Style="{StaticResource StatusPill}" VerticalAlignment="Center"><StackPanel Orientation="Horizontal"><Ellipse Width="7" Height="7" Fill="{StaticResource Success}" Margin="0,0,7,0"/><TextBlock Text="Hors ligne · Données locales" Foreground="{StaticResource Success}" FontWeight="SemiBold" FontSize="12"/></StackPanel></Border>
         </Grid>
       </Border>
       <ContentControl Grid.Row="1" Content="{Binding CurrentPage}" Focusable="False"/>
