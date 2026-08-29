@@ -15,8 +15,8 @@ public sealed class SaleService(IDbContextFactory<BoutiqueDbContext> factory, IA
         var previous = await db.Sales.AsNoTracking().SingleOrDefaultAsync(x => x.IdempotencyKey == draft.IdempotencyKey, cancellationToken);
         if (previous is not null)
         {
-            var documentId = await db.DocumentSnapshots.Where(x => x.SaleId == previous.Id).Select(x => x.Id).SingleAsync(cancellationToken);
-            return new SaleResult(previous.Id, previous.Number, previous.TotalXof, documentId, true, false);
+            var documentId = await db.DocumentSnapshots.Where(x => x.SaleId == previous.Id && x.Type == DocumentType.Receipt).Select(x => x.Id).SingleAsync(cancellationToken);
+            return new SaleResult(previous.Id, previous.Number, previous.TotalXof, documentId, true, false, previous.ChangeXof);
         }
 
         await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, cancellationToken);
@@ -52,23 +52,50 @@ public sealed class SaleService(IDbContextFactory<BoutiqueDbContext> factory, IA
         sale.SubtotalXof = subtotal;
         sale.DiscountXof = totalDiscount + sale.Lines.Sum(x => x.DiscountXof);
         sale.TotalXof = subtotal - totalDiscount;
-        if (draft.Payments.Sum(x => x.AmountXof) != sale.TotalXof) throw new InvalidOperationException("La somme des paiements doit être égale au total de la vente.");
+
+        var sumPayments = draft.Payments.Sum(x => x.AmountXof);
+        if (sumPayments < sale.TotalXof) throw new InvalidOperationException("La somme des paiements doit être égale au total de la vente.");
         if (draft.Payments.Any(x => x.AmountXof < 0)) throw new InvalidOperationException("Un paiement ne peut pas être négatif.");
+        var change = sumPayments - sale.TotalXof;
+        if (change > 0 && !draft.Payments.Any(x => x.Mode == PaymentMode.Cash && x.AmountXof >= change))
+            throw new InvalidOperationException("La monnaie rendue doit être couverte par un paiement en espèces.");
+        sale.ChangeXof = change;
 
         Customer? customer = null;
         if (draft.CustomerId is not null) customer = await db.Customers.SingleOrDefaultAsync(x => x.Id == draft.CustomerId, cancellationToken) ?? throw new KeyNotFoundException("Client introuvable.");
+        else if (!string.IsNullOrWhiteSpace(draft.NewCustomerName) || !string.IsNullOrWhiteSpace(draft.NewCustomerPhone))
+        {
+            var phone = string.IsNullOrWhiteSpace(draft.NewCustomerPhone) ? null : draft.NewCustomerPhone.Trim();
+            if (phone is not null) customer = await db.Customers.SingleOrDefaultAsync(x => x.Phone == phone, cancellationToken);
+            if (customer is null)
+            {
+                customer = new Customer { Name = string.IsNullOrWhiteSpace(draft.NewCustomerName) ? $"Client {phone}" : draft.NewCustomerName.Trim(), Phone = phone };
+                db.Customers.Add(customer);
+            }
+            sale.CustomerId = customer.Id;
+        }
+        var creditAmount = draft.Payments.Where(x => x.Mode == PaymentMode.Credit).Sum(x => x.AmountXof);
         if (hasCredit)
         {
             if (customer is null || draft.CreditDueAt is null) throw new InvalidOperationException("Un client et une échéance sont obligatoires pour le crédit.");
             var outstanding = await db.CustomerCredits.Where(x => x.CustomerId == customer.Id && x.Status != CreditStatus.Paid && x.Status != CreditStatus.Cancelled).SumAsync(x => x.BalanceXof, cancellationToken);
-            var creditAmount = draft.Payments.Where(x => x.Mode == PaymentMode.Credit).Sum(x => x.AmountXof);
             if (customer.CreditLimitXof <= 0 || outstanding + creditAmount > customer.CreditLimitXof) throw new InvalidOperationException("Le plafond de crédit du client est dépassé.");
             db.CustomerCredits.Add(new CustomerCredit { SaleId = sale.Id, CustomerId = customer.Id, OriginalAmountXof = creditAmount, BalanceXof = creditAmount, DueAt = draft.CreditDueAt.Value });
         }
 
-        sale.Number = await NextNumberAsync(db, DocumentType.Receipt, "TIC", cancellationToken);
+        sale.Number = await DocumentReceiptFactory.NextNumberAsync(db, DocumentType.Receipt, cancellationToken);
+        var remainingChange = change;
         foreach (var payment in draft.Payments)
-            sale.Payments.Add(new Payment { Mode = payment.Mode, AmountXof = payment.AmountXof, ExternalReference = payment.Reference });
+        {
+            var amount = payment.AmountXof;
+            if (remainingChange > 0 && payment.Mode == PaymentMode.Cash)
+            {
+                var deducted = Math.Min(remainingChange, amount);
+                amount -= deducted;
+                remainingChange -= deducted;
+            }
+            if (amount > 0) sale.Payments.Add(new Payment { Mode = payment.Mode, AmountXof = amount, ExternalReference = payment.Reference });
+        }
         var negativeStock = false;
         foreach (var line in sale.Lines)
         {
@@ -78,37 +105,32 @@ public sealed class SaleService(IDbContextFactory<BoutiqueDbContext> factory, IA
             db.StockMovements.Add(new StockMovement { VariantId = variant.Id, Type = StockMovementType.Sale, QuantityDelta = -line.Quantity, UnitCostXof = line.FrozenUnitCostXof, Reason = $"Vente {sale.Number}", SourceType = nameof(Sale), SourceId = sale.Id });
         }
         db.Sales.Add(sale);
-        var shopName = await SettingAsync(db, "Shop.Name", "Ma Boutique", cancellationToken);
-        var address = await SettingAsync(db, "Shop.Address", string.Empty, cancellationToken);
-        var phone = await SettingAsync(db, "Shop.Phone", string.Empty, cancellationToken);
-        var footer = await SettingAsync(db, "Shop.Footer", "Merci de votre visite", cancellationToken);
-        var email = await SettingAsync(db,"Shop.Email",string.Empty,cancellationToken);var taxId=await SettingAsync(db,"Shop.TaxId",string.Empty,cancellationToken);var slogan=await SettingAsync(db,"Shop.Slogan",string.Empty,cancellationToken);var logo=await SettingAsync(db,"Shop.Logo",string.Empty,cancellationToken);var stamp=await SettingAsync(db,"Shop.Stamp",string.Empty,cancellationToken);var signature=await SettingAsync(db,"Shop.Signature",string.Empty,cancellationToken);var returnPolicy=await SettingAsync(db,"Shop.ReturnPolicy",string.Empty,cancellationToken);
-        var receipt = new ReceiptData(shopName, address, phone, sale.Number, DateTimeOffset.UtcNow, customer?.Name,
-            sale.Lines.Select(x => new ReceiptItem(x.Description, x.Quantity, x.UnitPriceXof, x.DiscountXof, x.LineTotalXof)).ToArray(), sale.SubtotalXof + sale.Lines.Sum(x => x.DiscountXof), sale.DiscountXof, sale.TotalXof, draft.Payments, footer,false,email,taxId,slogan,logo,stamp,signature,returnPolicy);
-        var snapshot = new DocumentSnapshot { SaleId = sale.Id, Type = DocumentType.Receipt, Number = sale.Number, JsonPayload = JsonSerializer.Serialize(receipt) };
+
+        var items = sale.Lines.Select(x => new ReceiptItem(x.Description, x.Quantity, x.UnitPriceXof, x.DiscountXof, x.LineTotalXof)).ToArray();
+        var receiptSubtotal = sale.SubtotalXof + sale.Lines.Sum(x => x.DiscountXof);
+        var snapshot = new DocumentSnapshot { SaleId = sale.Id, Type = DocumentType.Receipt, Number = sale.Number, JsonPayload = JsonSerializer.Serialize(await DocumentReceiptFactory.CreateAsync(db, sale.Number, customer?.Name, items, receiptSubtotal, sale.DiscountXof, sale.TotalXof, draft.Payments, null, cancellationToken, DocumentType.Receipt, change)) };
         db.DocumentSnapshots.Add(snapshot);
-        db.AuditEntries.Add(new AuditEntry { Actor = "Vendeur boutique", Action = "Créer vente", EntityType = nameof(Sale), EntityId = sale.Id.ToString(), AfterJson = JsonSerializer.Serialize(new { sale.Number, sale.TotalXof }) });
+
+        var invoiceNumber = await DocumentReceiptFactory.NextNumberAsync(db, DocumentType.Invoice, cancellationToken);
+        db.DocumentSnapshots.Add(new DocumentSnapshot { SaleId = sale.Id, Type = DocumentType.Invoice, Number = invoiceNumber, JsonPayload = JsonSerializer.Serialize(await DocumentReceiptFactory.CreateAsync(db, invoiceNumber, customer?.Name, items, receiptSubtotal, sale.DiscountXof, sale.TotalXof, draft.Payments, null, cancellationToken, DocumentType.Invoice, change)) });
+
+        if (creditAmount > 0 && sale.TotalXof - creditAmount > 0)
+        {
+            var deposit = sale.TotalXof - creditAmount;
+            var depositNumber = await DocumentReceiptFactory.NextNumberAsync(db, DocumentType.DepositReceipt, cancellationToken);
+            db.DocumentSnapshots.Add(new DocumentSnapshot { SaleId = sale.Id, Type = DocumentType.DepositReceipt, Number = depositNumber, JsonPayload = JsonSerializer.Serialize(await DocumentReceiptFactory.CreateAsync(db, depositNumber, customer?.Name, [new ReceiptItem($"Acompte sur vente {sale.Number}", 1, deposit, 0, deposit)], deposit, 0, deposit, draft.Payments.Where(x => x.Mode != PaymentMode.Credit).ToArray(), $"Reste à payer : {creditAmount:N0} FCFA", cancellationToken, DocumentType.DepositReceipt)) });
+        }
+
+        db.AuditEntries.Add(new AuditEntry { Actor = "Vendeur boutique", Action = "Créer vente", EntityType = nameof(Sale), EntityId = sale.Id.ToString(), AfterJson = JsonSerializer.Serialize(new { sale.Number, sale.TotalXof, change, customer = customer?.Name }) });
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-        return new SaleResult(sale.Id, sale.Number, sale.TotalXof, snapshot.Id, false, negativeStock);
+        return new SaleResult(sale.Id, sale.Number, sale.TotalXof, snapshot.Id, false, negativeStock, change);
     }
 
     private static string BuildDescription(ProductVariant variant) => string.Join(" - ", new[] { variant.Product?.Name, variant.Color, variant.Size }.Where(x => !string.IsNullOrWhiteSpace(x)));
-
-    private static async Task<string> NextNumberAsync(BoutiqueDbContext db, DocumentType type, string prefix, CancellationToken cancellationToken)
-    {
-        var year = DateTimeOffset.UtcNow.Year;
-        var sequence = await db.DocumentSequences.SingleOrDefaultAsync(x => x.Type == type && x.Year == year, cancellationToken);
-        if (sequence is null) { sequence = new DocumentSequence { Type = type, Prefix = prefix, Year = year, NextValue = 2 }; db.DocumentSequences.Add(sequence); return $"{prefix}-{year}-000001"; }
-        var value = sequence.NextValue++;
-        return $"{sequence.Prefix}-{year}-{value:000000}";
-    }
-
-    private static async Task<string> SettingAsync(BoutiqueDbContext db, string key, string fallback, CancellationToken cancellationToken) =>
-        await db.AppSettings.Where(x => x.Key == key).Select(x => x.Value).SingleOrDefaultAsync(cancellationToken) ?? fallback;
 }
 
-public sealed class CashSessionService(IDbContextFactory<BoutiqueDbContext> factory) : ICashSessionService
+public sealed class CashSessionService(IDbContextFactory<BoutiqueDbContext> factory, IAuthorizationService authorization) : ICashSessionService
 {
     public async Task<CashSession> OpenAsync(long openingFloatXof, CancellationToken cancellationToken = default)
     {
@@ -127,7 +149,7 @@ public sealed class CashSessionService(IDbContextFactory<BoutiqueDbContext> fact
         return await db.CashSessions.AsNoTracking().SingleOrDefaultAsync(x => x.Status == CashSessionStatus.Open, cancellationToken);
     }
 
-    public async Task<CashSession> CloseAsync(long countedCashXof, string? differenceReason, CancellationToken cancellationToken = default)
+    public async Task<CashSession> CloseAsync(long countedCashXof, string? differenceReason, string? managerPin = null, CancellationToken cancellationToken = default)
     {
         await using var db = await factory.CreateDbContextAsync(cancellationToken);
         var session = await db.CashSessions.Include(x => x.Sales).ThenInclude(x => x.Payments).SingleOrDefaultAsync(x => x.Status == CashSessionStatus.Open, cancellationToken) ?? throw new InvalidOperationException("Aucune caisse ouverte.");
@@ -137,7 +159,15 @@ public sealed class CashSessionService(IDbContextFactory<BoutiqueDbContext> fact
         var expected = session.OpeningFloatXof + saleCash + creditCash - cashExpenses;
         var difference = countedCashXof - expected;
         if (difference != 0 && string.IsNullOrWhiteSpace(differenceReason)) throw new InvalidOperationException("Un motif est obligatoire en cas d'écart.");
+        var toleranceSetting = await db.AppSettings.Where(x => x.Key == "Cash.VarianceToleranceXof").Select(x => x.Value).SingleOrDefaultAsync(cancellationToken);
+        var tolerance = long.TryParse(toleranceSetting, out var parsedTolerance) ? parsedTolerance : 0;
+        if (Math.Abs(difference) > tolerance)
+        {
+            if (managerPin is null || !await authorization.AuthorizeSensitiveActionAsync(managerPin, "Clôture de caisse avec écart", cancellationToken: cancellationToken))
+                throw new UnauthorizedAccessException($"Écart de {difference:N0} FCFA au-delà de la tolérance ({tolerance:N0} FCFA) : PIN responsable requis.");
+        }
         session.ExpectedCashXof = expected; session.CountedCashXof = countedCashXof; session.DifferenceXof = difference; session.DifferenceReason = differenceReason; session.ClosedAt = DateTimeOffset.UtcNow; session.Status = CashSessionStatus.Closed;
+        db.AuditEntries.Add(new AuditEntry { Actor = "Responsable", Action = "Clôturer caisse", EntityType = nameof(CashSession), EntityId = session.Id.ToString(), AfterJson = JsonSerializer.Serialize(new { expected, countedCashXof, difference }) });
         await db.SaveChangesAsync(cancellationToken);
         return session;
     }
@@ -158,7 +188,8 @@ public sealed class ReportService(IDbContextFactory<BoutiqueDbContext> factory) 
         var expenses = await db.Expenses.Where(x => x.CreatedAt >= from && x.CreatedAt < to).SumAsync(x => x.AmountXof, cancellationToken);
         var credit = await db.CustomerCredits.Where(x => x.Status != CreditStatus.Paid && x.Status != CreditStatus.Cancelled).SumAsync(x => x.BalanceXof, cancellationToken);
         var low = await db.ProductVariants.CountAsync(x => x.IsActive && x.QuantityOnHand <= x.LowStockThreshold, cancellationToken);
-        return new DashboardSummary(salesXof, collected, salesXof - cost, expenses, credit, low);
+        var grossMargin = salesXof - cost;
+        return new DashboardSummary(salesXof, collected, grossMargin, expenses, credit, low, grossMargin - expenses, soldLines.Any(x => x.FrozenUnitCostXof <= 0));
     }
 
     public async Task<IReadOnlyList<ReportRow>> SalesByPaymentModeAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default)
@@ -167,5 +198,102 @@ public sealed class ReportService(IDbContextFactory<BoutiqueDbContext> factory) 
         var saleRows = await db.Payments.AsNoTracking().Where(x => x.CreatedAt >= from && x.CreatedAt < to).GroupBy(x => x.Mode).Select(x => new { Mode = x.Key, Value = x.Sum(y => y.AmountXof) }).ToListAsync(cancellationToken);
         var creditRows = await db.CreditPayments.AsNoTracking().Where(x => x.CreatedAt >= from && x.CreatedAt < to).GroupBy(x => x.Mode).Select(x => new { Mode = x.Key, Value = x.Sum(y => y.AmountXof) }).ToListAsync(cancellationToken);
         return saleRows.Concat(creditRows).GroupBy(x => x.Mode).Select(x => new ReportRow(x.Key.ToString(), x.Sum(y => y.Value))).Where(x => x.ValueXof != 0).OrderBy(x => x.Label).ToArray();
+    }
+
+    public async Task<IReadOnlyList<ReportRow>> SalesByDayAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(cancellationToken);
+        var rows = await db.Sales.AsNoTracking().Where(x => x.Status == SaleStatus.Completed && x.CreatedAt >= from && x.CreatedAt < to).Select(x => new { x.CreatedAt, x.TotalXof }).ToListAsync(cancellationToken);
+        return rows.GroupBy(x => x.CreatedAt.ToLocalTime().Date)
+            .OrderBy(x => x.Key)
+            .Select(x => new ReportRow(x.Key.ToString("dd/MM/yyyy"), x.Sum(y => y.TotalXof), x.Count()))
+            .ToArray();
+    }
+
+    public async Task<IReadOnlyList<ReportRow>> SalesBySellerAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(cancellationToken);
+        return await db.Sales.AsNoTracking().Where(x => x.Status == SaleStatus.Completed && x.CreatedAt >= from && x.CreatedAt < to)
+            .GroupBy(x => x.SellerName)
+            .Select(x => new ReportRow(x.Key, x.Sum(y => y.TotalXof), x.Count()))
+            .OrderByDescending(x => x.ValueXof).ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<ReportRow>> TopProductsAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(cancellationToken);
+        return await db.SaleLines.AsNoTracking().Where(x => x.CreatedAt >= from && x.CreatedAt < to && x.Sale!.Status == SaleStatus.Completed)
+            .GroupBy(x => x.Sku)
+            .Select(x => new ReportRow(x.Key, x.Sum(y => y.LineTotalXof), x.Sum(y => y.Quantity)))
+            .OrderByDescending(x => x.Quantity).Take(10).ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<ReportRow>> NoSalesProductsAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(cancellationToken);
+        var soldSkus = await db.SaleLines.AsNoTracking().Where(x => x.CreatedAt >= from && x.CreatedAt < to && x.Sale!.Status == SaleStatus.Completed).Select(x => x.Sku).Distinct().ToListAsync(cancellationToken);
+        return await db.ProductVariants.AsNoTracking().Where(x => x.IsActive && !soldSkus.Contains(x.Sku))
+            .OrderBy(x => x.Product!.Name)
+            .Select(x => new ReportRow(x.Product!.Name + " · " + x.Sku, 0, x.QuantityOnHand))
+            .Take(100).ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<ReportRow>> StockValueByCategoryAsync(CancellationToken cancellationToken = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(cancellationToken);
+        var rows = await db.ProductVariants.AsNoTracking().Include(x => x.Product).ThenInclude(x => x!.Category).Where(x => x.IsActive).ToListAsync(cancellationToken);
+        return rows.GroupBy(x => x.Product?.Category?.Name ?? "Sans catégorie")
+            .Select(x => new ReportRow(x.Key, x.Sum(y => decimal.ToInt64(decimal.Round(y.QuantityOnHand * y.WeightedAverageCostXof, 0))), x.Sum(y => y.QuantityOnHand)))
+            .OrderByDescending(x => x.ValueXof).ToArray();
+    }
+
+    public async Task<IReadOnlyList<ReportRow>> InventoryVarianceAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(cancellationToken);
+        return await db.StockMovements.AsNoTracking().Where(x => x.CreatedAt >= from && x.CreatedAt < to && (x.Type == StockMovementType.Inventory || x.Type == StockMovementType.Adjustment || x.Type == StockMovementType.Damaged || x.Type == StockMovementType.Lost))
+            .GroupBy(x => x.Variant!.Sku)
+            .Select(x => new ReportRow(x.Key, x.Sum(y => decimal.ToInt64(decimal.Round(y.QuantityDelta * y.UnitCostXof, 0))), x.Sum(y => y.QuantityDelta)))
+            .OrderBy(x => x.Label).ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<ReportRow>> CorrectionsAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(cancellationToken);
+        var discounts = await db.Sales.AsNoTracking().Where(x => x.Status == SaleStatus.Completed && x.CreatedAt >= from && x.CreatedAt < to).SumAsync(x => x.DiscountXof, cancellationToken);
+        var cancellations = await db.Sales.AsNoTracking().Where(x => x.Status == SaleStatus.Cancelled && x.CreatedAt >= from && x.CreatedAt < to).SumAsync(x => x.TotalXof, cancellationToken);
+        var returns = await db.StockMovements.AsNoTracking().Where(x => x.Type == StockMovementType.Return && x.CreatedAt >= from && x.CreatedAt < to).SumAsync(x => decimal.ToInt64(decimal.Round(x.QuantityDelta * x.UnitCostXof, 0)), cancellationToken);
+        return
+        [
+            new ReportRow("Remises accordées", discounts),
+            new ReportRow("Ventes annulées", cancellations),
+            new ReportRow("Retours (valeur coût)", returns)
+        ];
+    }
+
+    public async Task<IReadOnlyList<CashClosingRow>> CashClosingsAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(cancellationToken);
+        return await db.CashSessions.AsNoTracking().Where(x => x.Status == CashSessionStatus.Closed && x.ClosedAt != null && x.ClosedAt >= from && x.ClosedAt < to)
+            .OrderByDescending(x => x.ClosedAt)
+            .Select(x => new CashClosingRow(x.Number, x.OpenedAt, x.ClosedAt, x.ExpectedCashXof ?? 0, x.CountedCashXof ?? 0, x.DifferenceXof ?? 0, x.DifferenceReason))
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<StockAlertRow>> StockAlertsAsync(CancellationToken cancellationToken = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(cancellationToken);
+        var variants = await db.ProductVariants.AsNoTracking().Include(x => x.Product).Where(x => x.IsActive && x.QuantityOnHand <= x.LowStockThreshold).OrderBy(x => x.QuantityOnHand).ToListAsync(cancellationToken);
+        var negativeIds = variants.Where(x => x.QuantityOnHand < 0).Select(x => x.Id).ToArray();
+        var relatedSales = await db.SaleLines.AsNoTracking().Where(x => negativeIds.Contains(x.VariantId))
+            .GroupBy(x => x.VariantId)
+            .Select(x => new { VariantId = x.Key, Number = x.OrderByDescending(y => y.CreatedAt).Select(y => y.Sale!.Number).First() })
+            .ToListAsync(cancellationToken);
+        return variants.Select(x => new StockAlertRow(
+            x.Sku,
+            x.Product?.Name ?? string.Empty,
+            x.QuantityOnHand,
+            x.LowStockThreshold,
+            x.QuantityOnHand < 0 ? "Négatif (à fournir)" : x.QuantityOnHand == 0 ? "Rupture" : "Stock faible",
+            x.QuantityOnHand < 0 ? relatedSales.FirstOrDefault(r => r.VariantId == x.Id)?.Number : null)).ToArray();
     }
 }

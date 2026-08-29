@@ -36,4 +36,5 @@ public partial class SettingsView : UserControl
 {
     public SettingsView() => InitializeComponent();
     private void PinBox_OnPasswordChanged(object sender, System.Windows.RoutedEventArgs e) { if (DataContext is SettingsViewModel vm) vm.Pin = ((PasswordBox)sender).Password; }
+    private void NewPinBox_OnPasswordChanged(object sender, System.Windows.RoutedEventArgs e) { if (DataContext is SettingsViewModel vm) vm.NewPin = ((PasswordBox)sender).Password; }
 }

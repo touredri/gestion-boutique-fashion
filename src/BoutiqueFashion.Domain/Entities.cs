@@ -21,6 +21,9 @@ public sealed class Product : Entity
     [MaxLength(180)] public string Name { get; set; } = string.Empty;
     [MaxLength(120)] public string? Brand { get; set; }
     [MaxLength(500)] public string? Description { get; set; }
+    [MaxLength(120)] public string? SubCategory { get; set; }
+    [MaxLength(60)] public string? Gender { get; set; }
+    [MaxLength(60)] public string? Season { get; set; }
     public Guid CategoryId { get; set; }
     public Category? Category { get; set; }
     public bool IsActive { get; set; } = true;
@@ -45,6 +48,9 @@ public sealed class ProductVariant : Entity
     [MaxLength(80)] public string? Barcode { get; set; }
     [MaxLength(40)] public string? Size { get; set; }
     [MaxLength(60)] public string? Color { get; set; }
+    [MaxLength(60)] public string? Material { get; set; }
+    [MaxLength(120)] public string? Location { get; set; }
+    [MaxLength(160)] public string? Supplier { get; set; }
     public long CostXof { get; set; }
     public long PriceXof { get; set; }
     public long? PromotionalPriceXof { get; set; }
@@ -75,8 +81,12 @@ public sealed class Customer : Entity
     [MaxLength(160)] public string Name { get; set; } = string.Empty;
     [MaxLength(30)] public string? Phone { get; set; }
     [MaxLength(30)] public string? SecondaryPhone { get; set; }
+    [MaxLength(30)] public string? Gender { get; set; }
     [MaxLength(300)] public string? Address { get; set; }
     [MaxLength(500)] public string? Notes { get; set; }
+    [MaxLength(500)] public string? Preferences { get; set; }
+    [MaxLength(60)] public string? PreferredChannel { get; set; }
+    public DateTimeOffset? ConsentDate { get; set; }
     public long CreditLimitXof { get; set; }
     public bool MarketingConsent { get; set; }
     public bool IsArchived { get; set; }
@@ -95,6 +105,7 @@ public sealed class Sale : Entity
     public long SubtotalXof { get; set; }
     public long DiscountXof { get; set; }
     public long TotalXof { get; set; }
+    public long ChangeXof { get; set; }
     public SaleStatus Status { get; set; } = SaleStatus.Completed;
     public ICollection<SaleLine> Lines { get; set; } = [];
     public ICollection<Payment> Payments { get; set; } = [];
