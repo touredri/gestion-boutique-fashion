@@ -34,14 +34,22 @@
           <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"><TextBox Width="92" Text="{Binding OpeningFloat}" ToolTip="Fond initial FCFA" AutomationProperties.Name="Fond initial de caisse"/><Button Content="Ouvrir caisse" Command="{Binding OpenCashCommand}" Style="{StaticResource QuietButton}"/></StackPanel>
         </Grid>
         <ListBox Grid.Row="1" ItemsSource="{Binding Cart}" Margin="12,0" ScrollViewer.VerticalScrollBarVisibility="Auto">
-          <ListBox.ItemTemplate><DataTemplate><Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="4,6"><Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="44"/><ColumnDefinition Width="56"/><ColumnDefinition Width="44"/><ColumnDefinition Width="88"/><ColumnDefinition Width="44"/></Grid.ColumnDefinitions>
+          <ListBox.ItemTemplate><DataTemplate><Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="4,6"><StackPanel>
+            <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="44"/><ColumnDefinition Width="56"/><ColumnDefinition Width="44"/><ColumnDefinition Width="88"/><ColumnDefinition Width="44"/></Grid.ColumnDefinitions>
             <TextBlock Text="{Binding Label}" TextWrapping="Wrap" VerticalAlignment="Center" FontWeight="SemiBold"/>
             <Button Grid.Column="1" Content="−" MinWidth="0" Width="40" Style="{StaticResource QuietButton}" Command="{Binding DataContext.DecrementCommand, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding}" AutomationProperties.Name="Diminuer la quantité"/>
             <TextBox Grid.Column="2" Text="{Binding Quantity}" AutomationProperties.Name="Quantité"/>
             <Button Grid.Column="3" Content="+" MinWidth="0" Width="40" Style="{StaticResource QuietButton}" Command="{Binding DataContext.IncrementCommand, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding}" AutomationProperties.Name="Augmenter la quantité"/>
             <TextBlock Grid.Column="4" Text="{Binding TotalXof, StringFormat={}{0:N0}}" HorizontalAlignment="Right" VerticalAlignment="Center" Style="{StaticResource Money}"/>
             <Button Grid.Column="5" Content="×" MinWidth="0" Width="40" ToolTip="Retirer l’article" AutomationProperties.Name="Retirer l’article" Style="{StaticResource QuietButton}" Command="{Binding DataContext.RemoveCommand, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding}"/>
-          </Grid></Border></DataTemplate></ListBox.ItemTemplate>
+            </Grid>
+            <Grid Margin="0,3,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="110"/><ColumnDefinition Width="90"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+              <TextBlock Text="Remise article" Foreground="{StaticResource Muted}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" Margin="4,0,6,0"/>
+              <ComboBox Grid.Column="1" ItemsSource="{Binding DiscountKindLabels}" SelectedItem="{Binding DiscountKindLabel}" MinHeight="38" AutomationProperties.Name="Type de remise article"/>
+              <TextBox Grid.Column="2" Text="{Binding DiscountValue, UpdateSourceTrigger=PropertyChanged}" MinHeight="38" AutomationProperties.Name="Valeur de remise article"/>
+              <TextBlock Grid.Column="3" Text="{Binding DiscountAmountXof, StringFormat=- {0:N0} FCFA}" Foreground="{StaticResource Danger}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" Margin="8,0,0,0"/>
+            </Grid>
+          </StackPanel></Border></DataTemplate></ListBox.ItemTemplate>
         </ListBox>
         <Border Grid.Row="2" Background="{StaticResource Ivory}" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" CornerRadius="0,0,12,12" Padding="16,12">
           <ScrollViewer MaxHeight="470" VerticalScrollBarVisibility="Auto"><StackPanel>
