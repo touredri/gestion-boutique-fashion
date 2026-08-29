@@ -270,6 +270,26 @@ public sealed class ReportService(IDbContextFactory<BoutiqueDbContext> factory) 
         ];
     }
 
+    public async Task<IReadOnlyList<ReportRow>> RotationAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(cancellationToken);
+        var sold = await db.SaleLines.AsNoTracking().Where(x => x.CreatedAt >= from && x.CreatedAt < to && x.Sale!.Status == SaleStatus.Completed)
+            .GroupBy(x => x.Sku)
+            .Select(x => new { Sku = x.Key, Sold = x.Sum(y => y.Quantity), Value = x.Sum(y => y.LineTotalXof) })
+            .ToListAsync(cancellationToken);
+        var variants = await db.ProductVariants.AsNoTracking().Include(x => x.Product).Where(x => x.IsActive).ToListAsync(cancellationToken);
+        var rows = new List<ReportRow>();
+        foreach (var variant in variants)
+        {
+            var soldQty = sold.FirstOrDefault(s => s.Sku == variant.Sku)?.Sold ?? 0;
+            var value = sold.FirstOrDefault(s => s.Sku == variant.Sku)?.Value ?? 0;
+            var averageStock = Math.Max(1, (variant.QuantityOnHand + soldQty) / 2);
+            var rotation = Math.Round(soldQty / averageStock, 2);
+            rows.Add(new ReportRow($"{variant.Product?.Name} · {variant.Sku}", value, rotation));
+        }
+        return rows.OrderBy(x => x.Quantity).ThenBy(x => x.Label).Take(100).ToArray();
+    }
+
     public async Task<IReadOnlyList<CashClosingRow>> CashClosingsAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default)
     {
         await using var db = await factory.CreateDbContextAsync(cancellationToken);

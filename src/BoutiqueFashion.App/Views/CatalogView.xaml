@@ -14,6 +14,7 @@
             <StackPanel Width="130"><TextBlock Text="Marque" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding Brand}"/></StackPanel>
             <StackPanel Width="110"><TextBlock Text="Genre/public" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding Gender}" ToolTip="Homme, femme, enfant…"/></StackPanel>
             <StackPanel Width="110"><TextBlock Text="Saison" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding Season}"/></StackPanel>
+            <StackPanel Width="300"><TextBlock Text="Description courte" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding Description}"/></StackPanel>
           </WrapPanel>
           <TextBlock Text="{Binding ProductNotice}" Style="{StaticResource HelperText}" Foreground="{StaticResource TerracottaDark}" Margin="4,2,4,0"/>
         </StackPanel>
@@ -33,9 +34,12 @@
           </WrapPanel>
           <WrapPanel Margin="0,6,0,0">
             <StackPanel Width="150"><TextBlock Text="SKU (variante seule)" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding Sku}"/></StackPanel>
+            <StackPanel Width="140"><TextBlock Text="Code-barres" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding Barcode}"/></StackPanel>
             <StackPanel Width="110"><TextBlock Text="Taille / pointure" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding VariantSize}"/></StackPanel>
             <StackPanel Width="110"><TextBlock Text="Couleur" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding VariantColor}"/></StackPanel>
             <StackPanel Width="120"><TextBlock Text="Prix promo" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding PromotionPrice}"/></StackPanel>
+            <StackPanel Width="130"><TextBlock Text="Promo du" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding PromoStart}" ToolTip="AAAA-MM-JJ"/></StackPanel>
+            <StackPanel Width="130"><TextBlock Text="Promo au" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding PromoEnd}" ToolTip="AAAA-MM-JJ"/></StackPanel>
             <StackPanel Width="105"><TextBlock Text="PIN responsable" Style="{StaticResource FieldLabel}"/><PasswordBox PasswordChanged="CatalogPin_OnPasswordChanged"/></StackPanel>
             <Button Content="Ajouter 1 variante" Command="{Binding CreateCommand}" VerticalAlignment="Bottom"/>
             <Button Content="Enregistrer les modifications" Command="{Binding UpdateCommand}" Style="{StaticResource PrimaryButton}" VerticalAlignment="Bottom"/>
@@ -55,8 +59,20 @@
           </WrapPanel>
         </StackPanel>
       </Border>
+      <Border Style="{StaticResource Card}" Padding="14">
+        <StackPanel>
+          <TextBlock Text="4 · IMPORT CSV" Style="{StaticResource Eyebrow}"/>
+          <TextBlock Text="Colonnes attendues : produit, categorie, marque, sku, code_barres, taille, couleur, cout_xof, prix_xof, quantite, seuil_alerte" Style="{StaticResource HelperText}" Margin="4,0,4,6"/>
+          <WrapPanel>
+            <Button Content="Choisir le fichier CSV" Command="{Binding BrowseImportFileCommand}"/>
+            <TextBlock Text="{Binding ImportRowsCount, StringFormat={}{0} lignes prêtes}" Style="{StaticResource HelperText}" VerticalAlignment="Center" Margin="8,0,0,0"/>
+            <Button Content="Importer" Command="{Binding RunImportCommand}" Style="{StaticResource PrimaryButton}"/>
+          </WrapPanel>
+          <DataGrid ItemsSource="{Binding ImportIssues}" MaxHeight="140" Margin="0,6,0,0"><DataGrid.Columns><DataGridTextColumn Header="LIGNE" Binding="{Binding Line}" Width="70"/><DataGridTextColumn Header="PROBLÈME" Binding="{Binding Message}" Width="*"/></DataGrid.Columns></DataGrid>
+        </StackPanel>
+      </Border>
     </StackPanel>
     </ScrollViewer>
-    <DataGrid Grid.Row="1" ItemsSource="{Binding Items}" SelectedItem="{Binding Selected}" Margin="6,12,6,6"><DataGrid.Columns><DataGridTemplateColumn Header="PHOTO" Width="82"><DataGridTemplateColumn.CellTemplate><DataTemplate><Border Width="58" Height="58" CornerRadius="8" Background="{StaticResource Ivory}" BorderBrush="{StaticResource Line}" BorderThickness="1" HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{Binding Product.PrimaryImagePath, Converter={StaticResource ImagePathConverter}}" Stretch="UniformToFill" Margin="2" ToolTip="{Binding Product.Name}"><Image.Style><Style TargetType="Image"><Setter Property="Visibility" Value="Visible"/><Style.Triggers><Trigger Property="Source" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed"/></Trigger></Style.Triggers></Style></Image.Style></Image></Border></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn><DataGridTextColumn Header="PRODUIT" Binding="{Binding Product.Name}" Width="*"/><DataGridTextColumn Header="TYPE" Binding="{Binding Product.Type}"/><DataGridTextColumn Header="SKU" Binding="{Binding Sku}"/><DataGridTextColumn Header="TAILLE" Binding="{Binding Size}"/><DataGridTextColumn Header="COULEUR" Binding="{Binding Color}"/><DataGridTextColumn Header="STOCK" Binding="{Binding QuantityOnHand}"/><DataGridTextColumn Header="PRIX" Binding="{Binding PriceXof,StringFormat={}{0:N0} FCFA}"/><DataGridTextColumn Header="PROMO" Binding="{Binding PromotionalPriceXof,StringFormat={}{0:N0} FCFA}"/></DataGrid.Columns></DataGrid>
+    <DataGrid Grid.Row="1" ItemsSource="{Binding Items}" SelectedItem="{Binding Selected}" Margin="6,12,6,6"><DataGrid.Columns><DataGridTemplateColumn Header="PHOTO" Width="82"><DataGridTemplateColumn.CellTemplate><DataTemplate><Border Width="58" Height="58" CornerRadius="8" Background="{StaticResource Ivory}" BorderBrush="{StaticResource Line}" BorderThickness="1" HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{Binding PrimaryImagePath, Converter={StaticResource ImagePathConverter}}" Stretch="UniformToFill" Margin="2" ToolTip="{Binding Product.Name}"><Image.Style><Style TargetType="Image"><Setter Property="Visibility" Value="Visible"/><Style.Triggers><Trigger Property="Source" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed"/></Trigger></Style.Triggers></Style></Image.Style></Image></Border></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn><DataGridTextColumn Header="PRODUIT" Binding="{Binding Product.Name}" Width="*"/><DataGridTextColumn Header="TYPE" Binding="{Binding Product.Type}"/><DataGridTextColumn Header="SKU" Binding="{Binding Sku}"/><DataGridTextColumn Header="TAILLE" Binding="{Binding Size}"/><DataGridTextColumn Header="COULEUR" Binding="{Binding Color}"/><DataGridTextColumn Header="STOCK" Binding="{Binding QuantityOnHand}"/><DataGridTextColumn Header="PRIX" Binding="{Binding PriceXof,StringFormat={}{0:N0} FCFA}"/><DataGridTextColumn Header="MARGE" Binding="{Binding MarginXof,StringFormat={}{0:N0} FCFA}"/><DataGridTextColumn Header="PROMO" Binding="{Binding PromotionalPriceXof,StringFormat={}{0:N0} FCFA}"/></DataGrid.Columns></DataGrid>
   </Grid>
 </UserControl>

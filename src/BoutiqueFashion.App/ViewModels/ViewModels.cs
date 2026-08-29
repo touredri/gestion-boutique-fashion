@@ -147,11 +147,15 @@ public partial class SaleViewModel(ICatalogService catalog, ICustomerService cus
     private static string? NullIfEmpty(string value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
 
-public partial class CatalogViewModel(ICatalogService catalog) : ObservableObject, ILoadable
+public partial class CatalogViewModel(ICatalogService catalog, IProductImportService import) : ObservableObject, ILoadable
 {
     public ObservableCollection<ProductVariant> Items { get; } = [];
+    public ObservableCollection<ImportIssue> ImportIssues { get; } = [];
     public IReadOnlyList<ProductType> ProductTypes { get; } = Enum.GetValues<ProductType>();
+    private ImportPreview? importPreview;
+    [ObservableProperty] private int importRowsCount;
     [ObservableProperty] private string productName = string.Empty; [ObservableProperty] private string category = "Vêtements"; [ObservableProperty] private string sku = string.Empty; [ObservableProperty] private string price = string.Empty; [ObservableProperty] private string cost = string.Empty; [ObservableProperty] private string status = string.Empty;
+    [ObservableProperty] private string description = string.Empty; [ObservableProperty] private string barcode = string.Empty; [ObservableProperty] private string promoStart = string.Empty; [ObservableProperty] private string promoEnd = string.Empty;
     [ObservableProperty] private ProductType selectedType = ProductType.Clothing; [ObservableProperty] private string brand = string.Empty; [ObservableProperty] private string productNotice = string.Empty;
     [ObservableProperty] private string subCategory = string.Empty; [ObservableProperty] private string gender = string.Empty; [ObservableProperty] private string season = string.Empty;
     [ObservableProperty] private string material = string.Empty; [ObservableProperty] private string location = string.Empty; [ObservableProperty] private string supplier = string.Empty;
@@ -174,25 +178,28 @@ public partial class CatalogViewModel(ICatalogService catalog) : ObservableObjec
     }
     partial void OnSelectedChanged(ProductVariant? value)
     {
-        PhotoPath = value?.Product?.PrimaryImagePath ?? string.Empty;
+        PhotoPath = value?.PrimaryImagePath ?? string.Empty;
         if (value is not null)
         {
             ProductName = value.Product?.Name ?? string.Empty; Category = value.Product?.Category?.Name ?? category;
             SelectedType = value.Product?.Type ?? SelectedType; Brand = value.Product?.Brand ?? string.Empty;
+            Description = value.Product?.Description ?? string.Empty; Barcode = value.Barcode ?? string.Empty;
+            PromoStart = value.PromotionStartsAt?.ToLocalTime().ToString("yyyy-MM-dd") ?? string.Empty;
+            PromoEnd = value.PromotionEndsAt?.ToLocalTime().ToString("yyyy-MM-dd") ?? string.Empty;
             SubCategory = value.Product?.SubCategory ?? string.Empty; Gender = value.Product?.Gender ?? string.Empty; Season = value.Product?.Season ?? string.Empty;
             Material = value.Material ?? string.Empty; Location = value.Location ?? string.Empty; Supplier = value.Supplier ?? string.Empty;
         }
     }
     private static string? NullIfEmpty(string value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
-    [RelayCommand] private async Task Create() { try { await catalog.CreateVariantAsync(ProductName, Category, Sku, null, NullIfEmpty(VariantSize), NullIfEmpty(VariantColor), long.Parse(Cost), long.Parse(Price), 0, 2, default, NullIfEmpty(SubCategory), NullIfEmpty(Gender), NullIfEmpty(Season), NullIfEmpty(Material), NullIfEmpty(Location), NullIfEmpty(Supplier), SelectedType); Status = "Produit ajouté"; ProductName = Sku = Price = Cost = string.Empty; await LoadAsync(); } catch (Exception e) { Status = e.Message; } }
+    [RelayCommand] private async Task Create() { try { await catalog.CreateVariantAsync(ProductName, Category, Sku, NullIfEmpty(Barcode), NullIfEmpty(VariantSize), NullIfEmpty(VariantColor), long.Parse(Cost), long.Parse(Price), 0, 2, default, NullIfEmpty(SubCategory), NullIfEmpty(Gender), NullIfEmpty(Season), NullIfEmpty(Material), NullIfEmpty(Location), NullIfEmpty(Supplier), SelectedType, NullIfEmpty(Description), NullIfEmpty(PhotoPath), NullIfEmpty(ManagerPin)); Status = "Produit ajouté"; ProductName = Sku = Price = Cost = string.Empty; await LoadAsync(); } catch (Exception e) { Status = e.Message; } }
 
     [RelayCommand] private async Task CreateMatrix()
     {
         try
         {
             var colors = SplitList(MatrixColors); var sizes = SplitList(MatrixSizes);
-            var created = await catalog.CreateMatrixAsync(new MatrixDraft(ProductName, Category, MatrixPrefix, colors, sizes, long.Parse(Cost), long.Parse(Price), decimal.Parse(MatrixQuantity), 2, SelectedType, NullIfEmpty(Brand), NullIfEmpty(SubCategory), NullIfEmpty(Gender), NullIfEmpty(Season), NullIfEmpty(Material), NullIfEmpty(Supplier)));
+            var created = await catalog.CreateMatrixAsync(new MatrixDraft(ProductName, Category, MatrixPrefix, colors, sizes, long.Parse(Cost), long.Parse(Price), decimal.Parse(MatrixQuantity), 2, SelectedType, NullIfEmpty(Brand), NullIfEmpty(SubCategory), NullIfEmpty(Gender), NullIfEmpty(Season), NullIfEmpty(Material), NullIfEmpty(Supplier), NullIfEmpty(ManagerPin)));
             Status = $"{created.Count} variantes uniques créées";
             await LoadAsync();
         }
@@ -201,7 +208,45 @@ public partial class CatalogViewModel(ICatalogService catalog) : ObservableObjec
 
     private static List<string> SplitList(string value) => value.Split([';', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
 
-    [RelayCommand] private async Task Update() { if (Selected is null) return; try { var u = new ProductUpdate(Selected.Id, string.IsNullOrWhiteSpace(ProductName) ? Selected.Product!.Name : ProductName, Category, string.IsNullOrWhiteSpace(Sku) ? Selected.Sku : Sku, Selected.Barcode, Selected.Size, Selected.Color, string.IsNullOrWhiteSpace(Cost) ? Selected.CostXof : long.Parse(Cost), string.IsNullOrWhiteSpace(Price) ? Selected.PriceXof : long.Parse(Price), string.IsNullOrWhiteSpace(PromotionPrice) ? null : long.Parse(PromotionPrice), DateTimeOffset.Now, DateTimeOffset.Now.AddMonths(1), Selected.LowStockThreshold, PhotoPath, true, NullIfEmpty(SubCategory), NullIfEmpty(Gender), NullIfEmpty(Season), NullIfEmpty(Material), NullIfEmpty(Location), NullIfEmpty(Supplier), SelectedType); await catalog.UpdateVariantAsync(u, ManagerPin); Status = "Produit modifié"; PhotoPath = string.Empty; await LoadAsync(); } catch (Exception e) { Status = e.Message; } }
+    [RelayCommand] private async Task Update()
+    {
+        if (Selected is null) return;
+        try
+        {
+            DateTimeOffset? promoStart = DateTimeOffset.TryParse(PromoStart, out var ps) ? ps : Selected.PromotionStartsAt;
+            DateTimeOffset? promoEnd = DateTimeOffset.TryParse(PromoEnd, out var pe) ? pe : Selected.PromotionEndsAt;
+            var u = new ProductUpdate(Selected.Id, string.IsNullOrWhiteSpace(ProductName) ? Selected.Product!.Name : ProductName, Category, string.IsNullOrWhiteSpace(Sku) ? Selected.Sku : Sku, NullIfEmpty(Barcode) ?? Selected.Barcode, Selected.Size, Selected.Color, string.IsNullOrWhiteSpace(Cost) ? Selected.CostXof : long.Parse(Cost), string.IsNullOrWhiteSpace(Price) ? Selected.PriceXof : long.Parse(Price), string.IsNullOrWhiteSpace(PromotionPrice) ? null : long.Parse(PromotionPrice), promoStart, promoEnd, Selected.LowStockThreshold, PhotoPath, true, NullIfEmpty(SubCategory), NullIfEmpty(Gender), NullIfEmpty(Season), NullIfEmpty(Material), NullIfEmpty(Location), NullIfEmpty(Supplier), SelectedType, NullIfEmpty(Description));
+            await catalog.UpdateVariantAsync(u, ManagerPin); Status = "Produit modifié"; PhotoPath = string.Empty; await LoadAsync();
+        }
+        catch (Exception e) { Status = e.Message; }
+    }
+
+    [RelayCommand] private async Task BrowseImportFile()
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog { Title = "Fichier CSV d'import de produits", Filter = "CSV (*.csv)|*.csv", CheckFileExists = true };
+        if (dialog.ShowDialog() != true) return;
+        try
+        {
+            importPreview = await import.PreviewAsync(dialog.FileName);
+            ImportIssues.Clear(); foreach (var issue in importPreview.Issues) ImportIssues.Add(issue);
+            ImportRowsCount = importPreview.Rows.Count;
+            Status = importPreview.Issues.Count == 0 ? $"{importPreview.Rows.Count} lignes prêtes à importer" : $"{importPreview.Issues.Count} problème(s) à corriger avant l'import";
+        }
+        catch (Exception e) { Status = e.Message; }
+    }
+
+    [RelayCommand] private async Task RunImport()
+    {
+        if (importPreview is null || importPreview.Issues.Count > 0) { Status = "Corrigez les problèmes du fichier avant l'import."; return; }
+        try
+        {
+            var count = await import.ImportAsync(importPreview);
+            Status = $"{count} variantes importées";
+            importPreview = null; ImportIssues.Clear(); ImportRowsCount = 0;
+            await LoadAsync();
+        }
+        catch (Exception e) { Status = e.Message; }
+    }
 
     [RelayCommand] private async Task Archive() { if (Selected is null) return; if (!UiConfirm.Ask($"Archiver la variante {Selected.Sku} ? Elle restera dans l'historique mais ne pourra plus être vendue.")) return; try { await catalog.UpdateVariantAsync(new ProductUpdate(Selected.Id, Selected.Product!.Name, Selected.Product.Category?.Name ?? Category, Selected.Sku, Selected.Barcode, Selected.Size, Selected.Color, Selected.CostXof, Selected.PriceXof, Selected.PromotionalPriceXof, Selected.PromotionStartsAt, Selected.PromotionEndsAt, Selected.LowStockThreshold, null, false, Selected.Product.SubCategory, Selected.Product.Gender, Selected.Product.Season, Selected.Material, Selected.Location, Selected.Supplier, Selected.Product.Type), ManagerPin); Status = "Produit archivé"; await LoadAsync(); } catch (Exception e) { Status = e.Message; } }
 }
@@ -214,20 +259,31 @@ public partial class InventoryLineViewModel(ProductVariant variant) : Observable
     [ObservableProperty] private decimal countedQuantity = variant.QuantityOnHand;
 }
 
-public partial class StockViewModel(ICatalogService catalog, IStockService stock, IInventoryService inventory, IReportService reports) : ObservableObject, ILoadable
+public partial class OrderDraftLine(string label, decimal expected) : ObservableObject
+{
+    public string Label { get; } = label;
+    public decimal Expected { get; } = expected;
+}
+
+public partial class StockViewModel(ICatalogService catalog, IStockService stock, IInventoryService inventory, IReportService reports, IPurchaseService purchases) : ObservableObject, ILoadable
 {
     public ObservableCollection<ProductVariant> Items { get; } = [];
     public ObservableCollection<StockHistoryRow> History { get; } = [];
     public ObservableCollection<StockAlertRow> Alerts { get; } = [];
     public ObservableCollection<InventoryLineViewModel> InventoryLines { get; } = [];
+    public ObservableCollection<OrderDraftLine> OrderLines { get; } = [];
+    public ObservableCollection<PurchaseOrderRow> OpenOrders { get; } = [];
     [ObservableProperty] private ProductVariant? selected; [ObservableProperty] private string quantity = string.Empty; [ObservableProperty] private string reason = string.Empty; [ObservableProperty] private string managerPin = string.Empty; [ObservableProperty] private string status = string.Empty;
     [ObservableProperty] private string countedQuantity = ""; [ObservableProperty] private string categoryFilter = string.Empty;
+    [ObservableProperty] private string supplier = string.Empty; [ObservableProperty] private string orderExpected = "1";
+    [ObservableProperty] private PurchaseOrderRow? selectedOpenLine; [ObservableProperty] private string receivedQuantity = "0"; [ObservableProperty] private string receivedCost = "";
 
     public async Task LoadAsync()
     {
         var rows = await catalog.SearchAsync(null); Items.Clear(); foreach (var row in rows) Items.Add(row);
         History.Clear(); foreach (var h in await inventory.HistoryAsync(Selected?.Id)) History.Add(h);
         Alerts.Clear(); foreach (var a in await reports.StockAlertsAsync()) Alerts.Add(a);
+        OpenOrders.Clear(); foreach (var o in await purchases.ListOpenAsync()) OpenOrders.Add(o);
     }
 
     [RelayCommand] private async Task Receive() { if (Selected is null) return; try { await stock.AdjustAsync(new StockAdjustment(Selected.Id, decimal.Parse(Quantity), StockMovementType.Receipt, Selected.CostXof, Reason, "Responsable")); Status = "Réception enregistrée"; await LoadAsync(); } catch (Exception e) { Status = e.Message; } }
@@ -253,6 +309,44 @@ public partial class StockViewModel(ICatalogService catalog, IStockService stock
             if (counts.Length == 0) { Status = "Aucun écart à valider."; return; }
             await inventory.ApplyCountAsync(counts, Reason, ManagerPin);
             Status = $"Inventaire validé : {counts.Length} écarts";
+            await LoadAsync();
+        }
+        catch (Exception e) { Status = e.Message; }
+    }
+
+    [RelayCommand] private void AddToOrder()
+    {
+        if (Selected is null) return;
+        OrderLines.Add(new OrderDraftLine($"{Selected.Product?.Name} · {Selected.Sku}", decimal.Parse(OrderExpected)));
+    }
+
+    [RelayCommand] private void RemoveOrderLine(OrderDraftLine line) => OrderLines.Remove(line);
+
+    [RelayCommand] private async Task CreateOrder()
+    {
+        try
+        {
+            await purchases.CreateOrderAsync(Supplier, OrderLines.Select(x =>
+            {
+                var sku = x.Label.Split('·')[^1].Trim();
+                var variant = Items.First(i => i.Sku == sku);
+                return new PurchaseLineDraft(variant.Id, x.Expected);
+            }).ToArray());
+            Status = $"Commande fournisseur {Supplier} créée ({OrderLines.Count} lignes)";
+            OrderLines.Clear(); Supplier = string.Empty;
+            await LoadAsync();
+        }
+        catch (Exception e) { Status = e.Message; }
+    }
+
+    [RelayCommand] private async Task ReceiveSelected()
+    {
+        if (SelectedOpenLine is null) return;
+        try
+        {
+            var cost = long.TryParse(ReceivedCost, out var parsedCost) && parsedCost > 0 ? parsedCost : 0;
+            await purchases.ReceiveAsync(SelectedOpenLine.LineId, decimal.Parse(ReceivedQuantity), cost);
+            Status = $"Réception enregistrée : {ReceivedQuantity} × {SelectedOpenLine.Sku}";
             await LoadAsync();
         }
         catch (Exception e) { Status = e.Message; }
@@ -399,7 +493,7 @@ public partial class ReportsViewModel(IReportService reports) : ObservableObject
     [ObservableProperty] private string toDate = DateTime.Today.ToString("yyyy-MM-dd");
     [ObservableProperty] private string selectedReportKind = "Ventes par jour";
     [ObservableProperty] private string status = string.Empty;
-    public IReadOnlyList<string> ReportKinds { get; } = ["Ventes par jour", "Modes de paiement", "Ventes par vendeur", "Top produits", "Articles sans vente", "Valeur du stock", "Écarts d'inventaire", "Remises et corrections"];
+    public IReadOnlyList<string> ReportKinds { get; } = ["Ventes par jour", "Modes de paiement", "Ventes par vendeur", "Top produits", "Articles sans vente", "Valeur du stock", "Écarts d'inventaire", "Remises et corrections", "Rotation & dormants"];
 
     public async Task LoadAsync()
     {
@@ -418,6 +512,7 @@ public partial class ReportsViewModel(IReportService reports) : ObservableObject
                 "Valeur du stock" => await reports.StockValueByCategoryAsync(),
                 "Écarts d'inventaire" => await reports.InventoryVarianceAsync(from, to),
                 "Remises et corrections" => await reports.CorrectionsAsync(from, to),
+                "Rotation & dormants" => await reports.RotationAsync(from, to),
                 _ => await reports.SalesByDayAsync(from, to)
             };
             foreach (var row in rows) Rows.Add(row);

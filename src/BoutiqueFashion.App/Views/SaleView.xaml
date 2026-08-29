@@ -15,7 +15,7 @@
           <Button Width="186" Height="196" Margin="5" Padding="14" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" Command="{Binding DataContext.AddCommand, RelativeSource={RelativeSource AncestorType=ListBox}}" CommandParameter="{Binding}">
             <Grid><Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
               <Border Height="92" CornerRadius="8" Background="{StaticResource Ivory}" BorderBrush="{StaticResource Line}" BorderThickness="1" Margin="0,0,0,6" HorizontalAlignment="Stretch">
-                <Image Source="{Binding Product.PrimaryImagePath, Converter={StaticResource ImagePathConverter}}" Stretch="UniformToFill" Margin="3">
+                <Image Source="{Binding PrimaryImagePath, Converter={StaticResource ImagePathConverter}}" Stretch="UniformToFill" Margin="3">
                   <Image.Style><Style TargetType="Image"><Setter Property="Visibility" Value="Visible"/><Style.Triggers><Trigger Property="Source" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed"/></Trigger></Style.Triggers></Style></Image.Style>
                 </Image>
               </Border>

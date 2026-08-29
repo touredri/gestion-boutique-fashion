@@ -31,6 +31,23 @@
           <Button Content="Endommagé (sortie)" Command="{Binding DamageCommand}" Style="{StaticResource DangerButton}"/>
           <Button Content="Perdu (sortie)" Command="{Binding LoseCommand}" Style="{StaticResource DangerButton}"/>
           <Button Content="Valider inventaire compté" Command="{Binding ApplyInventoryCommand}" Style="{StaticResource PrimaryButton}"/>
+          <Separator/>
+          <TextBlock Text="FOURNISSEURS ET RÉCEPTIONS" Style="{StaticResource Eyebrow}"/>
+          <TextBlock Text="Commande : quantités attendues puis reçues" Style="{StaticResource HelperText}" Margin="4,0,4,8"/>
+          <TextBlock Text="Fournisseur" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding Supplier}"/>
+          <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <StackPanel><TextBlock Text="Quantité attendue (variante sélectionnée)" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding OrderExpected}"/></StackPanel>
+            <Button Grid.Column="1" Content="+ Ligne" Command="{Binding AddToOrderCommand}" VerticalAlignment="Bottom"/>
+          </Grid>
+          <ItemsControl ItemsSource="{Binding OrderLines}"><ItemsControl.ItemTemplate><DataTemplate><Grid Margin="0,2"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="44"/></Grid.ColumnDefinitions><TextBlock Text="{Binding Label}" VerticalAlignment="Center"/><TextBlock Text="{Binding Expected, StringFormat=× {0:0.###}}" VerticalAlignment="Center" Style="{StaticResource Money}"/><Button Grid.Column="1" Content="×" MinWidth="0" Width="40" Style="{StaticResource QuietButton}" Command="{Binding DataContext.RemoveOrderLineCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}"/></Grid></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+          <Button Content="Créer la commande fournisseur" Command="{Binding CreateOrderCommand}"/>
+          <TextBlock Text="Réceptions en attente" Style="{StaticResource FieldLabel}"/>
+          <DataGrid ItemsSource="{Binding OpenOrders}" SelectedItem="{Binding SelectedOpenLine}" MaxHeight="180" IsReadOnly="True"><DataGrid.Columns><DataGridTextColumn Header="Fournisseur" Binding="{Binding Supplier}"/><DataGridTextColumn Header="SKU" Binding="{Binding Sku}"/><DataGridTextColumn Header="Attendu" Binding="{Binding Expected}"/><DataGridTextColumn Header="Reçu" Binding="{Binding Received}"/></DataGrid.Columns></DataGrid>
+          <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
+            <StackPanel><TextBlock Text="Quantité reçue" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding ReceivedQuantity}"/></StackPanel>
+            <StackPanel Grid.Column="1"><TextBlock Text="Coût unitaire (optionnel)" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding ReceivedCost}" ToolTip="Vide = coût actuel"/></StackPanel>
+          </Grid>
+          <Button Content="Réceptionner la ligne sélectionnée" Command="{Binding ReceiveSelectedCommand}" Style="{StaticResource PrimaryButton}"/>
           <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Style="{StaticResource HelperText}" Margin="4,6"/>
         </StackPanel>
       </ScrollViewer>

@@ -58,8 +58,18 @@ public sealed record MatrixDraft(
     string? Gender = null,
     string? Season = null,
     string? Material = null,
-    string? Supplier = null);
-public sealed record ProductUpdate(Guid VariantId, string ProductName, string Category, string Sku, string? Barcode, string? Size, string? Color, long CostXof, long PriceXof, long? PromotionalPriceXof, DateTimeOffset? PromotionStartsAt, DateTimeOffset? PromotionEndsAt, decimal AlertThreshold, string? PhotoPath, bool IsActive, string? SubCategory = null, string? Gender = null, string? Season = null, string? Material = null, string? Location = null, string? Supplier = null, ProductType Type = ProductType.Clothing);
+    string? Supplier = null,
+    string? ManagerPin = null);
+public sealed record ProductUpdate(Guid VariantId, string ProductName, string Category, string Sku, string? Barcode, string? Size, string? Color, long CostXof, long PriceXof, long? PromotionalPriceXof, DateTimeOffset? PromotionStartsAt, DateTimeOffset? PromotionEndsAt, decimal AlertThreshold, string? PhotoPath, bool IsActive, string? SubCategory = null, string? Gender = null, string? Season = null, string? Material = null, string? Location = null, string? Supplier = null, ProductType Type = ProductType.Clothing, string? Description = null);
+
+public sealed record PurchaseLineDraft(Guid VariantId, decimal ExpectedQuantity);
+public sealed record PurchaseOrderRow(Guid OrderId, Guid LineId, string Supplier, string Sku, string ProductName, decimal Expected, decimal Received);
+public interface IPurchaseService
+{
+    Task<Guid> CreateOrderAsync(string supplier, IReadOnlyList<PurchaseLineDraft> lines, string? note = null, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<PurchaseOrderRow>> ListOpenAsync(CancellationToken cancellationToken = default);
+    Task ReceiveAsync(Guid orderLineId, decimal receivedQuantity, long unitCostXof = 0, string actor = "Responsable", CancellationToken cancellationToken = default);
+}
 
 public interface ISaleService
 {
@@ -129,6 +139,7 @@ public interface IReportService
     Task<IReadOnlyList<ReportRow>> StockValueByCategoryAsync(CancellationToken cancellationToken = default);
     Task<IReadOnlyList<ReportRow>> InventoryVarianceAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<ReportRow>> CorrectionsAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<ReportRow>> RotationAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<CashClosingRow>> CashClosingsAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<StockAlertRow>> StockAlertsAsync(CancellationToken cancellationToken = default);
 }
@@ -136,7 +147,7 @@ public interface IReportService
 public interface ICatalogService
 {
     Task<IReadOnlyList<ProductVariant>> SearchAsync(string? query, CancellationToken cancellationToken = default);
-    Task<ProductVariant> CreateVariantAsync(string productName, string categoryName, string sku, string? barcode, string? size, string? color, long costXof, long priceXof, decimal initialQuantity, decimal alertThreshold, CancellationToken cancellationToken = default, string? subCategory = null, string? gender = null, string? season = null, string? material = null, string? location = null, string? supplier = null, ProductType type = ProductType.Clothing);
+    Task<ProductVariant> CreateVariantAsync(string productName, string categoryName, string sku, string? barcode, string? size, string? color, long costXof, long priceXof, decimal initialQuantity, decimal alertThreshold, CancellationToken cancellationToken = default, string? subCategory = null, string? gender = null, string? season = null, string? material = null, string? location = null, string? supplier = null, ProductType type = ProductType.Clothing, string? description = null, string? photoPath = null, string? managerPin = null);
     Task<IReadOnlyList<ProductVariant>> CreateMatrixAsync(MatrixDraft draft, CancellationToken cancellationToken = default);
     Task<ProductVariant> UpdateVariantAsync(ProductUpdate update, string managerPin, CancellationToken cancellationToken = default);
 }
