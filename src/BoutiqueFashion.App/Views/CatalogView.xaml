@@ -8,76 +8,54 @@
     </Grid>
     <TabControl Grid.Row="1" SelectedIndex="{Binding SelectedTab}" Padding="0">
       <TabItem Header="  Ajouter un produit  " Padding="14,10">
-        <Grid>
-          <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-          <Border Style="{StaticResource Card}" Margin="0,6,0,0" Padding="10">
-            <WrapPanel>
-              <Button Content="Ajouter 1 variante" Command="{Binding CreateCommand}" Style="{StaticResource PrimaryButton}"/>
-              <Button Content="Créer la matrice" Command="{Binding CreateMatrixCommand}"/>
-              <Button Content="Enregistrer les modifications" Command="{Binding UpdateCommand}"/>
-              <Button Content="Archiver" Command="{Binding ArchiveCommand}" Style="{StaticResource DangerButton}"/>
-              <StackPanel Width="170"><TextBlock Text="PIN responsable" Style="{StaticResource FieldLabel}"/><controls:KeypadField Value="{Binding ManagerPin}" Mask="True" Title="PIN responsable"/></StackPanel>
-              <TextBlock Text="{Binding Status}" Style="{StaticResource HelperText}" VerticalAlignment="Center" Margin="10,0,0,0"/>
-            </WrapPanel>
-          </Border>
-          <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-            <StackPanel>
-              <Border Style="{StaticResource Card}" Padding="14">
-                <StackPanel>
-                  <TextBlock Text="1 · PRODUIT" Style="{StaticResource Eyebrow}"/>
-                  <WrapPanel>
-                    <StackPanel Width="200"><TextBlock Text="Nom du produit" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding ProductName, UpdateSourceTrigger=PropertyChanged}" controls:Placeholder.Text="Nom du produit"/></StackPanel>
-                    <StackPanel Width="130"><TextBlock Text="Type d'article" Style="{StaticResource FieldLabel}"/><ComboBox ItemsSource="{Binding ProductTypes}" SelectedItem="{Binding SelectedType}"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Converter={StaticResource EnumFr}}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox></StackPanel>
-                    <StackPanel Width="160"><TextBlock Text="Catégorie" Style="{StaticResource FieldLabel}"/><ComboBox ItemsSource="{Binding Categories}" SelectedItem="{Binding Category}"/></StackPanel>
-                    <StackPanel Width="110"><Button Content="+ Nouvelle catégorie" Command="{Binding ToggleNewCategoryCommand}" Style="{StaticResource QuietButton}" HorizontalAlignment="Left"/></StackPanel>
-                    <StackPanel Width="160" Visibility="{Binding ShowNewCategory, Converter={StaticResource BoolToVis}}"><TextBlock Text="Nouvelle catégorie" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding NewCategoryText, UpdateSourceTrigger=PropertyChanged}" controls:Placeholder.Text="Nouvelle catégorie"/></StackPanel>
-                    <StackPanel Width="140"><TextBlock Text="Sous-catégorie" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding SubCategory}" controls:Placeholder.Text="Sous-catégorie"/></StackPanel>
-                    <StackPanel Width="130"><TextBlock Text="Marque" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding Brand}" controls:Placeholder.Text="Marque"/></StackPanel>
-                    <StackPanel Width="110"><TextBlock Text="Genre/public" Style="{StaticResource FieldLabel}"/><ComboBox ItemsSource="{Binding GenderOptions}" SelectedItem="{Binding Gender}"/></StackPanel>
-                    <StackPanel Width="130"><TextBlock Text="Saison" Style="{StaticResource FieldLabel}"/><ComboBox ItemsSource="{Binding SeasonOptions}" SelectedItem="{Binding Season}"/></StackPanel>
-                    <StackPanel Width="280"><TextBlock Text="Description courte" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding Description}" controls:Placeholder.Text="Description courte"/></StackPanel>
-                  </WrapPanel>
-                  <TextBlock Text="{Binding ProductNotice}" Style="{StaticResource HelperText}" Foreground="{StaticResource TerracottaDark}" Margin="4,2,4,0"/>
-                </StackPanel>
-              </Border>
-              <Border Style="{StaticResource Card}" Padding="14">
-                <StackPanel>
-                  <TextBlock Text="2 · VARIANTES ET TARIFS" Style="{StaticResource Eyebrow}"/>
-                  <TextBlock Text="Matrice couleurs × tailles — les tailles recommandées se remplissent selon le type" Style="{StaticResource HelperText}" Margin="4,0,4,6"/>
-                  <WrapPanel>
-                    <StackPanel Width="140"><TextBlock Text="Préfixe SKU" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding MatrixPrefix}" controls:Placeholder.Text="Préfixe SKU"/></StackPanel>
-                    <StackPanel Width="220"><TextBlock Text="Couleurs (virgules)" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding MatrixColors}" controls:Placeholder.Text="Rouge, Noir, …"/></StackPanel>
-                    <StackPanel Width="260"><TextBlock Text="Tailles / pointures (virgules)" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding MatrixSizes}" controls:Placeholder.Text="M, L, XL…"/></StackPanel>
-                    <StackPanel Width="110"><TextBlock Text="Stock initial" Style="{StaticResource FieldLabel}"/><controls:KeypadField Value="{Binding MatrixQuantity}" Title="Stock initial"/></StackPanel>
-                    <StackPanel Width="120"><TextBlock Text="Coût FCFA" Style="{StaticResource FieldLabel}"/><controls:KeypadField Value="{Binding Cost}" Title="Coût" Suffix="FCFA"/></StackPanel>
-                    <StackPanel Width="120"><TextBlock Text="Prix FCFA" Style="{StaticResource FieldLabel}"/><controls:KeypadField Value="{Binding Price}" Title="Prix" Suffix="FCFA"/></StackPanel>
-                  </WrapPanel>
-                  <TextBlock Text="Variante seule" FontWeight="SemiBold" Margin="4,8,4,2"/>
-                  <WrapPanel>
-                    <StackPanel Width="150"><TextBlock Text="SKU" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding Sku}"/></StackPanel>
-                    <StackPanel Width="140"><TextBlock Text="Code-barres" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding Barcode}" controls:Placeholder.Text="Code-barres"/></StackPanel>
-                    <StackPanel Width="120"><TextBlock Text="Taille / pointure" Style="{StaticResource FieldLabel}"/><ComboBox ItemsSource="{Binding SizeOptions}" SelectedItem="{Binding VariantSize}"/></StackPanel>
-                    <StackPanel Width="120"><TextBlock Text="Couleur" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding VariantColor}" controls:Placeholder.Text="Couleur"/></StackPanel>
-                    <StackPanel Width="130"><TextBlock Text="Prix promo" Style="{StaticResource FieldLabel}"/><controls:KeypadField Value="{Binding PromotionPrice}" Title="Prix promo" Suffix="FCFA"/></StackPanel>
-                    <StackPanel Width="130"><TextBlock Text="Promo du" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding PromoStart}" controls:Placeholder.Text="AAAA-MM-JJ" ToolTip="AAAA-MM-JJ"/></StackPanel>
-                    <StackPanel Width="130"><TextBlock Text="Promo au" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding PromoEnd}" controls:Placeholder.Text="AAAA-MM-JJ" ToolTip="AAAA-MM-JJ"/></StackPanel>
-                  </WrapPanel>
-                </StackPanel>
-              </Border>
-              <Border Style="{StaticResource Card}" Padding="14">
-                <StackPanel>
-                  <TextBlock Text="3 · SUIVI EN BOUTIQUE" Style="{StaticResource Eyebrow}"/>
-                  <WrapPanel>
-                    <StackPanel Width="240"><TextBlock Text="Photo de la variante" Style="{StaticResource FieldLabel}"/><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox Text="{Binding PhotoPath}" IsReadOnly="True"/><Button Grid.Column="1" Content="Parcourir…" Click="BrowsePhoto_OnClick" Margin="4,0,0,0" VerticalAlignment="Stretch"/></Grid></StackPanel>
-                    <StackPanel Width="140"><TextBlock Text="Matière" Style="{StaticResource FieldLabel}"/><ComboBox ItemsSource="{Binding MaterialOptions}" SelectedItem="{Binding Material}"/></StackPanel>
-                    <StackPanel Width="140"><TextBlock Text="Rayon / emplacement" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding Location}" controls:Placeholder.Text="Rayon / emplacement"/></StackPanel>
-                    <StackPanel Width="160"><TextBlock Text="Fournisseur" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding Supplier}" controls:Placeholder.Text="Fournisseur"/></StackPanel>
-                  </WrapPanel>
-                </StackPanel>
-              </Border>
-            </StackPanel>
-          </ScrollViewer>
-        </Grid>
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+          <StackPanel>
+            <Border Style="{StaticResource Card}" Padding="14">
+              <StackPanel>
+                <TextBlock Text="1 · PRODUIT" Style="{StaticResource Eyebrow}"/>
+                <WrapPanel>
+                  <StackPanel Width="200"><TextBlock Text="Nom du produit" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding ProductName, UpdateSourceTrigger=PropertyChanged}" controls:Placeholder.Text="Nom du produit"/></StackPanel>
+                  <StackPanel Width="130"><TextBlock Text="Type d'article" Style="{StaticResource FieldLabel}"/><ComboBox ItemsSource="{Binding ProductTypes}" SelectedItem="{Binding SelectedType}"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Converter={StaticResource EnumFr}}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox></StackPanel>
+                  <StackPanel Width="160"><TextBlock Text="Catégorie" Style="{StaticResource FieldLabel}"/><ComboBox ItemsSource="{Binding CategoryOptions}" SelectedItem="{Binding Category}"/></StackPanel>
+                  <StackPanel Width="110"><Button Content="+ Nouvelle catégorie" Command="{Binding ToggleNewCategoryCommand}" Style="{StaticResource QuietButton}" HorizontalAlignment="Left"/></StackPanel>
+                  <StackPanel Width="160" Visibility="{Binding ShowNewCategory, Converter={StaticResource BoolToVis}}"><TextBlock Text="Nouvelle catégorie" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding NewCategoryText, UpdateSourceTrigger=PropertyChanged}" controls:Placeholder.Text="Nouvelle catégorie"/></StackPanel>
+                  <StackPanel Width="140"><TextBlock Text="Sous-catégorie" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding SubCategory}" controls:Placeholder.Text="Sous-catégorie"/></StackPanel>
+                  <StackPanel Width="130"><TextBlock Text="Marque" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding Brand}" controls:Placeholder.Text="Marque"/></StackPanel>
+                  <StackPanel Width="110"><TextBlock Text="Genre/public" Style="{StaticResource FieldLabel}"/><ComboBox ItemsSource="{Binding GenderOptions}" SelectedItem="{Binding Gender}"/></StackPanel>
+                  <StackPanel Width="280"><TextBlock Text="Description courte" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding Description}" controls:Placeholder.Text="Description courte"/></StackPanel>
+                </WrapPanel>
+                <TextBlock Text="{Binding ProductNotice}" Style="{StaticResource HelperText}" Foreground="{StaticResource TerracottaDark}" Margin="4,2,4,0"/>
+              </StackPanel>
+            </Border>
+            <Border Style="{StaticResource Card}" Padding="14">
+              <StackPanel>
+                <TextBlock Text="2 · VARIANTES ET TARIFS" Style="{StaticResource Eyebrow}"/>
+                <WrapPanel>
+                  <StackPanel Width="110"><TextBlock Text="Stock initial" Style="{StaticResource FieldLabel}"/><controls:KeypadField Value="{Binding MatrixQuantity}" Title="Stock initial"/></StackPanel>
+                  <StackPanel Width="120"><TextBlock Text="Coût FCFA" Style="{StaticResource FieldLabel}"/><controls:KeypadField Value="{Binding Cost}" Title="Coût" Suffix="FCFA"/></StackPanel>
+                  <StackPanel Width="120"><TextBlock Text="Prix FCFA" Style="{StaticResource FieldLabel}"/><controls:KeypadField Value="{Binding Price}" Title="Prix" Suffix="FCFA"/></StackPanel>
+                </WrapPanel>
+                <Button Content="+ Variante" Command="{Binding ToggleVariantEntryCommand}" HorizontalAlignment="Left" Margin="4,8,4,2" AutomationProperties.Name="Afficher la saisie de variante"/>
+                <WrapPanel Visibility="{Binding ShowVariantEntry, Converter={StaticResource BoolToVis}}">
+                  <StackPanel Width="150"><TextBlock Text="SKU" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding Sku}" controls:Placeholder.Text="SKU"/></StackPanel>
+                  <StackPanel Width="140"><TextBlock Text="Code-barres" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding Barcode}" controls:Placeholder.Text="Code-barres"/></StackPanel>
+                  <StackPanel Width="120"><TextBlock Text="Taille / pointure" Style="{StaticResource FieldLabel}"/><ComboBox ItemsSource="{Binding SizeOptions}" SelectedItem="{Binding VariantSize}"/></StackPanel>
+                  <StackPanel Width="120"><TextBlock Text="Couleur" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding VariantColor}" controls:Placeholder.Text="Couleur"/></StackPanel>
+                  <StackPanel Width="140"><TextBlock Text="Matière" Style="{StaticResource FieldLabel}"/><ComboBox ItemsSource="{Binding MaterialOptions}" SelectedItem="{Binding Material}"/></StackPanel>
+                  <StackPanel Width="160"><TextBlock Text="Fournisseur" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding Supplier}" controls:Placeholder.Text="Fournisseur"/></StackPanel>
+                  <StackPanel Width="240"><TextBlock Text="Photo de la variante" Style="{StaticResource FieldLabel}"/><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBox Text="{Binding PhotoPath}" IsReadOnly="True"/><Button Grid.Column="1" Content="Parcourir…" Click="BrowsePhoto_OnClick" Margin="4,0,0,0" VerticalAlignment="Stretch"/></Grid></StackPanel>
+                </WrapPanel>
+                <WrapPanel Margin="0,10,0,0">
+                  <Button Content="Ajouter le produit" Command="{Binding CreateCommand}" Style="{StaticResource PrimaryButton}"/>
+                  <Button Content="Enregistrer les modifications" Command="{Binding UpdateCommand}"/>
+                  <Button Content="Archiver" Command="{Binding ArchiveCommand}" Style="{StaticResource DangerButton}"/>
+                  <StackPanel Width="170"><TextBlock Text="PIN responsable" Style="{StaticResource FieldLabel}"/><controls:KeypadField Value="{Binding ManagerPin}" Mask="True" Title="PIN responsable"/></StackPanel>
+                  <TextBlock Text="{Binding Status}" Style="{StaticResource HelperText}" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                </WrapPanel>
+              </StackPanel>
+            </Border>
+          </StackPanel>
+        </ScrollViewer>
       </TabItem>
       <TabItem Header="  Liste des produits  " Padding="14,10">
         <Grid>
