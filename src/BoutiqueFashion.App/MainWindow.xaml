@@ -3,7 +3,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:BoutiqueFashion.App.ViewModels"
         xmlns:views="clr-namespace:BoutiqueFashion.App.Views"
-        Title="Boutique" MinWidth="1024" MinHeight="600" WindowState="Maximized"
+        xmlns:controls="clr-namespace:BoutiqueFashion.App.Controls"
+        Title="Boutique" Icon="/Assets/logo-nav.png" MinWidth="1024" MinHeight="600" WindowState="Maximized"
         WindowStartupLocation="CenterScreen" UseLayoutRounding="True" SnapsToDevicePixels="True">
   <Window.Resources>
     <DataTemplate DataType="{x:Type vm:DashboardViewModel}"><views:DashboardView/></DataTemplate>
@@ -23,8 +24,8 @@
         <StackPanel DockPanel.Dock="Top">
           <Grid Margin="6,4,4,18">
             <Grid.ColumnDefinitions><ColumnDefinition Width="46"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-            <Border Width="40" Height="40" Background="{StaticResource Terracotta}" CornerRadius="10">
-              <TextBlock Text="BF" Foreground="White" FontWeight="Bold" FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            <Border Width="40" Height="40" CornerRadius="10">
+              <Image Source="/Assets/logo-nav.png" Width="40" Height="40" RenderOptions.BitmapScalingMode="HighQuality"/>
             </Border>
             <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="10,0,0,0">
               <TextBlock Text="BOUTIQUE" Foreground="White" FontWeight="Bold" FontSize="14"/>
@@ -51,13 +52,15 @@
       </DockPanel>
     </Border>
     <Grid Grid.Column="1">
-      <Grid.RowDefinitions><RowDefinition Height="76"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+      <Grid.RowDefinitions><RowDefinition Height="56"/><RowDefinition Height="*"/></Grid.RowDefinitions>
       <Border Background="{StaticResource Paper}" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
         <Grid Margin="24,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-          <StackPanel VerticalAlignment="Center"><TextBlock Text="{Binding PageTitle}" Style="{StaticResource PageTitle}"/><TextBlock Text="Gestion locale de la boutique" Foreground="{StaticResource Muted}" FontSize="12"/></StackPanel>
+          <TextBlock Text="{Binding PageTitle}" Style="{StaticResource PageTitle}" VerticalAlignment="Center"/>
         </Grid>
       </Border>
       <ContentControl Grid.Row="1" Content="{Binding CurrentPage}" Focusable="False"/>
     </Grid>
+    <controls:TouchKeypadOverlay Grid.ColumnSpan="2"/>
+    <controls:TouchKeyboardOverlay Grid.ColumnSpan="2"/>
   </Grid>
 </Window>

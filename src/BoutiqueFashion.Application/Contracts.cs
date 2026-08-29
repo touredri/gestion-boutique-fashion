@@ -168,6 +168,7 @@ public interface ICustomerService
 public interface IExpenseService
 {
     Task<Expense> CreateAsync(string category, string description, long amountXof, PaymentMode mode, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<Expense>> ListRecentAsync(int count = 20, CancellationToken cancellationToken = default);
 }
 
 public interface IAppSettingsService

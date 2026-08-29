@@ -19,6 +19,12 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=admin
 UninstallDisplayIcon={app}\{#MyAppExeName}
+SetupIconFile=..\src\BoutiqueFashion.App\Assets\logo.ico
+WizardImageFile=..\src\BoutiqueFashion.App\Assets\installer-side.png
+WizardSmallImageFile=..\src\BoutiqueFashion.App\Assets\installer-small.png
+
+[Languages]
+Name: "french"; MessagesFile: "compiler:Languages\French.isl"
 
 [Files]
 Source: "..\artifacts\win-x64\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs

@@ -285,4 +285,11 @@ public sealed class ExpenseService(IDbContextFactory<BoutiqueDbContext> factory)
         await db.SaveChangesAsync(cancellationToken);
         return expense;
     }
+
+    public async Task<IReadOnlyList<Expense>> ListRecentAsync(int count = 20, CancellationToken cancellationToken = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(cancellationToken);
+        var rows = await db.Expenses.AsNoTracking().ToListAsync(cancellationToken);
+        return rows.OrderByDescending(x => x.CreatedAt).Take(count).ToArray();
+    }
 }

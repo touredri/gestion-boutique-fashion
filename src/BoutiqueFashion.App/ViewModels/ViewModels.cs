@@ -97,8 +97,6 @@ public partial class SaleViewModel(ICatalogService catalog, ICustomerService cus
     [ObservableProperty] private PaymentMode selectedPaymentMode = PaymentMode.Cash;
     [ObservableProperty] private PrinterProfile? selectedPrinter;
     [ObservableProperty] private CustomerRow? selectedCustomer;
-    [ObservableProperty] private string newCustomerName = string.Empty;
-    [ObservableProperty] private string newCustomerPhone = string.Empty;
     [ObservableProperty] private decimal discountPercent;
     [ObservableProperty] private string discountReason = string.Empty;
     [ObservableProperty] private string managerPin = string.Empty;
@@ -114,6 +112,7 @@ public partial class SaleViewModel(ICatalogService catalog, ICustomerService cus
     public long PayableXof => TotalXof - BusinessRules.CalculateDiscount(TotalXof, DiscountPercent == 0 ? DiscountKind.None : DiscountKind.Percentage, DiscountPercent);
     public long ChangePreview { get { var sum = Payments.Sum(x => x.AmountXof); return sum > PayableXof ? sum - PayableXof : 0; } }
     partial void OnDiscountPercentChanged(decimal value) { OnPropertyChanged(nameof(PayableXof)); OnPropertyChanged(nameof(ChangePreview)); }
+    [RelayCommand] private void SetCreditDue(string days) { if (int.TryParse(days, out var d)) CreditDueDate = DateTime.Today.AddDays(d).ToString("yyyy-MM-dd"); }
 
     public async Task LoadAsync()
     {
@@ -156,9 +155,7 @@ public partial class SaleViewModel(ICatalogService catalog, ICustomerService cus
             var hasCredit = paymentDrafts.Any(x => x.Mode == PaymentMode.Credit);
             var key = Guid.NewGuid().ToString("N");
             DateTimeOffset? creditDue = hasCredit ? DateTimeOffset.Parse(CreditDueDate) : null;
-            var draft = new SaleDraft(key, Cart.Select(x => new SaleLineDraft(x.Variant.Id, x.Quantity, x.EffectiveDiscountKind, x.DiscountValue)).ToArray(), paymentDrafts, SelectedCustomer?.Id, DiscountPercent == 0 ? DiscountKind.None : DiscountKind.Percentage, DiscountPercent, DiscountReason, ManagerPin, creditDue,
-                SelectedCustomer is null ? NullIfEmpty(NewCustomerName) : null,
-                SelectedCustomer is null ? NullIfEmpty(NewCustomerPhone) : null);
+            var draft = new SaleDraft(key, Cart.Select(x => new SaleLineDraft(x.Variant.Id, x.Quantity, x.EffectiveDiscountKind, x.DiscountValue)).ToArray(), paymentDrafts, SelectedCustomer?.Id, DiscountPercent == 0 ? DiscountKind.None : DiscountKind.Percentage, DiscountPercent, DiscountReason, ManagerPin, creditDue);
             var result = await sales.CreateAsync(draft);
             Status = $"Vente {result.Number} enregistrée";
             if (result.ChangeXof > 0) Status += $" • Monnaie à rendre : {result.ChangeXof:N0} FCFA";
@@ -168,7 +165,7 @@ public partial class SaleViewModel(ICatalogService catalog, ICustomerService cus
                 try { var receipt = await documents.GetReceiptAsync(result.DocumentId, false); await printerService.PrintReceiptAsync(SelectedPrinter, receipt); await documents.MarkPrintedAsync(result.DocumentId); }
                 catch (Exception e) { Status += $" • Impression: {e.Message}"; }
             }
-            Cart.Clear(); Payments.Clear(); DiscountPercent = 0; NewCustomerName = string.Empty; NewCustomerPhone = string.Empty;
+            Cart.Clear(); Payments.Clear(); DiscountPercent = 0;
             OnPropertyChanged(nameof(TotalXof)); OnPropertyChanged(nameof(PayableXof)); OnPropertyChanged(nameof(PaymentTotalXof));
             await LoadAsync();
         }
@@ -187,6 +184,7 @@ public partial class CatalogViewModel(ICatalogService catalog, IProductImportSer
     public IReadOnlyList<ProductType> ProductTypes { get; } = Enum.GetValues<ProductType>();
     public IReadOnlyList<string> GenderOptions { get; } = ["Femme", "Homme", "Enfant", "Mixte"];
     public IReadOnlyList<string> SeasonOptions { get; } = ["Toutes saisons", "Été", "Hiver", "Mi-saison"];
+    public IReadOnlyList<string> MaterialOptions { get; } = ["Coton", "Polyester", "Lin", "Soie", "Laine", "Denim", "Cuir", "Synthétique", "Autre"];
     private ImportPreview? importPreview;
     [ObservableProperty] private int importRowsCount;
     [ObservableProperty] private bool hasImportPreview;
@@ -338,6 +336,7 @@ public partial class StockViewModel(ICatalogService catalog, IStockService stock
     public ObservableCollection<InventoryLineViewModel> InventoryLines { get; } = [];
     public ObservableCollection<OrderDraftLine> OrderLines { get; } = [];
     public ObservableCollection<PurchaseOrderRow> OpenOrders { get; } = [];
+    public ObservableCollection<string> Categories { get; } = [];
     [ObservableProperty] private ProductVariant? selected; [ObservableProperty] private string quantity = string.Empty; [ObservableProperty] private string reason = string.Empty; [ObservableProperty] private string managerPin = string.Empty; [ObservableProperty] private string status = string.Empty;
     [ObservableProperty] private string countedQuantity = ""; [ObservableProperty] private string categoryFilter = string.Empty;
     [ObservableProperty] private string supplier = string.Empty; [ObservableProperty] private string orderExpected = "1";
@@ -346,6 +345,7 @@ public partial class StockViewModel(ICatalogService catalog, IStockService stock
     public async Task LoadAsync()
     {
         var rows = await catalog.SearchAsync(null); Items.Clear(); foreach (var row in rows) Items.Add(row);
+        Categories.Clear(); foreach (var c in await catalog.CategoriesAsync()) Categories.Add(c);
         History.Clear(); foreach (var h in await inventory.HistoryAsync(Selected?.Id)) History.Add(h);
         Alerts.Clear(); foreach (var a in await reports.StockAlertsAsync()) Alerts.Add(a);
         OpenOrders.Clear(); foreach (var o in await purchases.ListOpenAsync()) OpenOrders.Add(o);
@@ -426,6 +426,8 @@ public partial class CustomersViewModel(ICustomerService customers, ICreditServi
     public ObservableCollection<CustomerHistorySale> HistorySales { get; } = [];
     public ObservableCollection<CustomerHistoryPayment> HistoryPayments { get; } = [];
     public IReadOnlyList<PaymentMode> PaymentModes { get; } = Enum.GetValues<PaymentMode>().Where(x => x != PaymentMode.Credit).ToArray();
+    public IReadOnlyList<string> GenderOptions { get; } = ["Femme", "Homme", "Enfant", "Mixte"];
+    public IReadOnlyList<string> ChannelOptions { get; } = ["Boutique", "WhatsApp", "Instagram", "Facebook", "Téléphone", "Autre"];
 
     [ObservableProperty] private string search = string.Empty;
     partial void OnSearchChanged(string value) => _ = LoadAsync();
@@ -505,10 +507,12 @@ public partial class CustomersViewModel(ICustomerService customers, ICreditServi
 
 public partial class ExpensesViewModel(IExpenseService expenses) : ObservableObject, ILoadable
 {
+    public ObservableCollection<Expense> RecentExpenses { get; } = [];
     public IReadOnlyList<PaymentMode> PaymentModes { get; } = Enum.GetValues<PaymentMode>();
+    public IReadOnlyList<string> CategoryOptions { get; } = ["Loyer", "Salaires", "Transport", "Électricité", "Eau", "Internet", "Fournitures", "Marketing", "Maintenance", "Impôts", "Assurance", "Autres"];
     [ObservableProperty] private string category = "Autres"; [ObservableProperty] private string description = string.Empty; [ObservableProperty] private string amount = string.Empty; [ObservableProperty] private PaymentMode selectedMode = PaymentMode.Cash; [ObservableProperty] private string status = string.Empty;
-    public Task LoadAsync() => Task.CompletedTask;
-    [RelayCommand] private async Task Create() { try { await expenses.CreateAsync(Category, Description, long.Parse(Amount), SelectedMode); Status = "Dépense enregistrée"; Description = Amount = string.Empty; } catch (Exception e) { Status = e.Message; } }
+    public async Task LoadAsync() { RecentExpenses.Clear(); foreach (var e in await expenses.ListRecentAsync(20)) RecentExpenses.Add(e); }
+    [RelayCommand] private async Task Create() { try { await expenses.CreateAsync(Category, Description, long.Parse(Amount), SelectedMode); Status = "Dépense enregistrée"; Description = Amount = string.Empty; await LoadAsync(); } catch (Exception e) { Status = e.Message; } }
 }
 
 public partial class DocumentsViewModel(IDocumentService documents, IReturnService returns, IThermalPrinterService printers, IAppSettingsService settings, IA4DocumentService a4) : ObservableObject, ILoadable
@@ -712,17 +716,26 @@ public partial class SettingsViewModel(IAuthorizationService authorization, IApp
     }
 
     [RelayCommand] private async Task Backup() { try { Status = $"Sauvegarde: {await backup.CreateAsync()}"; } catch (Exception e) { Status = e.Message; } }
-    [RelayCommand] private async Task TestPrinter() { if (SelectedPrinter is null) return; try { await printer.PrintTestAsync(SelectedPrinter); Status = "Test envoyé"; } catch (Exception e) { Status = e.Message; } }
+    [RelayCommand] private async Task TestPrinter() { if (SelectedPrinter is null) { Status = "Sélectionnez d'abord une imprimante."; return; } try { await printer.PrintTestAsync(SelectedPrinter); Status = $"Ticket test envoyé vers « {SelectedPrinter.Name} »."; } catch (Exception e) { Status = $"Échec du test sur « {SelectedPrinter.Name} » : {e.Message}"; } }
 
     [RelayCommand] private async Task PreviewTemplate()
     {
         try
         {
             var sample = await documents.BuildSampleAsync(SelectedDocType);
-            var path = Path.Combine(Path.GetTempPath(), $"apercu-{SelectedDocType}.pdf");
+            var style = Enum.TryParse<DocumentStyle>(SelectedStyle, true, out var parsed) ? parsed : DocumentStyle.Moderne;
+            sample = sample with
+            {
+                Style = style,
+                LogoPath = FlagLogo ? sample.LogoPath : null,
+                Slogan = FlagSlogan ? sample.Slogan : null,
+                StampPath = FlagStamp ? sample.StampPath : null,
+                SignaturePath = FlagSignature ? sample.SignaturePath : null
+            };
+            var path = Path.Combine(Path.GetTempPath(), $"apercu-{SelectedDocType}-{Guid.NewGuid():N}.pdf");
             await File.WriteAllBytesAsync(path, a4.CreateInvoicePdf(sample));
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true });
-            Status = $"Aperçu du modèle {SelectedDocType} ouvert";
+            Status = $"Aperçu {SelectedStyle} · {SelectedDocType} ouvert";
         }
         catch (Exception e) { Status = e.Message; }
     }

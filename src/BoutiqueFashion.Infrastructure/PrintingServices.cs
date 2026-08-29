@@ -32,8 +32,19 @@ public sealed class ThermalPrinterService(IPrintQueueService queue) : IThermalPr
 {
     public IReadOnlyList<PrinterProfile> Discover()
     {
+        string defaultPrinter;
+        try { defaultPrinter = new System.Drawing.Printing.PrinterSettings().PrinterName; }
+        catch { defaultPrinter = string.Empty; }
         var result = new List<PrinterProfile>();
-        foreach (string printer in System.Drawing.Printing.PrinterSettings.InstalledPrinters) result.Add(new PrinterProfile(printer, PrinterConnectionKind.WindowsQueue, printer, PaperWidth.Mm80));
+        foreach (string printer in System.Drawing.Printing.PrinterSettings.InstalledPrinters)
+        {
+            var label = string.Equals(printer, defaultPrinter, StringComparison.OrdinalIgnoreCase) ? $"{printer} (par défaut)" : printer;
+            result.Add(new PrinterProfile(label, PrinterConnectionKind.WindowsQueue, printer, PaperWidth.Mm80));
+        }
+        result = result
+            .OrderByDescending(x => string.Equals(x.Address, defaultPrinter, StringComparison.OrdinalIgnoreCase))
+            .ThenBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
         result.AddRange(SerialPort.GetPortNames().OrderBy(x => x).Select(x => new PrinterProfile($"Bluetooth / série {x}", PrinterConnectionKind.SerialPort, x, PaperWidth.Mm80)));
         return result;
     }
@@ -222,7 +233,7 @@ internal static class RawPrinter
         try
         {
             Marshal.Copy(data, 0, unmanaged, data.Length);
-            if (StartDocPrinter(printer, 1, new DocInfo()) == 0 || !StartPagePrinter(printer) || !WritePrinter(printer, unmanaged, data.Length, out var written) || written != data.Length)
+            if (StartDocPrinter(printer, 1, new DocInfo()) == 0 || !StartPagePrinter(printer) || !WritePrinter(printer, unmanaged, data.Length, out _))
                 throw new InvalidOperationException($"Échec de l'impression ({Marshal.GetLastWin32Error()}).");
             EndPagePrinter(printer); EndDocPrinter(printer);
         }

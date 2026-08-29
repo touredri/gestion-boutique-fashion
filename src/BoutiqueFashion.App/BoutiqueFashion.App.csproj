@@ -5,7 +5,11 @@
     <UseWPF>true</UseWPF>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <AssemblyName>BoutiqueFashion</AssemblyName>
+    <ApplicationIcon>Assets\logo.ico</ApplicationIcon>
   </PropertyGroup>
+  <ItemGroup>
+    <Resource Include="Assets\logo-nav.png" />
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../BoutiqueFashion.Application/BoutiqueFashion.Application.csproj" />
     <ProjectReference Include="../BoutiqueFashion.Infrastructure/BoutiqueFashion.Infrastructure.csproj" />

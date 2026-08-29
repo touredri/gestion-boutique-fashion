@@ -1,44 +1,60 @@
-<UserControl x:Class="BoutiqueFashion.App.Views.DocumentsView" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-  <Grid Margin="18">
-    <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="400"/></Grid.ColumnDefinitions>
+<UserControl x:Class="BoutiqueFashion.App.Views.DocumentsView" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:controls="clr-namespace:BoutiqueFashion.App.Controls">
+  <Grid Margin="14">
+    <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="390"/></Grid.ColumnDefinitions>
     <Grid Margin="0,0,10,0">
       <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-      <Grid Margin="4,0,0,10"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+      <Grid Margin="4,0,0,8"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
         <StackPanel><TextBlock Text="HISTORIQUE DOCUMENTAIRE" Style="{StaticResource Eyebrow}"/><TextBlock Text="Tickets, factures, avoirs, bons et proformas" Style="{StaticResource SectionTitle}"/></StackPanel>
-        <StackPanel Grid.Column="1" Width="260"><TextBlock Text="Rechercher par numéro" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding Search, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Recherche par numéro de document"/></StackPanel>
+        <StackPanel Grid.Column="1" Width="250"><TextBlock Text="Rechercher par numéro" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding Search, UpdateSourceTrigger=PropertyChanged}" controls:Placeholder.Text="Numéro de document" controls:TouchKeyboard.Suppress="True" AutomationProperties.Name="Recherche par numéro de document"/></StackPanel>
       </Grid>
       <DataGrid Grid.Row="1" ItemsSource="{Binding Items}" SelectedItem="{Binding SelectedDocument}"><DataGrid.Columns><DataGridTextColumn Header="NUMÉRO" Binding="{Binding Number}" Width="*"/><DataGridTextColumn Header="TYPE" Binding="{Binding Type, Converter={StaticResource EnumFr}}"/><DataGridTextColumn Header="DATE" Binding="{Binding IssuedAt,StringFormat=dd/MM/yyyy HH:mm}"/><DataGridTextColumn Header="IMPR." Binding="{Binding PrintCount}"/></DataGrid.Columns></DataGrid>
       <WrapPanel Grid.Row="2" Margin="0,8,0,0"><Button Content="Duplicata thermique" Command="{Binding DuplicateCommand}"/><Button Content="Exporter PDF" Command="{Binding ExportPdfCommand}"/><Button Content="Imprimer A4" Command="{Binding PrintA4Command}" Style="{StaticResource PrimaryButton}"/></WrapPanel>
     </Grid>
-    <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
-      <StackPanel>
-        <Border Style="{StaticResource Card}">
-          <StackPanel>
-            <TextBlock Text="RETOUR ET CORRECTION" Style="{StaticResource Eyebrow}"/>
-            <TextBlock Text="Retour, échange ou annulation" Style="{StaticResource SectionTitle}"/>
-            <TextBlock Text="Numéro de vente" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding SaleNumber}"/>
-            <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="2*"/><ColumnDefinition/></Grid.ColumnDefinitions><StackPanel><TextBlock Text="SKU retourné" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding ReturnedSku}"/></StackPanel><StackPanel Grid.Column="1"><TextBlock Text="Quantité" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding ReturnedQuantity}"/></StackPanel></Grid>
-            <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="2*"/><ColumnDefinition/></Grid.ColumnDefinitions><StackPanel><TextBlock Text="SKU de remplacement" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding ReplacementSku}"/></StackPanel><StackPanel Grid.Column="1"><TextBlock Text="Quantité" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding ReplacementQuantity}"/></StackPanel></Grid>
-            <CheckBox Content="Réintégrer l'article en stock (décocher = mise au rebut)" IsChecked="{Binding Restock}" Margin="4,6"/>
-            <TextBlock Text="Règlement de la différence" Style="{StaticResource FieldLabel}"/>
-            <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions><TextBox Text="{Binding ExchangePaymentAmount}" ToolTip="Montant"/><ComboBox Grid.Column="1" ItemsSource="{Binding PaymentModes}" SelectedItem="{Binding ExchangePaymentMode}"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Converter={StaticResource EnumFr}}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox><TextBox Grid.Column="2" Text="{Binding ExchangePaymentReference}" ToolTip="Référence"/></Grid>
-            <TextBlock Text="Motif obligatoire" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding Reason}"/>
-            <TextBlock Text="PIN responsable" Style="{StaticResource FieldLabel}"/><PasswordBox PasswordChanged="DocumentPin_OnPasswordChanged"/>
-            <Button Content="Valider retour ou échange" Command="{Binding ReturnExchangeCommand}" Style="{StaticResource PrimaryButton}"/>
-            <Button Content="Annuler toute la vente" Command="{Binding CancelSaleCommand}" Style="{StaticResource DangerButton}"/>
+    <Grid Grid.Column="1">
+      <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+      <TabControl Padding="0">
+        <TabItem Header="Retour / Échange">
+          <StackPanel Margin="8,6">
+            <TextBox Text="{Binding SaleNumber}" controls:Placeholder.Text="Numéro de vente" ToolTip="Numéro de vente"/>
+            <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="2*"/><ColumnDefinition/></Grid.ColumnDefinitions>
+              <TextBox Text="{Binding ReturnedSku}" controls:Placeholder.Text="SKU retourné" ToolTip="SKU retourné"/>
+              <controls:KeypadField Grid.Column="1" Value="{Binding ReturnedQuantity}" Title="Quantité" Margin="2,4,0,4"/>
+            </Grid>
+            <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="2*"/><ColumnDefinition/></Grid.ColumnDefinitions>
+              <TextBox Text="{Binding ReplacementSku}" controls:Placeholder.Text="SKU de remplacement (optionnel)" ToolTip="SKU de remplacement (optionnel)"/>
+              <controls:KeypadField Grid.Column="1" Value="{Binding ReplacementQuantity}" Title="Quantité" Margin="2,4,0,4"/>
+            </Grid>
+            <CheckBox Content="Réintégrer en stock (décocher = rebut)" IsChecked="{Binding Restock}" Margin="4,2"/>
+            <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
+              <controls:KeypadField Value="{Binding ExchangePaymentAmount}" Title="Règlement différ." Suffix="FCFA" Margin="0,0,2,0"/>
+              <ComboBox Grid.Column="1" ItemsSource="{Binding PaymentModes}" SelectedItem="{Binding ExchangePaymentMode}" Margin="2,4"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Converter={StaticResource EnumFr}}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox>
+              <TextBox Grid.Column="2" Text="{Binding ExchangePaymentReference}" controls:Placeholder.Text="Référence" ToolTip="Référence"/>
+            </Grid>
+            <TextBox Text="{Binding Reason}" controls:Placeholder.Text="Motif obligatoire" ToolTip="Motif obligatoire"/>
+            <controls:KeypadField Value="{Binding ManagerPin}" Mask="True" Title="PIN responsable"/>
+            <Button Content="Valider retour ou échange" Command="{Binding ReturnExchangeCommand}" Style="{StaticResource PrimaryButton}" Margin="4,4,4,2"/>
           </StackPanel>
-        </Border>
-        <Border Style="{StaticResource Card}">
-          <StackPanel>
-            <TextBlock Text="PROFORMA" Style="{StaticResource Eyebrow}"/>
-            <TextBlock Text="Nouvelle proforma" Style="{StaticResource SectionTitle}"/>
-            <TextBlock Text="Description" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding ProformaDescription}"/>
-            <TextBlock Text="Total FCFA" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding ProformaTotal}"/>
-            <Button Content="Créer la proforma" Command="{Binding ProformaCommand}"/>
+        </TabItem>
+        <TabItem Header="Annulation">
+          <StackPanel Margin="8,6">
+            <TextBlock Text="Annule toute la vente : articles réintégrés, paiements contre-passés." Style="{StaticResource HelperText}" Margin="4,0,4,8" TextWrapping="Wrap"/>
+            <TextBlock Text="Numéro de vente (onglet précédent)" Style="{StaticResource FieldLabel}"/>
+            <TextBlock Text="{Binding SaleNumber}" FontWeight="SemiBold" FontSize="16" Margin="4,0,4,8"/>
+            <TextBox Text="{Binding Reason}" ToolTip="Motif obligatoire"/>
+            <controls:KeypadField Value="{Binding ManagerPin}" Mask="True" Title="PIN responsable"/>
+            <Button Content="Annuler toute la vente" Command="{Binding CancelSaleCommand}" Style="{StaticResource DangerButton}" Margin="4,4,4,2"/>
           </StackPanel>
-        </Border>
-        <TextBlock Text="{Binding Status}" Style="{StaticResource HelperText}" Margin="8" TextWrapping="Wrap"/>
-      </StackPanel>
-    </ScrollViewer>
+        </TabItem>
+        <TabItem Header="Proforma">
+          <StackPanel Margin="8,6">
+            <TextBlock Text="Document sans encaissement." Style="{StaticResource HelperText}" Margin="4,0,4,8"/>
+            <TextBox Text="{Binding ProformaDescription}" controls:Placeholder.Text="Description" ToolTip="Description"/>
+            <controls:KeypadField Value="{Binding ProformaTotal}" Title="Total" Suffix="FCFA"/>
+            <Button Content="Créer la proforma" Command="{Binding ProformaCommand}" Style="{StaticResource PrimaryButton}" Margin="4,4,4,2"/>
+          </StackPanel>
+        </TabItem>
+      </TabControl>
+      <TextBlock Grid.Row="1" Text="{Binding Status}" Style="{StaticResource HelperText}" Margin="12,4" TextWrapping="Wrap"/>
+    </Grid>
   </Grid>
 </UserControl>

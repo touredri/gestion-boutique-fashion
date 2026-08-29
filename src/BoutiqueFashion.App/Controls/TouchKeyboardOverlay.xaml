@@ -1,0 +1,22 @@
+<UserControl x:Class="BoutiqueFashion.App.Controls.TouchKeyboardOverlay"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Visibility="Collapsed" Focusable="False">
+  <Grid Background="#80000000" MouseLeftButtonUp="OnCancel">
+    <Border HorizontalAlignment="Center" VerticalAlignment="Center" Background="{StaticResource Paper}" CornerRadius="16" Padding="14" MinWidth="680" Effect="{StaticResource CardShadow}" MouseLeftButtonUp="OnCardTap">
+      <StackPanel>
+        <UniformGrid x:Name="Row1" Columns="10"/>
+        <UniformGrid x:Name="Row2" Columns="10"/>
+        <UniformGrid x:Name="Row3" Columns="10"/>
+        <Grid Margin="0,4,0,0">
+          <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+          <Button x:Name="ModeButton" Content="123" Style="{StaticResource KeyboardButton}" MinWidth="64" Click="OnMode" AutomationProperties.Name="Basculer chiffres et symboles"/>
+          <Button x:Name="ShiftButton" Grid.Column="1" Content="Maj" Style="{StaticResource KeyboardButton}" MinWidth="64" Click="OnShift" AutomationProperties.Name="Majuscules"/>
+          <Button Grid.Column="2" Content="Espace" Style="{StaticResource KeyboardButton}" Click="OnSpace" AutomationProperties.Name="Espace"/>
+          <Button Grid.Column="3" Content="⌫" Style="{StaticResource KeyboardButton}" MinWidth="64" Click="OnBack" AutomationProperties.Name="Effacer"/>
+          <Button Grid.Column="4" Content="✓" Style="{StaticResource KeyboardButton}" MinWidth="64" Background="{StaticResource Terracotta}" Foreground="White" BorderBrush="{StaticResource Terracotta}" Click="OnOk" AutomationProperties.Name="Fermer la saisie"/>
+        </Grid>
+      </StackPanel>
+    </Border>
+  </Grid>
+</UserControl>
