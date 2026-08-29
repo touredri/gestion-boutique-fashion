@@ -30,6 +30,20 @@ public sealed class AuthorizationService(IDbContextFactory<BoutiqueDbContext> fa
         await db.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task ChangePinAsync(string oldPin, string newPin, CancellationToken cancellationToken = default)
+    {
+        ValidatePin(newPin);
+        await using var db = await factory.CreateDbContextAsync(cancellationToken);
+        var setting = await db.AppSettings.SingleOrDefaultAsync(x => x.Key == PinKey, cancellationToken) ?? throw new InvalidOperationException("Aucun PIN configuré.");
+        if (!Verify(oldPin, setting.Value)) throw new UnauthorizedAccessException("Ancien PIN invalide.");
+        var salt = RandomNumberGenerator.GetBytes(24);
+        var hash = Rfc2898DeriveBytes.Pbkdf2(newPin, salt, Iterations, HashAlgorithmName.SHA256, 32);
+        setting.Value = $"{Iterations}.{Convert.ToBase64String(salt)}.{Convert.ToBase64String(hash)}";
+        setting.UpdatedAt = DateTimeOffset.UtcNow;
+        db.AuditEntries.Add(new AuditEntry { Actor = "Responsable", Action = "Changer PIN", EntityType = "AppSetting", EntityId = PinKey });
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
     public async Task<bool> AuthorizeSensitiveActionAsync(string pin, string action, string actor = "Responsable", CancellationToken cancellationToken = default)
     {
         await using var db = await factory.CreateDbContextAsync(cancellationToken);

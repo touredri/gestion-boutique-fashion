@@ -87,8 +87,11 @@ internal static class EscPosReceiptBuilder
             if (item.DiscountXof > 0) Add(bytes, encoding, Columns("Remise", $"-{item.DiscountXof:N0}", width));
         }
         Add(bytes, encoding, new string('-', width));
+        Add(bytes, encoding, Columns("Sous-total", $"{receipt.SubtotalXof:N0}", width));
+        if (receipt.DiscountXof > 0) Add(bytes, encoding, Columns("Remise", $"-{receipt.DiscountXof:N0}", width));
         Add(bytes, encoding, Columns("TOTAL", $"{receipt.TotalXof:N0} FCFA", width), true, true);
         foreach (var payment in receipt.Payments) Add(bytes, encoding, Columns(payment.Mode.ToString(), $"{payment.AmountXof:N0}", width));
+        if (receipt.ChangeXof > 0) Add(bytes, encoding, Columns("Monnaie rendue", $"{receipt.ChangeXof:N0}", width), true);
         Add(bytes, encoding, ""); Add(bytes, encoding, Center(receipt.Footer, width));
         bytes.AddRange([0x1B, 0x64, 0x04]);
         if (profile.CutPaper) bytes.AddRange([0x1D, 0x56, 0x41, 0x00]);
@@ -160,6 +163,8 @@ public sealed class A4DocumentService(AppPaths paths) : IA4DocumentService
         var header = table.AddRow(); header.Shading.Color = Colors.LightGray; header.Cells[0].AddParagraph("Article"); header.Cells[1].AddParagraph("Qté"); header.Cells[2].AddParagraph("Prix"); header.Cells[3].AddParagraph("Total");
         foreach (var item in data.Items) { var row = table.AddRow(); row.Cells[0].AddParagraph(item.Description); row.Cells[1].AddParagraph(item.Quantity.ToString("0.###")); row.Cells[2].AddParagraph($"{item.UnitPriceXof:N0}"); row.Cells[3].AddParagraph($"{item.TotalXof:N0}"); }
         var total = section.AddParagraph($"TOTAL : {data.TotalXof:N0} FCFA"); total.Format.Alignment = ParagraphAlignment.Right; total.Format.Font.Size = 15; total.Format.Font.Bold = true; total.Format.SpaceBefore = Unit.FromCentimeter(0.5);
+        var amounts = section.AddParagraph($"Sous-total : {data.SubtotalXof:N0} FCFA   ·   Remise : -{data.DiscountXof:N0} FCFA"); amounts.Format.Alignment = ParagraphAlignment.Right; amounts.Format.Font.Size = 9;
+        if (data.ChangeXof > 0) { var change = section.AddParagraph($"Monnaie rendue : {data.ChangeXof:N0} FCFA"); change.Format.Alignment = ParagraphAlignment.Right; change.Format.Font.Size = 9; change.Format.Font.Bold = true; }
         if(!string.IsNullOrWhiteSpace(data.ReturnPolicy))section.AddParagraph(data.ReturnPolicy).Format.Font.Size=8;section.AddParagraph(data.Footer).Format.SpaceBefore = Unit.FromCentimeter(1);var validation=section.AddTable();validation.AddColumn(Unit.FromCentimeter(8));validation.AddColumn(Unit.FromCentimeter(8));var vr=validation.AddRow();if(!string.IsNullOrWhiteSpace(data.StampPath)&&File.Exists(data.StampPath))vr.Cells[0].AddImage(data.StampPath).Width=Unit.FromCentimeter(3);if(!string.IsNullOrWhiteSpace(data.SignaturePath)&&File.Exists(data.SignaturePath))vr.Cells[1].AddImage(data.SignaturePath).Width=Unit.FromCentimeter(3); return doc;
     }
 }

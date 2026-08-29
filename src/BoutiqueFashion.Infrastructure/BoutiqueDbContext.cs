@@ -1,10 +1,27 @@
 using BoutiqueFashion.Domain;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace BoutiqueFashion.Infrastructure;
 
 public sealed class BoutiqueDbContext(DbContextOptions<BoutiqueDbContext> options) : DbContext(options)
 {
+    // Le provider SQLite d'EF Core ne traduit ni les comparaisons, ni les tris,
+    // ni les agrégats sur DateTimeOffset ; stocker les ticks UTC (INTEGER) lève ces limites.
+    private sealed class DateTimeOffsetToUtcTicksConverter() : ValueConverter<DateTimeOffset, long>(
+        v => v.UtcTicks,
+        v => new DateTimeOffset(v, TimeSpan.Zero));
+
+    private sealed class NullableDateTimeOffsetToUtcTicksConverter() : ValueConverter<DateTimeOffset?, long?>(
+        v => v.HasValue ? v.Value.UtcTicks : null,
+        v => v.HasValue ? new DateTimeOffset(v.Value, TimeSpan.Zero) : null);
+
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        configurationBuilder.Properties<DateTimeOffset>().HaveConversion<DateTimeOffsetToUtcTicksConverter>();
+        configurationBuilder.Properties<DateTimeOffset?>().HaveConversion<NullableDateTimeOffsetToUtcTicksConverter>();
+    }
+
     public DbSet<Category> Categories => Set<Category>();
     public DbSet<Product> Products => Set<Product>();
     public DbSet<ProductImage> ProductImages => Set<ProductImage>();

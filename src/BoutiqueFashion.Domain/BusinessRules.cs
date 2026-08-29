@@ -1,9 +1,35 @@
 namespace BoutiqueFashion.Domain;
 
+public sealed record LoyaltyThresholds(long VipRevenueXof = 500_000, int LoyalPurchases = 5, int InactiveDays = 90, int NewDays = 30);
+
 public static class BusinessRules
 {
     public const decimal SellerDiscountLimitPercent = 10m;
     public const int ReturnWindowDays = 7;
+
+    public static IReadOnlyList<string> SizePresets(ProductType type) => type switch
+    {
+        ProductType.Clothing => ["S", "M", "L", "XL", "XXL"],
+        ProductType.Shoes => ["36", "37", "38", "39", "40", "41", "42", "43", "44", "45"],
+        _ => ["Unique"]
+    };
+
+    public static CustomerSegment ComputeSegment(
+        DateTimeOffset now,
+        DateTimeOffset createdAt,
+        DateTimeOffset? lastSaleAt,
+        int salesLastYear,
+        long revenueLastYear,
+        long outstandingBalance,
+        LoyaltyThresholds thresholds)
+    {
+        if (outstandingBalance > 0) return CustomerSegment.Debtor;
+        if (now - createdAt < TimeSpan.FromDays(thresholds.NewDays)) return CustomerSegment.New;
+        if (lastSaleAt is null || now - lastSaleAt.Value > TimeSpan.FromDays(thresholds.InactiveDays)) return CustomerSegment.Inactive;
+        if (revenueLastYear >= thresholds.VipRevenueXof) return CustomerSegment.Vip;
+        if (salesLastYear >= thresholds.LoyalPurchases) return CustomerSegment.Loyal;
+        return CustomerSegment.Active;
+    }
 
     public static long CalculateDiscount(long baseAmountXof, DiscountKind kind, decimal value)
     {
