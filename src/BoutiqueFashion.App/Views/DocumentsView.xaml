@@ -8,10 +8,18 @@
         <StackPanel Grid.Column="1" Width="250"><TextBlock Text="Rechercher par numéro" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding Search, UpdateSourceTrigger=PropertyChanged}" controls:Placeholder.Text="Numéro de document" controls:TouchKeyboard.Suppress="True" AutomationProperties.Name="Recherche par numéro de document"/></StackPanel>
       </Grid>
       <DataGrid Grid.Row="1" ItemsSource="{Binding Items}" SelectedItem="{Binding SelectedDocument}"><DataGrid.Columns><DataGridTextColumn Header="NUMÉRO" Binding="{Binding Number}" Width="*"/><DataGridTextColumn Header="TYPE" Binding="{Binding Type, Converter={StaticResource EnumFr}}"/><DataGridTextColumn Header="DATE" Binding="{Binding IssuedAt,StringFormat=dd/MM/yyyy HH:mm}"/><DataGridTextColumn Header="IMPR." Binding="{Binding PrintCount}"/></DataGrid.Columns></DataGrid>
-      <WrapPanel Grid.Row="2" Margin="0,8,0,0"><Button Content="Duplicata thermique" Command="{Binding DuplicateCommand}"/><Button Content="Exporter PDF" Command="{Binding ExportPdfCommand}"/><Button Content="Imprimer A4" Command="{Binding PrintA4Command}" Style="{StaticResource PrimaryButton}"/></WrapPanel>
+      <Border Grid.Row="2" Style="{StaticResource Card}" Margin="0,8,0,0" Padding="10">
+        <WrapPanel>
+          <StackPanel Width="215"><TextBlock Text="Imprimante ticket" Style="{StaticResource FieldLabel}"/><ComboBox ItemsSource="{Binding Printers}" SelectedItem="{Binding SelectedPrinter}" DisplayMemberPath="Name" AutomationProperties.Name="Imprimante ticket"/></StackPanel>
+          <StackPanel Width="215"><TextBlock Text="Imprimante A4" Style="{StaticResource FieldLabel}"/><ComboBox ItemsSource="{Binding A4Printers}" SelectedItem="{Binding SelectedA4Printer}" AutomationProperties.Name="Imprimante A4"/></StackPanel>
+          <Button Content="Duplicata thermique" Command="{Binding DuplicateCommand}" VerticalAlignment="Bottom" AutomationProperties.Name="Imprimer un duplicata thermique"/>
+          <Button Content="Imprimer A4" Command="{Binding PrintA4Command}" Style="{StaticResource PrimaryButton}" VerticalAlignment="Bottom" AutomationProperties.Name="Imprimer en format A4"/>
+          <Button Content="Exporter PDF" Command="{Binding ExportPdfCommand}" VerticalAlignment="Bottom" AutomationProperties.Name="Exporter en PDF"/>
+        </WrapPanel>
+      </Border>
     </Grid>
     <Grid Grid.Column="1">
-      <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+      <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
       <TabControl Padding="0">
         <TabItem Header="Retour / Échange">
           <StackPanel Margin="8,6">
@@ -54,7 +62,16 @@
           </StackPanel>
         </TabItem>
       </TabControl>
-      <TextBlock Grid.Row="1" Text="{Binding Status}" Style="{StaticResource HelperText}" Margin="12,4" TextWrapping="Wrap"/>
+      <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,8,0,0" Padding="12" MaxHeight="250">
+        <StackPanel>
+          <TextBlock Text="APERÇU DU DOCUMENT" Style="{StaticResource Eyebrow}" Margin="0,0,0,6"/>
+          <ScrollViewer VerticalScrollBarVisibility="Auto" Visibility="{Binding HasPreview, Converter={StaticResource BoolToVis}}">
+            <ItemsControl ItemsSource="{Binding PreviewLines}"><ItemsControl.ItemTemplate><DataTemplate><TextBlock Text="{Binding}" FontFamily="Cascadia Mono, Consolas" FontSize="12"/></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+          </ScrollViewer>
+          <TextBlock Text="Sélectionnez un document dans la liste pour afficher son aperçu." Style="{StaticResource HelperText}" Visibility="{Binding NoPreview, Converter={StaticResource BoolToVis}}"/>
+        </StackPanel>
+      </Border>
+      <TextBlock Grid.Row="2" Text="{Binding Status}" Style="{StaticResource HelperText}" Margin="12,4" TextWrapping="Wrap"/>
     </Grid>
   </Grid>
 </UserControl>

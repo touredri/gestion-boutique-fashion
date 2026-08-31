@@ -25,7 +25,8 @@ public sealed class SaleService(IDbContextFactory<BoutiqueDbContext> factory, IA
         if (previous is not null)
         {
             var documentId = await db.DocumentSnapshots.Where(x => x.SaleId == previous.Id && x.Type == DocumentType.Receipt).Select(x => x.Id).SingleAsync(cancellationToken);
-            return new SaleResult(previous.Id, previous.Number, previous.TotalXof, documentId, true, false, previous.ChangeXof);
+            var invoiceId = await db.DocumentSnapshots.Where(x => x.SaleId == previous.Id && x.Type == DocumentType.Invoice).Select(x => (Guid?)x.Id).FirstOrDefaultAsync(cancellationToken);
+            return new SaleResult(previous.Id, previous.Number, previous.TotalXof, documentId, true, false, previous.ChangeXof, invoiceId);
         }
 
         await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, cancellationToken);
@@ -113,7 +114,8 @@ public sealed class SaleService(IDbContextFactory<BoutiqueDbContext> factory, IA
         db.DocumentSnapshots.Add(snapshot);
 
         var invoiceNumber = await DocumentReceiptFactory.NextNumberAsync(db, DocumentType.Invoice, cancellationToken);
-        db.DocumentSnapshots.Add(new DocumentSnapshot { SaleId = sale.Id, Type = DocumentType.Invoice, Number = invoiceNumber, JsonPayload = JsonSerializer.Serialize(await DocumentReceiptFactory.CreateAsync(db, invoiceNumber, customer?.Name, items, receiptSubtotal, sale.DiscountXof, sale.TotalXof, draft.Payments, null, cancellationToken, DocumentType.Invoice, change)) });
+        var invoiceSnapshot = new DocumentSnapshot { SaleId = sale.Id, Type = DocumentType.Invoice, Number = invoiceNumber, JsonPayload = JsonSerializer.Serialize(await DocumentReceiptFactory.CreateAsync(db, invoiceNumber, customer?.Name, items, receiptSubtotal, sale.DiscountXof, sale.TotalXof, draft.Payments, null, cancellationToken, DocumentType.Invoice, change)) };
+        db.DocumentSnapshots.Add(invoiceSnapshot);
 
         if (creditAmount > 0 && sale.TotalXof - creditAmount > 0)
         {
@@ -125,7 +127,7 @@ public sealed class SaleService(IDbContextFactory<BoutiqueDbContext> factory, IA
         db.AuditEntries.Add(new AuditEntry { Actor = "Vendeur boutique", Action = "Créer vente", EntityType = nameof(Sale), EntityId = sale.Id.ToString(), AfterJson = JsonSerializer.Serialize(new { sale.Number, sale.TotalXof, change, customer = customer?.Name }) });
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-        return new SaleResult(sale.Id, sale.Number, sale.TotalXof, snapshot.Id, false, negativeStock, change);
+        return new SaleResult(sale.Id, sale.Number, sale.TotalXof, snapshot.Id, false, negativeStock, change, invoiceSnapshot.Id);
     }
 
     private static string BuildDescription(ProductVariant variant) => string.Join(" - ", new[] { variant.Product?.Name, variant.Color, variant.Size }.Where(x => !string.IsNullOrWhiteSpace(x)));

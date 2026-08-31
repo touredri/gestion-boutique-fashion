@@ -1,6 +1,12 @@
 <UserControl x:Class="BoutiqueFashion.App.Views.CatalogView" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:controls="clr-namespace:BoutiqueFashion.App.Controls">
   <Grid Margin="18">
-    <TabControl SelectedIndex="{Binding SelectedTab}" Padding="0">
+    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+    <Grid Margin="4,0,4,10">
+      <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+      <StackPanel><TextBlock Text="PRODUITS" Style="{StaticResource Eyebrow}"/><TextBlock Text="Catalogue de la boutique" Style="{StaticResource SectionTitle}"/></StackPanel>
+      <Button Grid.Column="1" Content="Import CSV" Command="{Binding BrowseImportFileCommand}" VerticalAlignment="Center"/>
+    </Grid>
+    <TabControl Grid.Row="1" SelectedIndex="{Binding SelectedTab}" Padding="0">
       <TabItem Header="  Ajouter un produit  " Padding="14,10">
         <ScrollViewer VerticalScrollBarVisibility="Auto">
           <StackPanel>
@@ -10,13 +16,10 @@
                 <WrapPanel>
                   <StackPanel Width="200"><TextBlock Text="Nom du produit" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding ProductName, UpdateSourceTrigger=PropertyChanged}" controls:Placeholder.Text="Nom du produit"/></StackPanel>
                   <StackPanel Width="130"><TextBlock Text="Type d'article" Style="{StaticResource FieldLabel}"/><ComboBox ItemsSource="{Binding ProductTypes}" SelectedItem="{Binding SelectedType}"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Converter={StaticResource EnumFr}}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox></StackPanel>
-                  <StackPanel Width="160"><TextBlock Text="Catégorie" Style="{StaticResource FieldLabel}"/><ComboBox ItemsSource="{Binding CategoryOptions}" SelectedItem="{Binding Category}"/></StackPanel>
-                  <StackPanel Width="110"><Button Content="+ Nouvelle catégorie" Command="{Binding ToggleNewCategoryCommand}" Style="{StaticResource QuietButton}" HorizontalAlignment="Left"/></StackPanel>
-                  <StackPanel Width="160" Visibility="{Binding ShowNewCategory, Converter={StaticResource BoolToVis}}"><TextBlock Text="Nouvelle catégorie" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding NewCategoryText, UpdateSourceTrigger=PropertyChanged}" controls:Placeholder.Text="Nouvelle catégorie"/></StackPanel>
+                  <StackPanel Width="280"><TextBlock Text="Description courte" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding Description}" controls:Placeholder.Text="Description courte"/></StackPanel>
                   <StackPanel Width="140"><TextBlock Text="Sous-catégorie" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding SubCategory}" controls:Placeholder.Text="Sous-catégorie"/></StackPanel>
                   <StackPanel Width="130"><TextBlock Text="Marque" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding Brand}" controls:Placeholder.Text="Marque"/></StackPanel>
                   <StackPanel Width="110"><TextBlock Text="Genre/public" Style="{StaticResource FieldLabel}"/><ComboBox ItemsSource="{Binding GenderOptions}" SelectedItem="{Binding Gender}"/></StackPanel>
-                  <StackPanel Width="280"><TextBlock Text="Description courte" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding Description}" controls:Placeholder.Text="Description courte"/></StackPanel>
                 </WrapPanel>
                 <TextBlock Text="{Binding ProductNotice}" Style="{StaticResource HelperText}" Foreground="{StaticResource TerracottaDark}" Margin="4,2,4,0"/>
               </StackPanel>
@@ -72,14 +75,12 @@
           </Border>
           <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,6,0,0" Padding="10">
             <Grid>
-              <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-              <WrapPanel>
+              <WrapPanel Visibility="{Binding HasSelection, Converter={StaticResource BoolToVis}}">
                 <Button Content="Modifier" Command="{Binding EditSelectedCommand}" Style="{StaticResource PrimaryButton}"/>
                 <Button Content="Archiver" Command="{Binding ArchiveCommand}" Style="{StaticResource DangerButton}"/>
                 <Button Content="Supprimer" Command="{Binding DeleteSelectedCommand}" Style="{StaticResource DangerButton}"/>
-                <TextBlock Text="Sélectionnez une ligne puis choisissez une action." Style="{StaticResource HelperText}" VerticalAlignment="Center" Margin="10,0,0,0"/>
               </WrapPanel>
-              <Button Grid.Column="1" Content="Import CSV" Command="{Binding BrowseImportFileCommand}" VerticalAlignment="Center"/>
+              <TextBlock Text="Sélectionnez une ligne pour agir sur le produit." Style="{StaticResource HelperText}" VerticalAlignment="Center" Visibility="{Binding NoSelection, Converter={StaticResource BoolToVis}}"/>
             </Grid>
           </Border>
           <DataGrid Grid.Row="2" ItemsSource="{Binding Items}" SelectedItem="{Binding Selected}" Margin="0,6,0,0"><DataGrid.Columns><DataGridTemplateColumn Header="PHOTO" Width="82"><DataGridTemplateColumn.CellTemplate><DataTemplate><Border Width="58" Height="58" CornerRadius="8" Background="{StaticResource Ivory}" BorderBrush="{StaticResource Line}" BorderThickness="1" HorizontalAlignment="Center" VerticalAlignment="Center"><Image Source="{Binding PrimaryImagePath, Converter={StaticResource ImagePathConverter}}" Stretch="UniformToFill" Margin="2" ToolTip="{Binding Product.Name}"><Image.Style><Style TargetType="Image"><Setter Property="Visibility" Value="Visible"/><Style.Triggers><Trigger Property="Source" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed"/></Trigger></Style.Triggers></Style></Image.Style></Image></Border></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn><DataGridTextColumn Header="PRODUIT" Binding="{Binding Product.Name}" Width="*"/><DataGridTextColumn Header="TYPE" Binding="{Binding Product.Type, Converter={StaticResource EnumFr}}"/><DataGridTextColumn Header="SKU" Binding="{Binding Sku}"/><DataGridTextColumn Header="TAILLE" Binding="{Binding Size}"/><DataGridTextColumn Header="COULEUR" Binding="{Binding Color}"/><DataGridTextColumn Header="STOCK" Binding="{Binding QuantityOnHand}"/><DataGridTextColumn Header="PRIX" Binding="{Binding PriceXof,StringFormat={}{0:N0} FCFA}"/><DataGridTextColumn Header="MARGE" Binding="{Binding MarginXof,StringFormat={}{0:N0} FCFA}"/><DataGridTextColumn Header="PROMO" Binding="{Binding PromotionalPriceXof,StringFormat={}{0:N0} FCFA}"/></DataGrid.Columns></DataGrid>

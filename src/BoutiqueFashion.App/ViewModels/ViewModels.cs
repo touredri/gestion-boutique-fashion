@@ -88,13 +88,32 @@ public partial class PaymentLineViewModel : ObservableObject { public IReadOnlyL
 public partial class SaleViewModel(ICatalogService catalog, ICustomerService customers, ISaleService sales, ICashSessionService cash, IThermalPrinterService printerService, IAppSettingsService settings, IDocumentService documents) : ObservableObject, ILoadable
 {
     public ObservableCollection<ProductVariant> Products { get; } = [];
+    private readonly List<ProductVariant> masterProducts = [];
+    public ObservableCollection<string> CategoryFilters { get; } = ["Tous"];
     public ObservableCollection<CartLineViewModel> Cart { get; } = [];
     public ObservableCollection<CustomerRow> Customers { get; } = [];
     public ObservableCollection<PaymentLineViewModel> Payments { get; } = [];
     public IReadOnlyList<PaymentMode> PaymentModes { get; } = Enum.GetValues<PaymentMode>();
     public ObservableCollection<PrinterProfile> Printers { get; } = [];
     [ObservableProperty] private string search = string.Empty;
+    [ObservableProperty] private string selectedCategoryFilter = "Tous";
+    partial void OnSelectedCategoryFilterChanged(string value) => ApplyProductFilter();
+    [ObservableProperty] private string newCustomerName = string.Empty;
+    [ObservableProperty] private string newCustomerPhone = string.Empty;
     [ObservableProperty] private PaymentMode selectedPaymentMode = PaymentMode.Cash;
+    partial void OnSelectedPaymentModeChanged(PaymentMode value)
+    {
+        if (Payments.Count == 0 && PayableXof > 0)
+        {
+            var line = new PaymentLineViewModel { Mode = value, AmountXof = PayableXof };
+            line.PropertyChanged += (_, _) => { OnPropertyChanged(nameof(PaymentTotalXof)); OnPropertyChanged(nameof(ChangePreview)); };
+            Payments.Add(line);
+            OnPropertyChanged(nameof(PaymentTotalXof)); OnPropertyChanged(nameof(ChangePreview));
+        }
+    }
+    [ObservableProperty] private bool printInvoice;
+    [RelayCommand] private void ChooseReceipt() => PrintInvoice = false;
+    [RelayCommand] private void ChooseInvoice() => PrintInvoice = true;
     [ObservableProperty] private PrinterProfile? selectedPrinter;
     [ObservableProperty] private CustomerRow? selectedCustomer;
     [ObservableProperty] private decimal discountPercent;
@@ -102,6 +121,8 @@ public partial class SaleViewModel(ICatalogService catalog, ICustomerService cus
     [ObservableProperty] private string managerPin = string.Empty;
     [ObservableProperty] private string creditDueDate = DateTime.Today.AddDays(30).ToString("yyyy-MM-dd");
     [ObservableProperty] private string status = "Prêt";
+    [ObservableProperty] private string cashSessionState = "Caisse fermée";
+    [ObservableProperty] private bool isCashOpen;
     [ObservableProperty] private bool isBusy;
     [ObservableProperty] private string countedCash = "";
     [ObservableProperty] private string cashDifferenceReason = "";
@@ -116,8 +137,14 @@ public partial class SaleViewModel(ICatalogService catalog, ICustomerService cus
 
     public async Task LoadAsync()
     {
-        var items = await catalog.SearchAsync(Search); Products.Clear(); foreach (var item in items) Products.Add(item);
+        var items = await catalog.SearchAsync(Search);
+        masterProducts.Clear(); masterProducts.AddRange(items);
+        ApplyProductFilter();
+        if (CategoryFilters.Count <= 1) foreach (var c in await catalog.CategoriesAsync()) if (!CategoryFilters.Contains(c)) CategoryFilters.Add(c);
         await RefreshCustomersAsync();
+        var openSession = await cash.GetOpenAsync();
+        CashSessionState = openSession is null ? "Caisse fermée · ouvrez-la dans « Clôture caisse »" : $"Caisse ouverte · {openSession.Number}";
+        IsCashOpen = openSession is not null;
         Printers.Clear();
         foreach (var p in printerService.Discover()) Printers.Add(p);
         var tcp = await settings.GetAsync("Printer.Tcp");
@@ -131,20 +158,27 @@ public partial class SaleViewModel(ICatalogService catalog, ICustomerService cus
         foreach (var item in await customers.SearchAsync(string.IsNullOrWhiteSpace(CustomerSearch) ? null : CustomerSearch)) Customers.Add(item);
     }
 
+    private void ApplyProductFilter()
+    {
+        Products.Clear();
+        foreach (var item in masterProducts.Where(x => SelectedCategoryFilter == "Tous" || x.Product?.Category?.Name == SelectedCategoryFilter)) Products.Add(item);
+    }
+
     [RelayCommand] private async Task FilterCustomers() => await RefreshCustomersAsync();
     [RelayCommand] private async Task SearchProducts() => await LoadAsync();
-    [RelayCommand] private void Add(ProductVariant variant) { var existing = Cart.FirstOrDefault(x => x.Variant.Id == variant.Id); if (existing is null) { var line = new CartLineViewModel(variant); line.PropertyChanged += (_, _) => { OnPropertyChanged(nameof(TotalXof)); OnPropertyChanged(nameof(ChangePreview)); }; Cart.Add(line); } else existing.Quantity++; OnPropertyChanged(nameof(TotalXof)); OnPropertyChanged(nameof(ChangePreview)); }
+    private static bool CanAdd(ProductVariant variant) => variant is not null && !variant.IsOutOfStock;
+    [RelayCommand(CanExecute = nameof(CanAdd))] private void Add(ProductVariant variant) { var existing = Cart.FirstOrDefault(x => x.Variant.Id == variant.Id); if (existing is null) { var line = new CartLineViewModel(variant); line.PropertyChanged += (_, _) => { OnPropertyChanged(nameof(TotalXof)); OnPropertyChanged(nameof(ChangePreview)); }; Cart.Add(line); } else existing.Quantity++; OnPropertyChanged(nameof(TotalXof)); OnPropertyChanged(nameof(ChangePreview)); }
     [RelayCommand] private void Remove(CartLineViewModel line) { Cart.Remove(line); OnPropertyChanged(nameof(TotalXof)); OnPropertyChanged(nameof(ChangePreview)); }
+    [RelayCommand] private void ClearCart() { Cart.Clear(); OnPropertyChanged(nameof(TotalXof)); OnPropertyChanged(nameof(ChangePreview)); }
     [RelayCommand] private void Increment(CartLineViewModel line) { line.Quantity++; }
     [RelayCommand] private void Decrement(CartLineViewModel line) { if (line.Quantity > 1) line.Quantity--; }
-    [RelayCommand] private void QuickPay(PaymentMode mode) { Payments.Clear(); var line = new PaymentLineViewModel { Mode = mode, AmountXof = PayableXof }; line.PropertyChanged += (_, _) => { OnPropertyChanged(nameof(PaymentTotalXof)); OnPropertyChanged(nameof(ChangePreview)); }; Payments.Add(line); OnPropertyChanged(nameof(PaymentTotalXof)); OnPropertyChanged(nameof(ChangePreview)); }
     partial void OnSelectedPrinterChanged(PrinterProfile? value) { if (value is not null) _ = PersistPrinterAsync(value); }
     private async Task PersistPrinterAsync(PrinterProfile value) { try { await settings.SetAsync("Printer.Selected", JsonSerializer.Serialize(value), "Vendeur boutique"); } catch { } }
-    [RelayCommand] private async Task OpenCash() { try { await cash.OpenAsync(long.Parse(OpeningFloat)); Status = "Caisse ouverte"; } catch (Exception e) { Status = e.Message; } }
+    [RelayCommand] private async Task OpenCash() { try { var session = await cash.OpenAsync(long.Parse(OpeningFloat)); Status = "Caisse ouverte"; CashSessionState = $"Caisse ouverte · {session.Number}"; IsCashOpen = true; } catch (Exception e) { Status = e.Message; } }
     [RelayCommand] private void AddPayment() { var line = new PaymentLineViewModel { AmountXof = Math.Max(0, PayableXof - Payments.Sum(x => x.AmountXof)) }; line.PropertyChanged += (_, _) => { OnPropertyChanged(nameof(PaymentTotalXof)); OnPropertyChanged(nameof(ChangePreview)); }; Payments.Add(line); OnPropertyChanged(nameof(PaymentTotalXof)); OnPropertyChanged(nameof(ChangePreview)); }
     [RelayCommand] private void RemovePayment(PaymentLineViewModel line) { Payments.Remove(line); OnPropertyChanged(nameof(PaymentTotalXof)); OnPropertyChanged(nameof(ChangePreview)); }
     public long PaymentTotalXof => Payments.Sum(x => x.AmountXof);
-    [RelayCommand] private async Task CloseCash() { try { var result = await cash.CloseAsync(long.Parse(CountedCash), CashDifferenceReason, ManagerPin); Status = $"Caisse clôturée • Écart {result.DifferenceXof:N0} FCFA"; } catch (Exception e) { Status = e.Message; } }
+    [RelayCommand] private async Task CloseCash() { try { var result = await cash.CloseAsync(long.Parse(CountedCash), CashDifferenceReason, ManagerPin); Status = $"Caisse clôturée • Écart {result.DifferenceXof:N0} FCFA"; CashSessionState = "Caisse fermée · ouvrez-la dans « Clôture caisse »"; IsCashOpen = false; } catch (Exception e) { Status = e.Message; } }
 
     [RelayCommand] private async Task Complete()
     {
@@ -155,17 +189,19 @@ public partial class SaleViewModel(ICatalogService catalog, ICustomerService cus
             var hasCredit = paymentDrafts.Any(x => x.Mode == PaymentMode.Credit);
             var key = Guid.NewGuid().ToString("N");
             DateTimeOffset? creditDue = hasCredit ? DateTimeOffset.Parse(CreditDueDate) : null;
-            var draft = new SaleDraft(key, Cart.Select(x => new SaleLineDraft(x.Variant.Id, x.Quantity, x.EffectiveDiscountKind, x.DiscountValue)).ToArray(), paymentDrafts, SelectedCustomer?.Id, DiscountPercent == 0 ? DiscountKind.None : DiscountKind.Percentage, DiscountPercent, DiscountReason, ManagerPin, creditDue);
+            var draft = new SaleDraft(key, Cart.Select(x => new SaleLineDraft(x.Variant.Id, x.Quantity, x.EffectiveDiscountKind, x.DiscountValue)).ToArray(), paymentDrafts, SelectedCustomer?.Id, DiscountPercent == 0 ? DiscountKind.None : DiscountKind.Percentage, DiscountPercent, DiscountReason, ManagerPin, creditDue, SelectedCustomer is null ? NullIfEmpty(NewCustomerName) : null, SelectedCustomer is null ? NullIfEmpty(NewCustomerPhone) : null);
             var result = await sales.CreateAsync(draft);
-            Status = $"Vente {result.Number} enregistrée";
+            var documentLabel = PrintInvoice ? "Facture" : "Reçu";
+            Status = $"Vente {result.Number} enregistrée • {documentLabel} créé (visible dans Documents)";
             if (result.ChangeXof > 0) Status += $" • Monnaie à rendre : {result.ChangeXof:N0} FCFA";
             if (result.HasNegativeStock) Status += " • Alerte : stock négatif à régulariser";
             if (SelectedPrinter is not null)
             {
-                try { var receipt = await documents.GetReceiptAsync(result.DocumentId, false); await printerService.PrintReceiptAsync(SelectedPrinter, receipt); await documents.MarkPrintedAsync(result.DocumentId); }
+                var documentId = PrintInvoice ? result.InvoiceDocumentId ?? result.DocumentId : result.DocumentId;
+                try { var receipt = await documents.GetReceiptAsync(documentId, false); await printerService.PrintReceiptAsync(SelectedPrinter, receipt); await documents.MarkPrintedAsync(documentId); }
                 catch (Exception e) { Status += $" • Impression: {e.Message}"; }
             }
-            Cart.Clear(); Payments.Clear(); DiscountPercent = 0;
+            Cart.Clear(); Payments.Clear(); DiscountPercent = 0; SelectedPaymentMode = PaymentMode.Cash; PrintInvoice = false; NewCustomerName = string.Empty; NewCustomerPhone = string.Empty; SelectedCustomer = null;
             OnPropertyChanged(nameof(TotalXof)); OnPropertyChanged(nameof(PayableXof)); OnPropertyChanged(nameof(PaymentTotalXof));
             await LoadAsync();
         }
@@ -179,20 +215,17 @@ public partial class CatalogViewModel(ICatalogService catalog, IProductImportSer
 {
     public ObservableCollection<ProductVariant> Items { get; } = [];
     public ObservableCollection<ImportIssue> ImportIssues { get; } = [];
-    public ObservableCollection<string> Categories { get; } = [];
-    public ObservableCollection<string> CategoryOptions { get; } = [];
     public ObservableCollection<string> SizeOptions { get; } = [];
     public IReadOnlyList<ProductType> ProductTypes { get; } = Enum.GetValues<ProductType>();
     public IReadOnlyList<string> GenderOptions { get; } = ["Femme", "Homme", "Enfant", "Mixte"];
     public IReadOnlyList<string> MaterialOptions { get; } = ["Coton", "Polyester", "Lin", "Soie", "Laine", "Denim", "Cuir", "Synthétique", "Autre"];
-    private static readonly string[] PredefinedCategories = ["Vêtements", "Chaussures", "Accessoires", "Sacs", "Bijoux", "Cosmétiques"];
     private ImportPreview? importPreview;
     [ObservableProperty] private int importRowsCount;
     [ObservableProperty] private bool hasImportPreview;
     [ObservableProperty] private int selectedTab;
-    [ObservableProperty] private bool showNewCategory;
-    [ObservableProperty] private string newCategoryText = string.Empty;
-    [ObservableProperty] private string productName = string.Empty; [ObservableProperty] private string category = "Vêtements"; [ObservableProperty] private string price = string.Empty; [ObservableProperty] private string cost = string.Empty; [ObservableProperty] private string status = string.Empty;
+    [ObservableProperty] private bool hasSelection;
+    public bool NoSelection => !HasSelection;
+    [ObservableProperty] private string productName = string.Empty; [ObservableProperty] private string category = string.Empty; [ObservableProperty] private string price = string.Empty; [ObservableProperty] private string cost = string.Empty; [ObservableProperty] private string status = string.Empty;
     [ObservableProperty] private string description = string.Empty;
     [ObservableProperty] private ProductType selectedType = ProductType.Clothing; [ObservableProperty] private string brand = string.Empty; [ObservableProperty] private string productNotice = string.Empty;
     [ObservableProperty] private string subCategory = string.Empty; [ObservableProperty] private string gender = string.Empty;
@@ -200,14 +233,11 @@ public partial class CatalogViewModel(ICatalogService catalog, IProductImportSer
     public string SaveButtonLabel => IsEditing ? "Enregistrer" : "Ajouter";
     partial void OnIsEditingChanged(bool value) => OnPropertyChanged(nameof(SaveButtonLabel));
     public ObservableCollection<VariantRowViewModel> VariantRows { get; } = [];
-    [ObservableProperty] private string matrixPrefix = string.Empty; [ObservableProperty] private string matrixColors = string.Empty; [ObservableProperty] private string matrixSizes = string.Join(", ", BusinessRules.SizePresets(ProductType.Clothing)); [ObservableProperty] private string matrixQuantity = "0";
+    [ObservableProperty] private string matrixQuantity = "0";
     [ObservableProperty] private ProductVariant? selected; [ObservableProperty] private string managerPin = "";
     public async Task LoadAsync()
     {
         var rows = await catalog.SearchAsync(null); Items.Clear(); foreach (var row in rows) Items.Add(row);
-        Categories.Clear(); foreach (var c in await catalog.CategoriesAsync()) Categories.Add(c);
-        CategoryOptions.Clear();
-        foreach (var c in PredefinedCategories.Concat(Categories).Distinct(StringComparer.OrdinalIgnoreCase)) CategoryOptions.Add(c);
         RefreshSizeOptions();
     }
 
@@ -217,8 +247,14 @@ public partial class CatalogViewModel(ICatalogService catalog, IProductImportSer
         foreach (var s in BusinessRules.SizePresets(SelectedType)) SizeOptions.Add(s);
     }
 
-    partial void OnSelectedTypeChanged(ProductType value) { MatrixSizes = string.Join(", ", BusinessRules.SizePresets(value)); RefreshSizeOptions(); }
-    private string EffectiveCategory => ShowNewCategory && !string.IsNullOrWhiteSpace(NewCategoryText) ? NewCategoryText.Trim() : Category;
+    partial void OnSelectedTypeChanged(ProductType value) => RefreshSizeOptions();
+    private string EffectiveCategory => string.IsNullOrWhiteSpace(Category) ? TypeCategory(SelectedType) : Category;
+    private static string TypeCategory(ProductType type) => type switch
+    {
+        ProductType.Shoes => "Chaussures",
+        ProductType.Accessories => "Accessoires",
+        _ => "Vêtements",
+    };
     partial void OnProductNameChanged(string value) => _ = CheckExistingProductAsync(value);
     private async Task CheckExistingProductAsync(string name)
     {
@@ -233,9 +269,11 @@ public partial class CatalogViewModel(ICatalogService catalog, IProductImportSer
     }
     partial void OnSelectedChanged(ProductVariant? value)
     {
+        HasSelection = value is not null;
+        OnPropertyChanged(nameof(NoSelection));
         if (value is not null)
         {
-            ProductName = value.Product?.Name ?? string.Empty; Category = value.Product?.Category?.Name ?? category;
+            ProductName = value.Product?.Name ?? string.Empty; Category = value.Product?.Category?.Name ?? Category;
             SelectedType = value.Product?.Type ?? SelectedType; Brand = value.Product?.Brand ?? string.Empty;
             Description = value.Product?.Description ?? string.Empty;
             SubCategory = value.Product?.SubCategory ?? string.Empty; Gender = value.Product?.Gender ?? string.Empty;
@@ -280,22 +318,8 @@ public partial class CatalogViewModel(ICatalogService catalog, IProductImportSer
         IsEditing = false;
         VariantRows.Clear();
         VariantRows.Add(new VariantRowViewModel());
-        ProductName = Description = Brand = Cost = Price = string.Empty;
+        ProductName = Description = Brand = Cost = Price = Category = string.Empty;
     }
-
-    [RelayCommand] private async Task CreateMatrix()
-    {
-        try
-        {
-            var colors = SplitList(MatrixColors); var sizes = SplitList(MatrixSizes);
-            var created = await catalog.CreateMatrixAsync(new MatrixDraft(ProductName, EffectiveCategory, MatrixPrefix, colors, sizes, long.Parse(Cost), long.Parse(Price), decimal.Parse(MatrixQuantity), 2, SelectedType, NullIfEmpty(Brand), NullIfEmpty(SubCategory), NullIfEmpty(Gender), NullIfEmpty(Season), NullIfEmpty(Material), NullIfEmpty(Supplier), NullIfEmpty(ManagerPin)));
-            Status = $"{created.Count} variantes uniques créées";
-            await LoadAsync();
-        }
-        catch (Exception e) { Status = e.Message; }
-    }
-
-    private static List<string> SplitList(string value) => value.Split([';', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
 
     [RelayCommand] private async Task BrowseImportFile()
     {
@@ -324,8 +348,6 @@ public partial class CatalogViewModel(ICatalogService catalog, IProductImportSer
         }
         catch (Exception e) { Status = e.Message; }
     }
-
-    [RelayCommand] private void ToggleNewCategory() => ShowNewCategory = !ShowNewCategory;
 
     [RelayCommand] private void EditSelected()
     {
@@ -578,13 +600,73 @@ public partial class DocumentsViewModel(IDocumentService documents, IReturnServi
     [ObservableProperty] private string search = string.Empty;
     partial void OnSearchChanged(string value) => _ = LoadAsync();
     [ObservableProperty] private DocumentListItem? selectedDocument; [ObservableProperty] private string saleNumber = ""; [ObservableProperty] private string returnedSku = ""; [ObservableProperty] private string returnedQuantity = "1"; [ObservableProperty] private string replacementSku = ""; [ObservableProperty] private string replacementQuantity = "1"; [ObservableProperty] private string exchangePaymentAmount = "0"; [ObservableProperty] private PaymentMode exchangePaymentMode = PaymentMode.Cash; [ObservableProperty] private string exchangePaymentReference = ""; [ObservableProperty] private string reason = ""; [ObservableProperty] private string managerPin = ""; [ObservableProperty] private bool restock = true; [ObservableProperty] private string proformaDescription = "Article"; [ObservableProperty] private string proformaTotal = "0"; [ObservableProperty] private string status = "";
-    private PrinterProfile? printer;
+    partial void OnSelectedDocumentChanged(DocumentListItem? value) => _ = RefreshPreviewAsync();
+    public ObservableCollection<PrinterProfile> Printers { get; } = [];
+    public ObservableCollection<string> A4Printers { get; } = [];
+    [ObservableProperty] private PrinterProfile? selectedPrinter;
+    [ObservableProperty] private string? selectedA4Printer;
+    partial void OnSelectedPrinterChanged(PrinterProfile? value) { if (value is not null) _ = settings.SetAsync("Printer.Selected", JsonSerializer.Serialize(value), "Vendeur boutique"); }
+    public ObservableCollection<string> PreviewLines { get; } = [];
+    [ObservableProperty] private bool hasPreview;
+    partial void OnHasPreviewChanged(bool value) => OnPropertyChanged(nameof(NoPreview));
+    public bool NoPreview => !HasPreview;
 
-    public async Task LoadAsync() { Items.Clear(); foreach (var x in await documents.ListAsync(Search)) Items.Add(x); var saved = await settings.GetAsync("Printer.Selected"); printer = saved is null ? printers.Discover().FirstOrDefault() : JsonSerializer.Deserialize<PrinterProfile>(saved); }
+    public async Task LoadAsync()
+    {
+        var keepId = SelectedDocument?.Id;
+        Items.Clear(); foreach (var x in await documents.ListAsync(Search)) Items.Add(x);
+        if (keepId is Guid id) SelectedDocument = Items.FirstOrDefault(x => x.Id == id);
+        await LoadPrintersAsync();
+    }
+
+    private async Task LoadPrintersAsync()
+    {
+        if (Printers.Count == 0)
+        {
+            foreach (var p in printers.Discover()) Printers.Add(p);
+            var tcp = await settings.GetAsync("Printer.Tcp");
+            if (!string.IsNullOrWhiteSpace(tcp)) Printers.Add(new PrinterProfile($"Thermique réseau {tcp}", PrinterConnectionKind.TcpIp, tcp, PaperWidth.Mm80));
+            var saved = await settings.GetAsync("Printer.Selected");
+            SelectedPrinter = saved is null ? Printers.FirstOrDefault() : JsonSerializer.Deserialize<PrinterProfile>(saved);
+        }
+        if (A4Printers.Count == 0)
+        {
+            try
+            {
+                using var server = new System.Printing.LocalPrintServer();
+                foreach (var queue in server.GetPrintQueues()) A4Printers.Add(queue.FullName);
+                SelectedA4Printer ??= server.DefaultPrintQueue?.FullName ?? A4Printers.FirstOrDefault();
+            }
+            catch { }
+        }
+    }
+
+    private async Task RefreshPreviewAsync()
+    {
+        PreviewLines.Clear();
+        if (SelectedDocument is null) { HasPreview = false; return; }
+        try
+        {
+            var receipt = await documents.GetReceiptAsync(SelectedDocument.Id, false);
+            PreviewLines.Add(receipt.ShopName);
+            PreviewLines.Add($"{receipt.Number} · {receipt.IssuedAt:dd/MM/yyyy HH:mm}");
+            if (!string.IsNullOrWhiteSpace(receipt.Customer)) PreviewLines.Add($"Client : {receipt.Customer}");
+            PreviewLines.Add("──────────────────────────────");
+            foreach (var item in receipt.Items) PreviewLines.Add($"{item.Quantity:0.###} × {item.Description} — {item.TotalXof:N0} FCFA");
+            PreviewLines.Add("──────────────────────────────");
+            if (receipt.DiscountXof > 0) PreviewLines.Add($"Remise : -{receipt.DiscountXof:N0} FCFA");
+            PreviewLines.Add($"TOTAL : {receipt.TotalXof:N0} FCFA");
+            foreach (var payment in receipt.Payments) PreviewLines.Add($"{Libelles.Text(payment.Mode)} : {payment.AmountXof:N0} FCFA");
+            if (receipt.ChangeXof > 0) PreviewLines.Add($"Monnaie rendue : {receipt.ChangeXof:N0} FCFA");
+            HasPreview = true;
+        }
+        catch (Exception e) { HasPreview = false; Status = e.Message; }
+    }
+
     [RelayCommand] private async Task Refresh() => await LoadAsync();
-    [RelayCommand] private async Task Duplicate() { if (SelectedDocument is null || printer is null) return; try { var receipt = await documents.GetReceiptAsync(SelectedDocument.Id, true); await printers.PrintReceiptAsync(printer, receipt); await documents.MarkPrintedAsync(SelectedDocument.Id); Status = "Duplicata imprimé"; await LoadAsync(); } catch (Exception e) { Status = e.Message; } }
+    [RelayCommand] private async Task Duplicate() { if (SelectedDocument is null) return; if (SelectedPrinter is null) { Status = "Sélectionnez d'abord une imprimante ticket."; return; } try { var receipt = await documents.GetReceiptAsync(SelectedDocument.Id, true); await printers.PrintReceiptAsync(SelectedPrinter, receipt); await documents.MarkPrintedAsync(SelectedDocument.Id); Status = "Duplicata imprimé"; await LoadAsync(); } catch (Exception e) { Status = e.Message; } }
     [RelayCommand] private async Task ExportPdf() { if (SelectedDocument is null) return; try { var receipt = await documents.GetReceiptAsync(SelectedDocument.Id, SelectedDocument.PrintCount > 0); var dialog = new Microsoft.Win32.SaveFileDialog { FileName = $"{SelectedDocument.Number}.pdf", Filter = "Document PDF (*.pdf)|*.pdf" }; if (dialog.ShowDialog() != true) return; await File.WriteAllBytesAsync(dialog.FileName, a4.CreateInvoicePdf(receipt)); Status = "PDF exporté"; } catch (Exception e) { Status = e.Message; } }
-    [RelayCommand] private async Task PrintA4() { if (SelectedDocument is null) return; try { var dialog = new System.Windows.Controls.PrintDialog(); if (dialog.ShowDialog() != true) return; var receipt = await documents.GetReceiptAsync(SelectedDocument.Id, SelectedDocument.PrintCount > 0); await a4.PrintInvoiceAsync(receipt, dialog.PrintQueue.FullName); await documents.MarkPrintedAsync(SelectedDocument.Id); Status = "Document envoyé à l’imprimante A4"; await LoadAsync(); } catch (Exception e) { Status = e.Message; } }
+    [RelayCommand] private async Task PrintA4() { if (SelectedDocument is null) return; try { var receipt = await documents.GetReceiptAsync(SelectedDocument.Id, SelectedDocument.PrintCount > 0); await a4.PrintInvoiceAsync(receipt, SelectedA4Printer); await documents.MarkPrintedAsync(SelectedDocument.Id); Status = SelectedA4Printer is null ? "Document envoyé à l'imprimante A4 par défaut" : $"Document envoyé à « {SelectedA4Printer} »"; await LoadAsync(); } catch (Exception e) { Status = e.Message; } }
 
     [RelayCommand] private async Task ReturnExchange()
     {

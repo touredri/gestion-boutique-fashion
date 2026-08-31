@@ -10,7 +10,7 @@
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
         <WrapPanel Margin="0,0,0,4">
           <TextBlock Text="INVENTAIRE COMPLET OU PAR CATÉGORIE" Style="{StaticResource Eyebrow}" VerticalAlignment="Center"/>
-          <StackPanel Width="190"><TextBlock Text="Catégorie (vide = tout)" Style="{StaticResource FieldLabel}"/><ComboBox ItemsSource="{Binding Categories}" SelectedItem="{Binding CategoryFilter}" MinHeight="42"/></StackPanel>
+          <StackPanel Width="190"><TextBlock Text="Catégorie (vide = tout)" Style="{StaticResource FieldLabel}"/><ComboBox ItemsSource="{Binding Categories}" SelectedItem="{Binding CategoryFilter}"/></StackPanel>
           <Button Content="Charger" Command="{Binding LoadFullInventoryCommand}" VerticalAlignment="Bottom"/>
           <Button Content="Valider les écarts comptés" Command="{Binding ApplyFullInventoryCommand}" Style="{StaticResource PrimaryButton}" VerticalAlignment="Bottom"/>
         </WrapPanel>
@@ -46,7 +46,7 @@
                 <controls:KeypadField Value="{Binding OrderExpected}" Title="Quantité attendue (variante sélectionnée)"/>
                 <Button Grid.Column="1" Content="+ Ligne" Command="{Binding AddToOrderCommand}" VerticalAlignment="Center"/>
               </Grid>
-              <ItemsControl ItemsSource="{Binding OrderLines}" MaxHeight="86"><ItemsControl.ItemTemplate><DataTemplate><Grid Margin="0,1"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="40"/></Grid.ColumnDefinitions><TextBlock Text="{Binding Label}" VerticalAlignment="Center" FontSize="12"/><TextBlock Grid.Column="1" Text="{Binding Expected, StringFormat=× {0:0.###}}" VerticalAlignment="Center" Style="{StaticResource Money}"/><Button Grid.Column="2" Content="×" MinWidth="0" Width="36" MinHeight="38" Style="{StaticResource QuietButton}" Command="{Binding DataContext.RemoveOrderLineCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}"/></Grid></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+              <ItemsControl ItemsSource="{Binding OrderLines}" MaxHeight="86"><ItemsControl.ItemTemplate><DataTemplate><Grid Margin="0,1"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="40"/></Grid.ColumnDefinitions><TextBlock Text="{Binding Label}" VerticalAlignment="Center" FontSize="12"/><TextBlock Grid.Column="1" Text="{Binding Expected, StringFormat=× {0:0.###}}" VerticalAlignment="Center" Style="{StaticResource Money}"/><Button Grid.Column="2" Content="×" MinWidth="0" Width="36" Style="{StaticResource QuietButton}" Command="{Binding DataContext.RemoveOrderLineCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}"/></Grid></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
               <Button Content="Créer la commande fournisseur" Command="{Binding CreateOrderCommand}" Margin="4,2"/>
               <TextBlock Text="Réceptions en attente" Style="{StaticResource FieldLabel}"/>
               <DataGrid ItemsSource="{Binding OpenOrders}" SelectedItem="{Binding SelectedOpenLine}" MaxHeight="140" IsReadOnly="True"><DataGrid.Columns><DataGridTextColumn Header="Fournisseur" Binding="{Binding Supplier}"/><DataGridTextColumn Header="SKU" Binding="{Binding Sku}"/><DataGridTextColumn Header="Attendu" Binding="{Binding Expected}"/><DataGridTextColumn Header="Reçu" Binding="{Binding Received}"/></DataGrid.Columns></DataGrid>

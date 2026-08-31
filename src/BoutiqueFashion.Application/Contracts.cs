@@ -17,7 +17,7 @@ public sealed record SaleDraft(
     string? NewCustomerName = null,
     string? NewCustomerPhone = null);
 
-public sealed record SaleResult(Guid SaleId, string Number, long TotalXof, Guid DocumentId, bool AlreadyExisted, bool HasNegativeStock, long ChangeXof = 0);
+public sealed record SaleResult(Guid SaleId, string Number, long TotalXof, Guid DocumentId, bool AlreadyExisted, bool HasNegativeStock, long ChangeXof = 0, Guid? InvoiceDocumentId = null);
 public sealed record StockAdjustment(Guid VariantId, decimal QuantityDelta, StockMovementType Type, long UnitCostXof, string Reason, string Actor);
 public sealed record DashboardSummary(long SalesXof, long CollectedXof, long GrossMarginXof, long ExpensesXof, long CreditBalanceXof, int LowStockCount, long EstimatedProfitXof = 0, bool CostWarning = false, int SalesCount = 0);
 public sealed record RecentSaleRow(string Number, string Time, string Customer, long TotalXof);
