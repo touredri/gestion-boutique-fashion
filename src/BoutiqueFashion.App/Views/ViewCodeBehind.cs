@@ -2,13 +2,23 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using BoutiqueFashion.App.ViewModels;
 using BoutiqueFashion.Application;
 
 namespace BoutiqueFashion.App.Views;
 
 public partial class DashboardView : UserControl { public DashboardView() => InitializeComponent(); }
-public partial class SaleView : UserControl { public SaleView() => InitializeComponent(); }
+public partial class SaleView : UserControl
+{
+    public SaleView() => InitializeComponent();
+    private void SearchBox_OnKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter) return;
+        e.Handled = true;
+        if (DataContext is SaleViewModel vm) vm.SearchProductsCommand.Execute(null);
+    }
+}
 public partial class CatalogView : UserControl
 {
     public CatalogView() => InitializeComponent();

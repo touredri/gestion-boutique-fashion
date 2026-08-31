@@ -68,6 +68,7 @@ public sealed class ProductVariant : Entity
     public ICollection<ProductImage> Images { get; set; } = [];
     [NotMapped] public string? PrimaryImagePath => Images?.FirstOrDefault(x => x.IsPrimary)?.RelativePath ?? Images?.FirstOrDefault()?.RelativePath ?? Product?.PrimaryImagePath;
     [NotMapped] public long MarginXof => PriceXof - CostXof;
+    [NotMapped] public bool IsOutOfStock => QuantityOnHand <= 0;
 }
 
 public sealed class StockMovement : Entity
