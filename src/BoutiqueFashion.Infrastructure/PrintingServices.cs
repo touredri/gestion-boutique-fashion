@@ -175,7 +175,7 @@ internal static class EscPosTicketLayout
         lines.Add(new TicketLine(new string('-', width)));
         lines.Add(new TicketLine(Columns("Sous-total", $"{receipt.SubtotalXof:N0}", width)));
         if (receipt.DiscountXof > 0) lines.Add(new TicketLine(Columns("Remise", $"-{receipt.DiscountXof:N0}", width)));
-        lines.Add(new TicketLine(Columns("TOTAL", $"{receipt.TotalXof:N0} FCFA", width), true, true));
+        lines.Add(new TicketLine(Columns("TOTAL", $"{receipt.TotalXof:N0} FCFA", width), true));
         foreach (var payment in receipt.Payments) lines.Add(new TicketLine(Columns(Libelles.Text(payment.Mode), $"{payment.AmountXof:N0}", width)));
         if (receipt.ChangeXof > 0) lines.Add(new TicketLine(Columns("Monnaie rendue", $"{receipt.ChangeXof:N0}", width), true));
         lines.Add(new TicketLine(string.Empty));
@@ -205,7 +205,7 @@ internal static class EscPosTicketLayout
         if (receipt.DiscountXof > 0) lines.Add(new TicketLine(Columns("Sous-total", $"{receipt.SubtotalXof:N0}", width)));
         if (receipt.DiscountXof > 0) lines.Add(new TicketLine(Columns("Remise globale", $"-{receipt.DiscountXof:N0}", width)));
         lines.Add(new TicketLine(new string('-', width)));
-        lines.Add(new TicketLine(Columns("TOTAL", $"{receipt.TotalXof:N0} FCFA", width), true, true));
+        lines.Add(new TicketLine(Columns("TOTAL", $"{receipt.TotalXof:N0} FCFA", width), true));
         lines.Add(new TicketLine(new string('-', width)));
         foreach (var payment in receipt.Payments) lines.Add(new TicketLine(Columns(Libelles.Text(payment.Mode), $"{payment.AmountXof:N0}", width)));
         if (receipt.ChangeXof > 0) lines.Add(new TicketLine(Columns("Monnaie rendue", $"{receipt.ChangeXof:N0}", width), true));
