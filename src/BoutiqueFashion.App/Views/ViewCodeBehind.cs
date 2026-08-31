@@ -1,5 +1,9 @@
+using System.Collections.Generic;
+using System.Linq;
+using System.Windows;
 using System.Windows.Controls;
 using BoutiqueFashion.App.ViewModels;
+using BoutiqueFashion.Application;
 
 namespace BoutiqueFashion.App.Views;
 
@@ -46,4 +50,28 @@ public partial class SettingsView : UserControl
     private void BrowseLogo_OnClick(object sender, System.Windows.RoutedEventArgs e) => BrowseImage("Choisir le logo", path => { if (DataContext is SettingsViewModel vm) vm.LogoPath = path; });
     private void BrowseStamp_OnClick(object sender, System.Windows.RoutedEventArgs e) => BrowseImage("Choisir le cachet", path => { if (DataContext is SettingsViewModel vm) vm.StampPath = path; });
     private void BrowseSignature_OnClick(object sender, System.Windows.RoutedEventArgs e) => BrowseImage("Choisir la signature", path => { if (DataContext is SettingsViewModel vm) vm.SignaturePath = path; });
+}
+
+public partial class TicketPreviewWindow : Window
+{
+    private TicketPreviewWindow() => InitializeComponent();
+
+    public static void Show(IReadOnlyList<TicketLine> lines, string title, BoutiqueFashion.Domain.PaperWidth paper = BoutiqueFashion.Domain.PaperWidth.Mm80)
+    {
+        var window = new TicketPreviewWindow { Title = title };
+        window.PaperHeader.Text = $"APERÇU TICKET · {(int)paper} MM";
+        window.HeaderText.Text = title.ToUpperInvariant();
+        window.TicketLines.ItemsSource = lines.Select(line => new TicketPreviewLine(line)).ToArray();
+        window.Owner = System.Windows.Application.Current.MainWindow;
+        window.ShowDialog();
+    }
+
+    private void Close_OnClick(object sender, RoutedEventArgs e) => Close();
+}
+
+public sealed class TicketPreviewLine(TicketLine line)
+{
+    public string Text { get; } = string.IsNullOrEmpty(line.Text) ? " " : line.Text;
+    public FontWeight Weight => line.Bold ? FontWeights.Bold : FontWeights.Normal;
+    public double Size => line.DoubleHeight ? 24 : 13;
 }

@@ -4,11 +4,14 @@ using System.IO.Ports;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.Json;
 using BoutiqueFashion.Application;
 using BoutiqueFashion.Domain;
 using MigraDoc.DocumentObjectModel;
 using MigraDoc.DocumentObjectModel.Tables;
 using MigraDoc.Rendering;
+using PdfSharp.Drawing;
+using Drawing = System.Drawing;
 
 namespace BoutiqueFashion.Infrastructure;
 
@@ -28,7 +31,7 @@ public sealed class PrintQueueService : IPrintQueueService
     }
 }
 
-public sealed class ThermalPrinterService(IPrintQueueService queue) : IThermalPrinterService
+public sealed class ThermalPrinterService(IPrintQueueService queue, IAppSettingsService settings) : IThermalPrinterService
 {
     public IReadOnlyList<PrinterProfile> Discover()
     {
@@ -49,19 +52,60 @@ public sealed class ThermalPrinterService(IPrintQueueService queue) : IThermalPr
         return result;
     }
 
-    public Task PrintTestAsync(PrinterProfile printer, CancellationToken cancellationToken = default) =>
-        PrintBytesAsync(printer, EscPosReceiptBuilder.Build(BuildTest(printer), printer), $"test:{printer.ConnectionKind}:{printer.Address}", cancellationToken);
+    public IReadOnlyList<TicketLine> Preview(ReceiptData receipt, PaperWidth paperWidth = PaperWidth.Mm80) => EscPosTicketLayout.Build(receipt, paperWidth);
 
-    public Task PrintReceiptAsync(PrinterProfile printer, ReceiptData receipt, CancellationToken cancellationToken = default) =>
-        PrintBytesAsync(printer, EscPosReceiptBuilder.Build(receipt, printer), $"receipt:{receipt.Number}:{receipt.IsDuplicate}", cancellationToken);
+    public Task<string> DiagnoseAsync(PrinterProfile printer, CancellationToken cancellationToken = default) => Task.Run(() =>
+    {
+        switch (printer.ConnectionKind)
+        {
+            case PrinterConnectionKind.WindowsQueue:
+                return RawPrinter.Describe(printer.Address);
+            case PrinterConnectionKind.SerialPort:
+                try
+                {
+                    using var serial = new SerialPort(printer.Address, 9600) { WriteTimeout = 2000 };
+                    serial.Open(); serial.Close();
+                    return $"Port série {printer.Address} ouvert avec succès (9600 bauds). Si rien ne s'imprime, essayez 19200 ou 115200 bauds (réglage « Vitesse série »).";
+                }
+                catch (Exception e) { return $"Port série {printer.Address} inaccessible : {e.Message}"; }
+            default:
+                return $"Imprimante réseau {printer.Address} : lancez « Imprimer un ticket test » pour vérifier la connexion.";
+        }
+    }, cancellationToken);
 
-    private Task PrintBytesAsync(PrinterProfile printer, byte[] bytes, string key, CancellationToken cancellationToken = default) =>
+    public async Task PrintTestAsync(PrinterProfile printer, CancellationToken cancellationToken = default)
+    {
+        var profile = await ApplySettingsAsync(printer, cancellationToken);
+        await PrintLinesAsync(profile, BuildTest(profile), $"test:{profile.ConnectionKind}:{profile.Address}", cancellationToken);
+    }
+
+    public async Task PrintReceiptAsync(PrinterProfile printer, ReceiptData receipt, CancellationToken cancellationToken = default)
+    {
+        var profile = await ApplySettingsAsync(printer, cancellationToken);
+        await PrintLinesAsync(profile, receipt, $"receipt:{receipt.Number}:{receipt.IsDuplicate}", cancellationToken);
+    }
+
+    private async Task<PrinterProfile> ApplySettingsAsync(PrinterProfile printer, CancellationToken cancellationToken) =>
+        printer with
+        {
+            CutPaper = (await settings.GetAsync("Printer.CutPaper", cancellationToken) ?? "1") == "1",
+            PaperWidth = (await settings.GetAsync("Printer.PaperWidth", cancellationToken) ?? "80") == "58" ? PaperWidth.Mm58 : PaperWidth.Mm80
+        };
+
+    private Task PrintLinesAsync(PrinterProfile printer, ReceiptData receipt, string key, CancellationToken cancellationToken = default) =>
         queue.EnqueueAsync(key, async token =>
         {
+            if (printer.ConnectionKind == PrinterConnectionKind.WindowsQueue && (await settings.GetAsync("Printer.RenderMode", token) ?? "Raw") == "Gdi")
+            {
+                var lines = EscPosTicketLayout.Build(receipt, printer.PaperWidth);
+                await Task.Run(() => GdiTicketRenderer.Print(printer.Address, lines), token);
+                return;
+            }
+            var bytes = EscPosReceiptBuilder.Build(receipt, printer);
             switch (printer.ConnectionKind)
             {
                 case PrinterConnectionKind.WindowsQueue:
-                    RawPrinter.Send(printer.Address, bytes);
+                    await Task.Run(() => RawPrinter.Send(printer.Address, bytes), token);
                     break;
                 case PrinterConnectionKind.TcpIp:
                     var parts = printer.Address.Split(':');
@@ -76,7 +120,8 @@ public sealed class ThermalPrinterService(IPrintQueueService queue) : IThermalPr
                     break;
                 default:
                 {
-                    using var serial = new SerialPort(printer.Address, 9600, Parity.None, 8, StopBits.One) { WriteTimeout = 10_000 };
+                    var baud = int.TryParse(await settings.GetAsync("Printer.SerialBaud", token), out var parsedBaud) ? parsedBaud : 9600;
+                    using var serial = new SerialPort(printer.Address, baud, Parity.None, 8, StopBits.One) { WriteTimeout = 10_000 };
                     serial.Open();
                     await serial.BaseStream.WriteAsync(bytes, token);
                     await serial.BaseStream.FlushAsync(token);
@@ -93,14 +138,127 @@ public sealed class ThermalPrinterService(IPrintQueueService queue) : IThermalPr
     }
 }
 
+internal static class EscPosTicketLayout
+{
+    private static readonly CultureInfo Fr = CultureInfo.GetCultureInfo("fr-FR");
+
+    public static int Columns(PaperWidth paper) => paper == PaperWidth.Mm58 ? 32 : 42;
+
+    public static IReadOnlyList<TicketLine> Build(ReceiptData receipt, PaperWidth paper = PaperWidth.Mm80)
+    {
+        var width = Columns(paper);
+        return receipt.Style switch
+        {
+            DocumentStyle.Classique => BuildClassique(receipt, width),
+            DocumentStyle.Minimal => BuildMinimal(receipt, width),
+            _ => BuildModerne(receipt, width)
+        };
+    }
+
+    private static List<TicketLine> BuildClassique(ReceiptData receipt, int width)
+    {
+        var lines = new List<TicketLine> { new(Center(receipt.ShopName.ToUpperInvariant(), width), true, true) };
+        if (!string.IsNullOrWhiteSpace(receipt.Address)) lines.Add(new TicketLine(Center(receipt.Address, width)));
+        if (!string.IsNullOrWhiteSpace(receipt.Phone)) lines.Add(new TicketLine(Center(receipt.Phone, width)));
+        lines.Add(new TicketLine(new string('-', width)));
+        lines.Add(new TicketLine(Fit($"{Libelles.Text(receipt.Kind)} : {receipt.Number}", width)));
+        lines.Add(new TicketLine(receipt.IssuedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm", Fr)));
+        if (!string.IsNullOrWhiteSpace(receipt.Customer)) lines.Add(new TicketLine(Fit($"Client: {receipt.Customer}", width)));
+        if (receipt.IsDuplicate) lines.Add(new TicketLine(Center("*** DUPLICATA ***", width), true));
+        lines.Add(new TicketLine(new string('-', width)));
+        foreach (var item in receipt.Items)
+        {
+            lines.Add(new TicketLine(Fit(item.Description, width)));
+            lines.Add(new TicketLine(Columns($"{item.Quantity:0.###} x {item.UnitPriceXof:N0}", $"{item.TotalXof:N0}", width)));
+            if (item.DiscountXof > 0) lines.Add(new TicketLine(Columns("Remise", $"-{item.DiscountXof:N0}", width)));
+        }
+        lines.Add(new TicketLine(new string('-', width)));
+        lines.Add(new TicketLine(Columns("Sous-total", $"{receipt.SubtotalXof:N0}", width)));
+        if (receipt.DiscountXof > 0) lines.Add(new TicketLine(Columns("Remise", $"-{receipt.DiscountXof:N0}", width)));
+        lines.Add(new TicketLine(Columns("TOTAL", $"{receipt.TotalXof:N0} FCFA", width), true, true));
+        foreach (var payment in receipt.Payments) lines.Add(new TicketLine(Columns(Libelles.Text(payment.Mode), $"{payment.AmountXof:N0}", width)));
+        if (receipt.ChangeXof > 0) lines.Add(new TicketLine(Columns("Monnaie rendue", $"{receipt.ChangeXof:N0}", width), true));
+        lines.Add(new TicketLine(string.Empty));
+        lines.Add(new TicketLine(Center(Fit(receipt.Footer, width), width)));
+        return lines;
+    }
+
+    private static List<TicketLine> BuildModerne(ReceiptData receipt, int width)
+    {
+        var lines = new List<TicketLine> { new(Center(receipt.ShopName.ToUpperInvariant(), width), true, true) };
+        if (!string.IsNullOrWhiteSpace(receipt.Slogan)) lines.Add(new TicketLine(Center(Fit($"* {receipt.Slogan} *", width), width)));
+        if (!string.IsNullOrWhiteSpace(receipt.Address)) lines.Add(new TicketLine(Center(Fit(receipt.Address, width), width)));
+        if (!string.IsNullOrWhiteSpace(receipt.Phone)) lines.Add(new TicketLine(Center(Fit($"Tel. {receipt.Phone}", width), width)));
+        lines.Add(new TicketLine(new string('=', width)));
+        lines.Add(new TicketLine(Columns(receipt.Number, receipt.IssuedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm", Fr), width)));
+        if (receipt.Kind != DocumentType.Receipt) lines.Add(new TicketLine(Center(Libelles.Text(receipt.Kind).ToUpperInvariant(), width), true));
+        if (!string.IsNullOrWhiteSpace(receipt.Customer)) lines.Add(new TicketLine(Fit($"Client : {receipt.Customer}", width), true));
+        if (receipt.IsDuplicate) lines.Add(new TicketLine(Center("*** DUPLICATA ***", width), true));
+        lines.Add(new TicketLine(new string('=', width)));
+        foreach (var item in receipt.Items)
+        {
+            lines.Add(new TicketLine(Fit(item.Description, width)));
+            lines.Add(new TicketLine(Columns($"  {item.Quantity:0.###} x {item.UnitPriceXof:N0}", $"{item.TotalXof:N0}", width)));
+            if (item.DiscountXof > 0) lines.Add(new TicketLine(Columns("  dont remise", $"-{item.DiscountXof:N0}", width)));
+        }
+        lines.Add(new TicketLine(new string('=', width)));
+        if (receipt.DiscountXof > 0) lines.Add(new TicketLine(Columns("Sous-total", $"{receipt.SubtotalXof:N0}", width)));
+        if (receipt.DiscountXof > 0) lines.Add(new TicketLine(Columns("Remise globale", $"-{receipt.DiscountXof:N0}", width)));
+        lines.Add(new TicketLine(new string('-', width)));
+        lines.Add(new TicketLine(Columns("TOTAL", $"{receipt.TotalXof:N0} FCFA", width), true, true));
+        lines.Add(new TicketLine(new string('-', width)));
+        foreach (var payment in receipt.Payments) lines.Add(new TicketLine(Columns(Libelles.Text(payment.Mode), $"{payment.AmountXof:N0}", width)));
+        if (receipt.ChangeXof > 0) lines.Add(new TicketLine(Columns("Monnaie rendue", $"{receipt.ChangeXof:N0}", width), true));
+        lines.Add(new TicketLine(string.Empty));
+        if (!string.IsNullOrWhiteSpace(receipt.ReturnPolicy)) lines.Add(new TicketLine(Center(Fit(receipt.ReturnPolicy, width), width)));
+        lines.Add(new TicketLine(Center(Fit(receipt.Footer, width), width), true));
+        return lines;
+    }
+
+    private static List<TicketLine> BuildMinimal(ReceiptData receipt, int width)
+    {
+        var lines = new List<TicketLine> { new(Fit(receipt.ShopName, width), true) };
+        if (!string.IsNullOrWhiteSpace(receipt.Address)) lines.Add(new TicketLine(Fit(receipt.Address, width)));
+        if (!string.IsNullOrWhiteSpace(receipt.Phone)) lines.Add(new TicketLine(Fit(receipt.Phone, width)));
+        lines.Add(new TicketLine(string.Empty));
+        lines.Add(new TicketLine(Fit($"{receipt.Number}  {receipt.IssuedAt.ToLocalTime():dd/MM/yyyy HH:mm}", width)));
+        if (receipt.Kind != DocumentType.Receipt) lines.Add(new TicketLine(Fit(Libelles.Text(receipt.Kind).ToUpperInvariant(), width), true));
+        if (!string.IsNullOrWhiteSpace(receipt.Customer)) lines.Add(new TicketLine(Fit(receipt.Customer, width)));
+        if (receipt.IsDuplicate) lines.Add(new TicketLine("DUPLICATA", true));
+        lines.Add(new TicketLine(string.Empty));
+        foreach (var item in receipt.Items)
+        {
+            lines.Add(new TicketLine(Fit(item.Description, width)));
+            lines.Add(new TicketLine(Columns($"{item.Quantity:0.###} x {item.UnitPriceXof:N0}", $"{item.TotalXof:N0}", width)));
+        }
+        lines.Add(new TicketLine(string.Empty));
+        lines.Add(new TicketLine(Columns("TOTAL", $"{receipt.TotalXof:N0} FCFA", width), true));
+        foreach (var payment in receipt.Payments) lines.Add(new TicketLine(Columns(Libelles.Text(payment.Mode), $"{payment.AmountXof:N0}", width)));
+        if (receipt.ChangeXof > 0) lines.Add(new TicketLine(Columns("Monnaie", $"{receipt.ChangeXof:N0}", width)));
+        lines.Add(new TicketLine(string.Empty));
+        lines.Add(new TicketLine(Fit(receipt.Footer, width)));
+        return lines;
+    }
+
+    private static string Center(string value, int width) => value.Length >= width ? Fit(value, width) : value.PadLeft((width + value.Length) / 2);
+    private static string Fit(string value, int width) => value.Length <= Math.Max(0, width) ? value : value[..Math.Max(0, width)];
+    private static string Columns(string left, string right, int width)
+    {
+        left = Fit(left, Math.Max(1, width - right.Length - 1));
+        return left + new string(' ', Math.Max(1, width - left.Length - right.Length)) + right;
+    }
+}
+
 internal static class EscPosReceiptBuilder
 {
-    public static byte[] Build(ReceiptData receipt, PrinterProfile profile) => receipt.Style switch
+    public static byte[] Build(ReceiptData receipt, PrinterProfile profile)
     {
-        DocumentStyle.Classique => BuildClassique(receipt, profile),
-        DocumentStyle.Minimal => BuildMinimal(receipt, profile),
-        _ => BuildModerne(receipt, profile)
-    };
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+        var encoding = Encoding.GetEncoding(858, EncoderFallback.ReplacementFallback, DecoderFallback.ReplacementFallback);
+        var bytes = Init();
+        foreach (var line in EscPosTicketLayout.Build(receipt, profile.PaperWidth)) Add(bytes, encoding, line.Text, line.Bold, line.DoubleHeight);
+        return Finish(bytes, profile);
+    }
 
     private static List<byte> Init() => new() { 0x1B, 0x40, 0x1B, 0x74, 0x13 };
 
@@ -111,113 +269,74 @@ internal static class EscPosReceiptBuilder
         return bytes.ToArray();
     }
 
-    private static byte[] BuildClassique(ReceiptData receipt, PrinterProfile profile)
-    {
-        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-        var encoding = Encoding.GetEncoding(858, EncoderFallback.ReplacementFallback, DecoderFallback.ReplacementFallback);
-        var width = profile.PaperWidth == PaperWidth.Mm58 ? 32 : 42;
-        var bytes = Init();
-        Add(bytes, encoding, Center(receipt.ShopName.ToUpperInvariant(), width), true, true);
-        if (!string.IsNullOrWhiteSpace(receipt.Address)) Add(bytes, encoding, Center(receipt.Address, width));
-        if (!string.IsNullOrWhiteSpace(receipt.Phone)) Add(bytes, encoding, Center(receipt.Phone, width));
-        Add(bytes, encoding, new string('-', width));
-        Add(bytes, encoding, $"Ticket: {receipt.Number}"); Add(bytes, encoding, receipt.IssuedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm", CultureInfo.GetCultureInfo("fr-FR")));
-        if (!string.IsNullOrWhiteSpace(receipt.Customer)) Add(bytes, encoding, $"Client: {receipt.Customer}");
-        if (receipt.IsDuplicate) Add(bytes, encoding, Center("*** DUPLICATA ***", width), true);
-        Add(bytes, encoding, new string('-', width));
-        foreach (var item in receipt.Items)
-        {
-            Add(bytes, encoding, Fit(item.Description, width));
-            Add(bytes, encoding, Columns($"{item.Quantity:0.###} x {item.UnitPriceXof:N0}", $"{item.TotalXof:N0}", width));
-            if (item.DiscountXof > 0) Add(bytes, encoding, Columns("Remise", $"-{item.DiscountXof:N0}", width));
-        }
-        Add(bytes, encoding, new string('-', width));
-        Add(bytes, encoding, Columns("Sous-total", $"{receipt.SubtotalXof:N0}", width));
-        if (receipt.DiscountXof > 0) Add(bytes, encoding, Columns("Remise", $"-{receipt.DiscountXof:N0}", width));
-        Add(bytes, encoding, Columns("TOTAL", $"{receipt.TotalXof:N0} FCFA", width), true, true);
-        foreach (var payment in receipt.Payments) Add(bytes, encoding, Columns(Libelles.Text(payment.Mode), $"{payment.AmountXof:N0}", width));
-        if (receipt.ChangeXof > 0) Add(bytes, encoding, Columns("Monnaie rendue", $"{receipt.ChangeXof:N0}", width), true);
-        Add(bytes, encoding, ""); Add(bytes, encoding, Center(receipt.Footer, width));
-        return Finish(bytes, profile);
-    }
-
-    private static byte[] BuildModerne(ReceiptData receipt, PrinterProfile profile)
-    {
-        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-        var encoding = Encoding.GetEncoding(858, EncoderFallback.ReplacementFallback, DecoderFallback.ReplacementFallback);
-        var width = profile.PaperWidth == PaperWidth.Mm58 ? 32 : 42;
-        var bytes = Init();
-        Add(bytes, encoding, Center(receipt.ShopName.ToUpperInvariant(), width), true, true);
-        if (!string.IsNullOrWhiteSpace(receipt.Slogan)) Add(bytes, encoding, Center($"* {receipt.Slogan} *", width));
-        if (!string.IsNullOrWhiteSpace(receipt.Address)) Add(bytes, encoding, Center(Fit(receipt.Address, width), width));
-        if (!string.IsNullOrWhiteSpace(receipt.Phone)) Add(bytes, encoding, Center($"Tel. {receipt.Phone}", width));
-        Add(bytes, encoding, new string('=', width));
-        Add(bytes, encoding, Columns(receipt.Number, receipt.IssuedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm", CultureInfo.GetCultureInfo("fr-FR")), width));
-        if (!string.IsNullOrWhiteSpace(receipt.Customer)) Add(bytes, encoding, $"Client : {receipt.Customer}", true);
-        if (receipt.IsDuplicate) Add(bytes, encoding, Center("*** DUPLICATA ***", width), true);
-        Add(bytes, encoding, new string('=', width));
-        foreach (var item in receipt.Items)
-        {
-            Add(bytes, encoding, Fit(item.Description, width));
-            Add(bytes, encoding, Columns($"  {item.Quantity:0.###} x {item.UnitPriceXof:N0}", $"{item.TotalXof:N0}", width));
-            if (item.DiscountXof > 0) Add(bytes, encoding, Columns("  dont remise", $"-{item.DiscountXof:N0}", width));
-        }
-        Add(bytes, encoding, new string('=', width));
-        if (receipt.DiscountXof > 0) Add(bytes, encoding, Columns("Sous-total", $"{receipt.SubtotalXof:N0}", width));
-        if (receipt.DiscountXof > 0) Add(bytes, encoding, Columns("Remise globale", $"-{receipt.DiscountXof:N0}", width));
-        Add(bytes, encoding, new string('-', width));
-        Add(bytes, encoding, Columns("TOTAL", $"{receipt.TotalXof:N0} FCFA", width), true, true);
-        Add(bytes, encoding, new string('-', width));
-        foreach (var payment in receipt.Payments) Add(bytes, encoding, Columns(Libelles.Text(payment.Mode), $"{payment.AmountXof:N0}", width));
-        if (receipt.ChangeXof > 0) Add(bytes, encoding, Columns("Monnaie rendue", $"{receipt.ChangeXof:N0}", width), true);
-        Add(bytes, encoding, "");
-        if (!string.IsNullOrWhiteSpace(receipt.ReturnPolicy)) Add(bytes, encoding, Center(Fit(receipt.ReturnPolicy, width), width));
-        Add(bytes, encoding, Center(receipt.Footer, width), true);
-        return Finish(bytes, profile);
-    }
-
-    private static byte[] BuildMinimal(ReceiptData receipt, PrinterProfile profile)
-    {
-        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-        var encoding = Encoding.GetEncoding(858, EncoderFallback.ReplacementFallback, DecoderFallback.ReplacementFallback);
-        var width = profile.PaperWidth == PaperWidth.Mm58 ? 32 : 42;
-        var bytes = Init();
-        Add(bytes, encoding, receipt.ShopName, true);
-        if (!string.IsNullOrWhiteSpace(receipt.Address)) Add(bytes, encoding, Fit(receipt.Address, width));
-        if (!string.IsNullOrWhiteSpace(receipt.Phone)) Add(bytes, encoding, receipt.Phone);
-        Add(bytes, encoding, "");
-        Add(bytes, encoding, $"{receipt.Number}  {receipt.IssuedAt.ToLocalTime():dd/MM/yyyy HH:mm}");
-        if (!string.IsNullOrWhiteSpace(receipt.Customer)) Add(bytes, encoding, receipt.Customer);
-        if (receipt.IsDuplicate) Add(bytes, encoding, "DUPLICATA", true);
-        Add(bytes, encoding, "");
-        foreach (var item in receipt.Items)
-        {
-            Add(bytes, encoding, Fit(item.Description, width));
-            Add(bytes, encoding, Columns($"{item.Quantity:0.###} x {item.UnitPriceXof:N0}", $"{item.TotalXof:N0}", width));
-        }
-        Add(bytes, encoding, "");
-        Add(bytes, encoding, Columns("TOTAL", $"{receipt.TotalXof:N0} FCFA", width), true);
-        foreach (var payment in receipt.Payments) Add(bytes, encoding, Columns(Libelles.Text(payment.Mode), $"{payment.AmountXof:N0}", width));
-        if (receipt.ChangeXof > 0) Add(bytes, encoding, Columns("Monnaie", $"{receipt.ChangeXof:N0}", width));
-        Add(bytes, encoding, "");
-        Add(bytes, encoding, Fit(receipt.Footer, width));
-        return Finish(bytes, profile);
-    }
-
-    private static void Add(List<byte> bytes, Encoding encoding, string value, bool bold = false, bool doubleHeight = false)
+    private static void Add(List<byte> bytes, Encoding encoding, string value, bool bold, bool doubleHeight)
     {
         bytes.AddRange([0x1B, 0x45, bold ? (byte)1 : (byte)0]);
         bytes.AddRange([0x1D, 0x21, doubleHeight ? (byte)0x11 : (byte)0]);
         bytes.AddRange(encoding.GetBytes(value + "\n"));
     }
-    private static string Center(string value, int width) => value.Length >= width ? Fit(value, width) : value.PadLeft((width + value.Length) / 2);
-    private static string Fit(string value, int width) => value.Length <= width ? value : value[..width];
-    private static string Columns(string left, string right, int width) { left = Fit(left, Math.Max(1, width - right.Length - 1)); return left + new string(' ', Math.Max(1, width - left.Length - right.Length)) + right; }
+}
+
+internal static class GdiTicketRenderer
+{
+    private const string FontName = "Courier New";
+    private static readonly string Sample = new('M', 42);
+
+    public static void Print(string printerName, IReadOnlyList<TicketLine> lines)
+    {
+        using var document = new System.Drawing.Printing.PrintDocument { DocumentName = "Boutique Fashion" };
+        document.PrinterSettings.PrinterName = printerName;
+        if (!document.PrinterSettings.IsValid) throw new InvalidOperationException($"Imprimante indisponible : {printerName}.");
+        document.DefaultPageSettings.Margins = new System.Drawing.Printing.Margins(0, 0, 0, 0);
+        foreach (System.Drawing.Printing.PaperSize size in document.PrinterSettings.PaperSizes)
+        {
+            if (size.Width > 0 && size.Width <= 400) { document.DefaultPageSettings.PaperSize = size; break; }
+        }
+        var index = 0;
+        document.PrintPage += (sender, e) =>
+        {
+            var graphics = e.Graphics!;
+            var width = e.MarginBounds.Width > 0 ? e.MarginBounds.Width : e.PageBounds.Width;
+            var bottom = e.MarginBounds.Height > 0 ? e.MarginBounds.Bottom : e.PageBounds.Height;
+            var baseSize = ChooseFontSize(graphics, width);
+            var y = (float)(e.MarginBounds.Height > 0 ? e.MarginBounds.Top : 0);
+            while (index < lines.Count)
+            {
+                var line = lines[index];
+                using var font = new Drawing.Font(FontName, line.DoubleHeight ? baseSize * 1.7f : baseSize, line.Bold ? Drawing.FontStyle.Bold : Drawing.FontStyle.Regular);
+                var height = font.GetHeight(graphics);
+                if (index > 0 && y + height > bottom) break;
+                graphics.DrawString(string.IsNullOrEmpty(line.Text) ? " " : line.Text, font, Drawing.Brushes.Black, 0, y);
+                y += height;
+                index++;
+            }
+            e.HasMorePages = index < lines.Count;
+        };
+        document.Print();
+    }
+
+    private static float ChooseFontSize(Drawing.Graphics graphics, int width)
+    {
+        for (var size = 12f; size >= 5f; size -= 0.5f)
+        {
+            using var font = new Drawing.Font(FontName, size);
+            if (graphics.MeasureString(Sample, font).Width <= width) return size;
+        }
+        return 5f;
+    }
 }
 
 internal static class RawPrinter
 {
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)] private sealed class DocInfo { [MarshalAs(UnmanagedType.LPWStr)] public string DocName = "Boutique Fashion"; [MarshalAs(UnmanagedType.LPWStr)] public string? OutputFile; [MarshalAs(UnmanagedType.LPWStr)] public string DataType = "RAW"; }
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)] private sealed class PrinterInfo2
+    {
+        public string pServerName = "", pPrinterName = "", pShareName = "", pPortName = "", pDriverName = "", pComment = "", pLocation = "";
+        public nint pDevMode;
+        public string pSepFile = "", pPrintProcessor = "", pDatatype = "", pParameters = "";
+        public nint pSecurityDescriptor;
+        public uint Attributes, Priority, DefaultPriority, StartTime, UntilHere, Status, cJobs;
+    }
     [DllImport("winspool.drv", EntryPoint = "OpenPrinterW", SetLastError = true, CharSet = CharSet.Unicode)] private static extern bool OpenPrinter(string name, out nint handle, nint defaults);
     [DllImport("winspool.drv", SetLastError = true)] private static extern bool ClosePrinter(nint handle);
     [DllImport("winspool.drv", EntryPoint = "StartDocPrinterW", SetLastError = true, CharSet = CharSet.Unicode)] private static extern int StartDocPrinter(nint handle, int level, [In] DocInfo docInfo);
@@ -225,6 +344,7 @@ internal static class RawPrinter
     [DllImport("winspool.drv", SetLastError = true)] private static extern bool StartPagePrinter(nint handle);
     [DllImport("winspool.drv", SetLastError = true)] private static extern bool EndPagePrinter(nint handle);
     [DllImport("winspool.drv", SetLastError = true)] private static extern bool WritePrinter(nint handle, nint bytes, int count, out int written);
+    [DllImport("winspool.drv", EntryPoint = "GetPrinterW", SetLastError = true)] private static extern bool GetPrinter(nint handle, int level, nint buffer, int size, out int needed);
 
     public static void Send(string printerName, byte[] data)
     {
@@ -238,6 +358,56 @@ internal static class RawPrinter
             EndPagePrinter(printer); EndDocPrinter(printer);
         }
         finally { Marshal.FreeCoTaskMem(unmanaged); ClosePrinter(printer); }
+    }
+
+    public static string Describe(string printerName)
+    {
+        if (!OpenPrinter(printerName, out var printer, 0))
+            return $"Impossible d'ouvrir la file « {printerName} » (erreur Windows {Marshal.GetLastWin32Error()}).\nCette imprimante a peut-être été supprimée ou renommée : relancez la détection en changeant d'imprimante puis en revenant sur celle-ci.";
+        try
+        {
+            GetPrinter(printer, 2, 0, 0, out var needed);
+            var buffer = Marshal.AllocHGlobal(needed);
+            try
+            {
+                if (!GetPrinter(printer, 2, buffer, needed, out _))
+                    return $"Lecture des informations de la file impossible (erreur Windows {Marshal.GetLastWin32Error()}).";
+                var info = Marshal.PtrToStructure<PrinterInfo2>(buffer);
+                if (info is null) return "Informations de la file illisibles.";
+                var report = new StringBuilder();
+                report.AppendLine($"File : {info.pPrinterName}");
+                report.AppendLine($"Pilote : {info.pDriverName}");
+                report.AppendLine($"Port : {info.pPortName}");
+                report.AppendLine($"État : {DescribeStatus(info.Status)}");
+                report.AppendLine($"Travaux en attente : {info.cJobs}");
+                var driver = info.pDriverName ?? string.Empty;
+                if (driver.Contains("Generic", StringComparison.OrdinalIgnoreCase) || driver.Contains("Text Only", StringComparison.OrdinalIgnoreCase) || driver.Contains("GDI", StringComparison.OrdinalIgnoreCase))
+                    report.AppendLine("Conseil : pilote non ESC/POS détecté — passez le « Mode d'impression » sur « Rendu Windows » puis relancez le ticket test.");
+                if ((info.Status & 0x80) != 0) report.AppendLine("Conseil : imprimante hors ligne — vérifiez l'alimentation et le câble, puis redémarrez le terminal.");
+                if ((info.Status & 0x18) != 0) report.AppendLine("Conseil : problème papier (bourrage ou rouleau vide).");
+                if ((info.Status & 0x100000) != 0) report.AppendLine("Conseil : intervention requise sur l'imprimante (capot ouvert ?).");
+                if (info.cJobs > 0) report.AppendLine("Conseil : videz la file d'attente Windows (Paramètres → Imprimantes) avant de réessayer.");
+                return report.ToString().TrimEnd();
+            }
+            finally { Marshal.FreeHGlobal(buffer); }
+        }
+        finally { ClosePrinter(printer); }
+    }
+
+    private static string DescribeStatus(uint status)
+    {
+        if (status == 0) return "Prête";
+        var labels = new List<string>();
+        if ((status & 0x1) != 0) labels.Add("en pause");
+        if ((status & 0x2) != 0) labels.Add("erreur");
+        if ((status & 0x8) != 0) labels.Add("bourrage papier");
+        if ((status & 0x10) != 0) labels.Add("papier épuisé");
+        if ((status & 0x40) != 0) labels.Add("problème papier");
+        if ((status & 0x80) != 0) labels.Add("hors ligne");
+        if ((status & 0x400) != 0) labels.Add("impression en cours");
+        if ((status & 0x1000) != 0) labels.Add("indisponible");
+        if ((status & 0x400000) != 0) labels.Add("capot ouvert");
+        return labels.Count == 0 ? $"code {status}" : string.Join(", ", labels);
     }
 }
 
@@ -254,11 +424,38 @@ public sealed class A4DocumentService(AppPaths paths) : IA4DocumentService
         renderer.RenderDocument(); using var stream = new MemoryStream(); renderer.PdfDocument.Save(stream, false); return stream.ToArray();
     }
 
-    public async Task PrintInvoiceAsync(ReceiptData data, string? printerName = null, CancellationToken cancellationToken = default)
+    public byte[] CreatePreviewImage(ReceiptData data)
     {
-        var path = Path.Combine(paths.Documents, $"{data.Number}.pdf"); await File.WriteAllBytesAsync(path, CreateInvoicePdf(data), cancellationToken);
-        var info = new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true, Verb = string.IsNullOrWhiteSpace(printerName) ? "print" : "printto", Arguments = string.IsNullOrWhiteSpace(printerName) ? string.Empty : $"\"{printerName}\"" };
-        System.Diagnostics.Process.Start(info);
+        var renderer = new DocumentRenderer(Build(data));
+        renderer.PrepareDocument();
+        const int width = 595, height = 842;
+        using var bitmap = new Drawing.Bitmap(width, height);
+        using (var graphics = Drawing.Graphics.FromImage(bitmap))
+        {
+            graphics.Clear(Drawing.Color.White);
+            graphics.TextRenderingHint = Drawing.Text.TextRenderingHint.AntiAlias;
+            using var xGraphics = XGraphics.FromGraphics(graphics, new XSize(width, height));
+            renderer.RenderPage(xGraphics, 1);
+        }
+        using var stream = new MemoryStream();
+        bitmap.Save(stream, Drawing.Imaging.ImageFormat.Png);
+        return stream.ToArray();
+    }
+
+    public async Task<string> PrintInvoiceAsync(ReceiptData data, string? printerName = null, CancellationToken cancellationToken = default)
+    {
+        var path = Path.Combine(paths.Documents, $"{data.Number}.pdf");
+        await File.WriteAllBytesAsync(path, CreateInvoicePdf(data), cancellationToken);
+        try
+        {
+            var info = new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true, Verb = string.IsNullOrWhiteSpace(printerName) ? "print" : "printto", Arguments = string.IsNullOrWhiteSpace(printerName) ? string.Empty : $"\"{printerName}\"" };
+            System.Diagnostics.Process.Start(info);
+        }
+        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            throw new InvalidOperationException($"Impossible d'imprimer automatiquement le PDF (aucune application PDF associée ?). Copie enregistrée : {path}", e);
+        }
+        return path;
     }
 
     private static Document Build(ReceiptData data) => data.Style switch
@@ -287,7 +484,7 @@ public sealed class A4DocumentService(AppPaths paths) : IA4DocumentService
         var rule = section.AddTable(); rule.Borders.Width = 0; rule.AddColumn(Unit.FromCentimeter(17.6));
         var ruleRow = rule.AddRow(); ruleRow.Height = Unit.FromCentimeter(0.12); ruleRow.Shading.Color = Terracotta;
 
-        var title = section.AddParagraph($"FACTURE {data.Number}"); title.Format.SpaceBefore = Unit.FromCentimeter(0.7); title.Format.Font.Size = 16; title.Format.Font.Bold = true; title.Format.Font.Color = Ink;
+        var title = section.AddParagraph($"{Libelles.Text(data.Kind).ToUpperInvariant()} {data.Number}"); title.Format.SpaceBefore = Unit.FromCentimeter(0.7); title.Format.Font.Size = 16; title.Format.Font.Bold = true; title.Format.Font.Color = Ink;
         var date = section.AddParagraph($"Date : {data.IssuedAt.ToLocalTime():dd/MM/yyyy HH:mm}"); date.Format.Font.Size = 10; date.Format.Font.Color = Muted;
         if (!string.IsNullOrWhiteSpace(data.Customer)) { var client = section.AddParagraph($"Client : {data.Customer}"); client.Format.Font.Size = 11; client.Format.Font.Bold = true; }
         if (data.IsDuplicate) { var dup = section.AddParagraph("DUPLICATA"); dup.Format.Font.Bold = true; dup.Format.Font.Color = Terracotta; }
@@ -335,7 +532,7 @@ public sealed class A4DocumentService(AppPaths paths) : IA4DocumentService
         foreach (var line in new[] { data.Address, data.Phone, data.Email, string.IsNullOrWhiteSpace(data.TaxId) ? null : $"NIF / RCCM : {data.TaxId}" })
             if (!string.IsNullOrWhiteSpace(line)) { var p = section.AddParagraph(line); p.Format.Font.Size = 9; p.Format.Font.Color = Muted; }
         section.AddParagraph("");
-        var title = section.AddParagraph($"FACTURE {data.Number}"); title.Format.Font.Size = 12; title.Format.Font.Bold = true;
+        var title = section.AddParagraph($"{Libelles.Text(data.Kind).ToUpperInvariant()} {data.Number}"); title.Format.Font.Size = 12; title.Format.Font.Bold = true;
         section.AddParagraph($"Date : {data.IssuedAt.ToLocalTime():dd/MM/yyyy HH:mm}").Format.Font.Size = 10;
         if (!string.IsNullOrWhiteSpace(data.Customer)) section.AddParagraph($"Client : {data.Customer}").Format.Font.Size = 10;
         if (data.IsDuplicate) section.AddParagraph("DUPLICATA").Format.Font.Bold = true;
@@ -361,7 +558,7 @@ public sealed class A4DocumentService(AppPaths paths) : IA4DocumentService
         var title = section.AddParagraph(data.ShopName); title.Format.Font.Size = 20; title.Format.Font.Bold = true; title.Format.Font.Color = Colors.DarkSlateGray;
         if (!string.IsNullOrWhiteSpace(data.Slogan)) section.AddParagraph(data.Slogan).Format.Font.Italic = true;
         if (!string.IsNullOrWhiteSpace(data.Address)) section.AddParagraph(data.Address); if (!string.IsNullOrWhiteSpace(data.Phone)) section.AddParagraph(data.Phone); if (!string.IsNullOrWhiteSpace(data.Email)) section.AddParagraph(data.Email); if (!string.IsNullOrWhiteSpace(data.TaxId)) section.AddParagraph($"NIF / RCCM : {data.TaxId}");
-        var heading = section.AddParagraph($"FACTURE {data.Number}"); heading.Format.SpaceBefore = Unit.FromCentimeter(1); heading.Format.Font.Size = 16; heading.Format.Font.Bold = true;
+        var heading = section.AddParagraph($"{Libelles.Text(data.Kind).ToUpperInvariant()} {data.Number}"); heading.Format.SpaceBefore = Unit.FromCentimeter(1); heading.Format.Font.Size = 16; heading.Format.Font.Bold = true;
         section.AddParagraph($"Date : {data.IssuedAt.ToLocalTime():dd/MM/yyyy HH:mm}"); if (!string.IsNullOrWhiteSpace(data.Customer)) section.AddParagraph($"Client : {data.Customer}"); if (data.IsDuplicate) { var duplicate = section.AddParagraph("DUPLICATA"); duplicate.Format.Font.Bold = true; duplicate.Format.Font.Color = Colors.Firebrick; }
         var table = section.AddTable(); table.Borders.Width = 0.5; table.AddColumn(Unit.FromCentimeter(8.5)); table.AddColumn(Unit.FromCentimeter(2)); table.AddColumn(Unit.FromCentimeter(3)); table.AddColumn(Unit.FromCentimeter(3));
         var header = table.AddRow(); header.Shading.Color = Colors.LightGray; header.Cells[0].AddParagraph("Article"); header.Cells[1].AddParagraph("Qté"); header.Cells[2].AddParagraph("Prix"); header.Cells[3].AddParagraph("Total");
@@ -376,4 +573,24 @@ public sealed class A4DocumentService(AppPaths paths) : IA4DocumentService
         if (!string.IsNullOrWhiteSpace(data.SignaturePath) && File.Exists(data.SignaturePath)) vr.Cells[1].AddImage(data.SignaturePath).Width = Unit.FromCentimeter(3);
         return doc;
     }
+}
+
+public static class PrinterStore
+{
+    public static async Task<PrinterProfile?> LoadAsync(IAppSettingsService settings, IThermalPrinterService printers, CancellationToken cancellationToken = default)
+    {
+        var saved = await settings.GetAsync("Printer.Selected", cancellationToken);
+        var discovered = printers.Discover();
+        if (!string.IsNullOrWhiteSpace(saved))
+        {
+            var profile = JsonSerializer.Deserialize<PrinterProfile>(saved);
+            if (profile is not null && (profile.ConnectionKind == PrinterConnectionKind.TcpIp
+                || discovered.Any(x => x.ConnectionKind == profile.ConnectionKind && string.Equals(x.Address, profile.Address, StringComparison.OrdinalIgnoreCase))))
+                return profile;
+        }
+        return discovered.FirstOrDefault();
+    }
+
+    public static Task SaveAsync(IAppSettingsService settings, PrinterProfile profile, CancellationToken cancellationToken = default) =>
+        settings.SetAsync("Printer.Selected", JsonSerializer.Serialize(profile), "Vendeur boutique", cancellationToken);
 }

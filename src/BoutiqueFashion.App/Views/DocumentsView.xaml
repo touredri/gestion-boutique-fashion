@@ -8,7 +8,7 @@
         <StackPanel Grid.Column="1" Width="250"><TextBlock Text="Rechercher par numéro" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding Search, UpdateSourceTrigger=PropertyChanged}" controls:Placeholder.Text="Numéro de document" controls:TouchKeyboard.Suppress="True" AutomationProperties.Name="Recherche par numéro de document"/></StackPanel>
       </Grid>
       <DataGrid Grid.Row="1" ItemsSource="{Binding Items}" SelectedItem="{Binding SelectedDocument}"><DataGrid.Columns><DataGridTextColumn Header="NUMÉRO" Binding="{Binding Number}" Width="*"/><DataGridTextColumn Header="TYPE" Binding="{Binding Type, Converter={StaticResource EnumFr}}"/><DataGridTextColumn Header="DATE" Binding="{Binding IssuedAt,StringFormat=dd/MM/yyyy HH:mm}"/><DataGridTextColumn Header="IMPR." Binding="{Binding PrintCount}"/></DataGrid.Columns></DataGrid>
-      <WrapPanel Grid.Row="2" Margin="0,8,0,0"><Button Content="Duplicata thermique" Command="{Binding DuplicateCommand}"/><Button Content="Exporter PDF" Command="{Binding ExportPdfCommand}"/><Button Content="Imprimer A4" Command="{Binding PrintA4Command}" Style="{StaticResource PrimaryButton}"/></WrapPanel>
+      <WrapPanel Grid.Row="2" Margin="0,8,0,0"><Button Content="Aperçu" Command="{Binding PreviewDocumentCommand}" Style="{StaticResource PrimaryButton}"/><Button Content="Duplicata thermique" Command="{Binding DuplicateCommand}"/><Button Content="Exporter PDF" Command="{Binding ExportPdfCommand}"/><Button Content="Imprimer A4" Command="{Binding PrintA4Command}"/></WrapPanel>
     </Grid>
     <Grid Grid.Column="1">
       <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>

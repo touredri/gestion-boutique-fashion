@@ -105,7 +105,7 @@ public sealed class DocumentService(IDbContextFactory<BoutiqueDbContext> factory
         var doc = new DocumentSnapshot { Type = DocumentType.Proforma, Number = number, JsonPayload = JsonSerializer.Serialize(receipt) }; db.DocumentSnapshots.Add(doc); await db.SaveChangesAsync(cancellationToken); return doc;
     }
 
-    public async Task<ReceiptData> GetReceiptAsync(Guid documentId, bool duplicate, CancellationToken cancellationToken = default) { await using var db = await factory.CreateDbContextAsync(cancellationToken); var doc = await db.DocumentSnapshots.SingleAsync(x => x.Id == documentId, cancellationToken); var receipt = JsonSerializer.Deserialize<ReceiptData>(doc.JsonPayload) ?? throw new InvalidDataException(); return receipt with { IsDuplicate = duplicate || doc.PrintCount > 0 }; }
+    public async Task<ReceiptData> GetReceiptAsync(Guid documentId, bool duplicate, CancellationToken cancellationToken = default) { await using var db = await factory.CreateDbContextAsync(cancellationToken); var doc = await db.DocumentSnapshots.SingleAsync(x => x.Id == documentId, cancellationToken); var receipt = JsonSerializer.Deserialize<ReceiptData>(doc.JsonPayload) ?? throw new InvalidDataException(); return receipt with { Kind = doc.Type, IsDuplicate = duplicate || doc.PrintCount > 0 }; }
 
     public Task<ReceiptData> BuildSampleAsync(DocumentType type, CancellationToken cancellationToken = default)
     {

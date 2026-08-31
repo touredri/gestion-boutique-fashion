@@ -23,7 +23,8 @@ public sealed record DashboardSummary(long SalesXof, long CollectedXof, long Gro
 public sealed record RecentSaleRow(string Number, string Time, string Customer, long TotalXof);
 public sealed record PrinterProfile(string Name, PrinterConnectionKind ConnectionKind, string Address, PaperWidth PaperWidth, bool CutPaper = true);
 public sealed record ReceiptItem(string Description, decimal Quantity, long UnitPriceXof, long DiscountXof, long TotalXof);
-public sealed record ReceiptData(string ShopName, string? Address, string? Phone, string Number, DateTimeOffset IssuedAt, string? Customer, IReadOnlyList<ReceiptItem> Items, long SubtotalXof, long DiscountXof, long TotalXof, IReadOnlyList<PaymentDraft> Payments, string Footer, bool IsDuplicate = false, string? Email = null, string? TaxId = null, string? Slogan = null, string? LogoPath = null, string? StampPath = null, string? SignaturePath = null, string? ReturnPolicy = null, long ChangeXof = 0, DocumentStyle Style = DocumentStyle.Moderne);
+public sealed record TicketLine(string Text, bool Bold = false, bool DoubleHeight = false);
+public sealed record ReceiptData(string ShopName, string? Address, string? Phone, string Number, DateTimeOffset IssuedAt, string? Customer, IReadOnlyList<ReceiptItem> Items, long SubtotalXof, long DiscountXof, long TotalXof, IReadOnlyList<PaymentDraft> Payments, string Footer, bool IsDuplicate = false, string? Email = null, string? TaxId = null, string? Slogan = null, string? LogoPath = null, string? StampPath = null, string? SignaturePath = null, string? ReturnPolicy = null, long ChangeXof = 0, DocumentStyle Style = DocumentStyle.Moderne, DocumentType Kind = DocumentType.Receipt);
 public sealed record ImportRow(string Product, string Category, string? Brand, string Sku, string? Barcode, string? Size, string? Color, long CostXof, long PriceXof, decimal Quantity, decimal AlertThreshold);
 public sealed record ImportIssue(int Line, string Message);
 public sealed record ImportPreview(IReadOnlyList<ImportRow> Rows, IReadOnlyList<ImportIssue> Issues);
@@ -100,6 +101,8 @@ public interface ICashSessionService
 public interface IThermalPrinterService
 {
     IReadOnlyList<PrinterProfile> Discover();
+    IReadOnlyList<TicketLine> Preview(ReceiptData receipt, PaperWidth paperWidth = PaperWidth.Mm80);
+    Task<string> DiagnoseAsync(PrinterProfile printer, CancellationToken cancellationToken = default);
     Task PrintTestAsync(PrinterProfile printer, CancellationToken cancellationToken = default);
     Task PrintReceiptAsync(PrinterProfile printer, ReceiptData receipt, CancellationToken cancellationToken = default);
 }
@@ -107,7 +110,8 @@ public interface IThermalPrinterService
 public interface IA4DocumentService
 {
     byte[] CreateInvoicePdf(ReceiptData data);
-    Task PrintInvoiceAsync(ReceiptData data, string? printerName = null, CancellationToken cancellationToken = default);
+    byte[] CreatePreviewImage(ReceiptData data);
+    Task<string> PrintInvoiceAsync(ReceiptData data, string? printerName = null, CancellationToken cancellationToken = default);
 }
 
 public interface IPrintQueueService

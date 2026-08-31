@@ -74,7 +74,8 @@ internal static class DocumentReceiptFactory
             await Setting("Shop.Stamp"),
             await Setting("Shop.Signature"),
             await Setting("Shop.ReturnPolicy"),
-            changeXof);
+            changeXof,
+            Kind: type);
         return await ApplyTemplateAsync(db, type, receipt, cancellationToken);
     }
 

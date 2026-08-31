@@ -1,10 +1,13 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.IO;
 using System.Text.Json;
 using System.Windows;
+using System.Windows.Media.Imaging;
 using BoutiqueFashion.Application;
 using BoutiqueFashion.Domain;
 using BoutiqueFashion.Infrastructure;
+using BoutiqueFashion.App.Views;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -127,7 +130,7 @@ public partial class SaleViewModel(ICatalogService catalog, ICustomerService cus
         foreach (var p in printerService.Discover()) Printers.Add(p);
         var tcp = await settings.GetAsync("Printer.Tcp");
         if (!string.IsNullOrWhiteSpace(tcp)) Printers.Add(new PrinterProfile($"Thermique réseau {tcp}", PrinterConnectionKind.TcpIp, tcp, PaperWidth.Mm80));
-        if (SelectedPrinter is null) { var saved = await settings.GetAsync("Printer.Selected"); SelectedPrinter = saved is null ? Printers.FirstOrDefault() : JsonSerializer.Deserialize<PrinterProfile>(saved); }
+        if (SelectedPrinter is null) SelectedPrinter = await PrinterStore.LoadAsync(settings, printerService) ?? Printers.FirstOrDefault();
     }
 
     private async Task RefreshCustomersAsync()
@@ -144,7 +147,7 @@ public partial class SaleViewModel(ICatalogService catalog, ICustomerService cus
     [RelayCommand] private void Decrement(CartLineViewModel line) { if (line.Quantity > 1) line.Quantity--; }
     [RelayCommand] private void QuickPay(PaymentMode mode) { Payments.Clear(); var line = new PaymentLineViewModel { Mode = mode, AmountXof = PayableXof }; line.PropertyChanged += (_, _) => { OnPropertyChanged(nameof(PaymentTotalXof)); OnPropertyChanged(nameof(ChangePreview)); }; Payments.Add(line); OnPropertyChanged(nameof(PaymentTotalXof)); OnPropertyChanged(nameof(ChangePreview)); }
     partial void OnSelectedPrinterChanged(PrinterProfile? value) { if (value is not null) _ = PersistPrinterAsync(value); }
-    private async Task PersistPrinterAsync(PrinterProfile value) { try { await settings.SetAsync("Printer.Selected", JsonSerializer.Serialize(value), "Vendeur boutique"); } catch { } }
+    private async Task PersistPrinterAsync(PrinterProfile value) { try { await PrinterStore.SaveAsync(settings, value); } catch { } }
     [RelayCommand] private async Task OpenCash() { try { await cash.OpenAsync(long.Parse(OpeningFloat)); Status = "Caisse ouverte"; } catch (Exception e) { Status = e.Message; } }
     [RelayCommand] private void AddPayment() { var line = new PaymentLineViewModel { AmountXof = Math.Max(0, PayableXof - Payments.Sum(x => x.AmountXof)) }; line.PropertyChanged += (_, _) => { OnPropertyChanged(nameof(PaymentTotalXof)); OnPropertyChanged(nameof(ChangePreview)); }; Payments.Add(line); OnPropertyChanged(nameof(PaymentTotalXof)); OnPropertyChanged(nameof(ChangePreview)); }
     [RelayCommand] private void RemovePayment(PaymentLineViewModel line) { Payments.Remove(line); OnPropertyChanged(nameof(PaymentTotalXof)); OnPropertyChanged(nameof(ChangePreview)); }
@@ -162,16 +165,18 @@ public partial class SaleViewModel(ICatalogService catalog, ICustomerService cus
             DateTimeOffset? creditDue = hasCredit ? DateTimeOffset.Parse(CreditDueDate) : null;
             var draft = new SaleDraft(key, Cart.Select(x => new SaleLineDraft(x.Variant.Id, x.Quantity, x.EffectiveDiscountKind, x.DiscountValue)).ToArray(), paymentDrafts, SelectedCustomer?.Id, DiscountPercent == 0 ? DiscountKind.None : DiscountKind.Percentage, DiscountPercent, DiscountReason, ManagerPin, creditDue);
             var result = await sales.CreateAsync(draft);
+            var message = $"Vente {result.Number} enregistrée.";
             Status = $"Vente {result.Number} enregistrée";
-            if (result.ChangeXof > 0) Status += $" • Monnaie à rendre : {result.ChangeXof:N0} FCFA";
-            if (result.HasNegativeStock) Status += " • Alerte : stock négatif à régulariser";
+            if (result.ChangeXof > 0) { Status += $" • Monnaie à rendre : {result.ChangeXof:N0} FCFA"; message += $"\nMonnaie à rendre : {result.ChangeXof:N0} FCFA."; }
+            if (result.HasNegativeStock) { Status += " • Alerte : stock négatif à régulariser"; message += "\nAlerte : stock négatif à régulariser."; }
             if (SelectedPrinter is not null)
             {
-                try { var receipt = await documents.GetReceiptAsync(result.DocumentId, false); await printerService.PrintReceiptAsync(SelectedPrinter, receipt); await documents.MarkPrintedAsync(result.DocumentId); }
-                catch (Exception e) { Status += $" • Impression: {e.Message}"; }
+                try { var receipt = await documents.GetReceiptAsync(result.DocumentId, false); await printerService.PrintReceiptAsync(SelectedPrinter, receipt); await documents.MarkPrintedAsync(result.DocumentId); message += "\nTicket imprimé."; }
+                catch (Exception e) { Status += $" • Impression: {e.Message}"; message += $"\nImpression échouée : {e.Message}"; }
             }
             Cart.Clear(); Payments.Clear(); DiscountPercent = 0;
             OnPropertyChanged(nameof(TotalXof)); OnPropertyChanged(nameof(PayableXof)); OnPropertyChanged(nameof(PaymentTotalXof));
+            UiFeedback.Success(message);
             await LoadAsync();
         }
         catch (Exception e) { Status = e.Message; } finally { IsBusy = false; }
@@ -602,11 +607,28 @@ public partial class DocumentsViewModel(IDocumentService documents, IReturnServi
     [ObservableProperty] private DocumentListItem? selectedDocument; [ObservableProperty] private string saleNumber = ""; [ObservableProperty] private string returnedSku = ""; [ObservableProperty] private string returnedQuantity = "1"; [ObservableProperty] private string replacementSku = ""; [ObservableProperty] private string replacementQuantity = "1"; [ObservableProperty] private string exchangePaymentAmount = "0"; [ObservableProperty] private PaymentMode exchangePaymentMode = PaymentMode.Cash; [ObservableProperty] private string exchangePaymentReference = ""; [ObservableProperty] private string reason = ""; [ObservableProperty] private string managerPin = ""; [ObservableProperty] private bool restock = true; [ObservableProperty] private string proformaDescription = "Article"; [ObservableProperty] private string proformaTotal = "0"; [ObservableProperty] private string status = "";
     private PrinterProfile? printer;
 
-    public async Task LoadAsync() { Items.Clear(); foreach (var x in await documents.ListAsync(Search)) Items.Add(x); var saved = await settings.GetAsync("Printer.Selected"); printer = saved is null ? printers.Discover().FirstOrDefault() : JsonSerializer.Deserialize<PrinterProfile>(saved); }
+    public async Task LoadAsync() { Items.Clear(); foreach (var x in await documents.ListAsync(Search)) Items.Add(x); printer = await PrinterStore.LoadAsync(settings, printers); }
     [RelayCommand] private async Task Refresh() => await LoadAsync();
-    [RelayCommand] private async Task Duplicate() { if (SelectedDocument is null || printer is null) return; try { var receipt = await documents.GetReceiptAsync(SelectedDocument.Id, true); await printers.PrintReceiptAsync(printer, receipt); await documents.MarkPrintedAsync(SelectedDocument.Id); Status = "Duplicata imprimé"; await LoadAsync(); } catch (Exception e) { Status = e.Message; } }
+    [RelayCommand] private async Task PreviewDocument()
+    {
+        if (SelectedDocument is null) { Status = "Sélectionnez d'abord un document."; return; }
+        try
+        {
+            var paper = (await settings.GetAsync("Printer.PaperWidth") ?? "80") == "58" ? PaperWidth.Mm58 : PaperWidth.Mm80;
+            var receipt = await documents.GetReceiptAsync(SelectedDocument.Id, SelectedDocument.PrintCount > 0);
+            TicketPreviewWindow.Show(printers.Preview(receipt, paper), $"Aperçu ticket · {SelectedDocument.Number}", paper);
+            Status = "Aperçu affiché";
+        }
+        catch (Exception e) { Status = e.Message; }
+    }
+    [RelayCommand] private async Task Duplicate()
+    {
+        if (SelectedDocument is null) { Status = "Sélectionnez d'abord un document."; return; }
+        if (printer is null) { Status = "Aucune imprimante sélectionnée (Paramètres → Impression)."; return; }
+        try { var receipt = await documents.GetReceiptAsync(SelectedDocument.Id, true); await printers.PrintReceiptAsync(printer, receipt); await documents.MarkPrintedAsync(SelectedDocument.Id); Status = "Duplicata imprimé"; await LoadAsync(); } catch (Exception e) { Status = e.Message; }
+    }
     [RelayCommand] private async Task ExportPdf() { if (SelectedDocument is null) return; try { var receipt = await documents.GetReceiptAsync(SelectedDocument.Id, SelectedDocument.PrintCount > 0); var dialog = new Microsoft.Win32.SaveFileDialog { FileName = $"{SelectedDocument.Number}.pdf", Filter = "Document PDF (*.pdf)|*.pdf" }; if (dialog.ShowDialog() != true) return; await File.WriteAllBytesAsync(dialog.FileName, a4.CreateInvoicePdf(receipt)); Status = "PDF exporté"; } catch (Exception e) { Status = e.Message; } }
-    [RelayCommand] private async Task PrintA4() { if (SelectedDocument is null) return; try { var dialog = new System.Windows.Controls.PrintDialog(); if (dialog.ShowDialog() != true) return; var receipt = await documents.GetReceiptAsync(SelectedDocument.Id, SelectedDocument.PrintCount > 0); await a4.PrintInvoiceAsync(receipt, dialog.PrintQueue.FullName); await documents.MarkPrintedAsync(SelectedDocument.Id); Status = "Document envoyé à l’imprimante A4"; await LoadAsync(); } catch (Exception e) { Status = e.Message; } }
+    [RelayCommand] private async Task PrintA4() { if (SelectedDocument is null) return; try { var dialog = new System.Windows.Controls.PrintDialog(); if (dialog.ShowDialog() != true) return; var receipt = await documents.GetReceiptAsync(SelectedDocument.Id, SelectedDocument.PrintCount > 0); var path = await a4.PrintInvoiceAsync(receipt, dialog.PrintQueue.FullName); await documents.MarkPrintedAsync(SelectedDocument.Id); Status = $"Document envoyé à l'imprimante A4 · Copie : {path}"; await LoadAsync(); } catch (Exception e) { Status = e.Message; } }
 
     [RelayCommand] private async Task ReturnExchange()
     {
@@ -706,9 +728,17 @@ public partial class SettingsViewModel(IAuthorizationService authorization, IApp
     public ObservableCollection<PrinterProfile> Printers { get; } = [];
     public IReadOnlyList<DocumentType> DocumentTypes { get; } = Enum.GetValues<DocumentType>();
     public IReadOnlyList<string> Styles { get; } = ["Classique", "Moderne", "Minimal"];
+    public IReadOnlyList<string> RenderModes { get; } = ["ESC/POS brut (recommandé)", "Rendu Windows (si rien ne sort)"];
+    public IReadOnlyList<int> SerialBauds { get; } = [9600, 19200, 38400, 57600, 115200];
+    public IReadOnlyList<string> PaperWidthOptions { get; } = ["58 mm", "80 mm"];
     [ObservableProperty] private string selectedStyle = "Moderne";
     [ObservableProperty] private string networkPrinter = "";
     [ObservableProperty] private PrinterProfile? selectedPrinter;
+    [ObservableProperty] private bool cutPaper = true;
+    [ObservableProperty] private string selectedRenderMode = "ESC/POS brut (recommandé)";
+    [ObservableProperty] private int serialBaud = 9600;
+    [ObservableProperty] private string selectedPaperWidthOption = "80 mm";
+    [ObservableProperty] private System.Windows.Media.ImageSource? previewImage;
     [ObservableProperty] private string shopName = string.Empty; [ObservableProperty] private string pin = string.Empty; [ObservableProperty] private string newPin = string.Empty; [ObservableProperty] private string status = string.Empty;
     [ObservableProperty] private string address = ""; [ObservableProperty] private string phone = ""; [ObservableProperty] private string email = ""; [ObservableProperty] private string taxId = ""; [ObservableProperty] private string slogan = ""; [ObservableProperty] private string footer = "Merci de votre visite"; [ObservableProperty] private string returnPolicy = "Échange ou avoir sous 7 jours"; [ObservableProperty] private string logoPath = ""; [ObservableProperty] private string stampPath = ""; [ObservableProperty] private string signaturePath = "";
     [ObservableProperty] private string seqReceipt = "TIC"; [ObservableProperty] private string seqInvoice = "FAC"; [ObservableProperty] private string seqProforma = "PRO"; [ObservableProperty] private string seqDeposit = "DEP"; [ObservableProperty] private string seqCreditPayment = "REC"; [ObservableProperty] private string seqBalance = "SOL"; [ObservableProperty] private string seqCreditNote = "AVO"; [ObservableProperty] private string seqReturnNote = "RET";
@@ -723,7 +753,11 @@ public partial class SettingsViewModel(IAuthorizationService authorization, IApp
         VarianceTolerance = await settings.GetAsync("Cash.VarianceToleranceXof") ?? VarianceTolerance;
         VipRevenue = await settings.GetAsync("Loyalty.VipRevenueXof") ?? VipRevenue; LoyalPurchases = await settings.GetAsync("Loyalty.LoyalPurchases") ?? LoyalPurchases; InactiveDays = await settings.GetAsync("Loyalty.InactiveDays") ?? InactiveDays; NewDays = await settings.GetAsync("Loyalty.NewDays") ?? NewDays;
         await LoadPrintersAsync();
-        var saved = await settings.GetAsync("Printer.Selected"); SelectedPrinter = saved is null ? Printers.FirstOrDefault() : JsonSerializer.Deserialize<PrinterProfile>(saved);
+        SelectedPrinter = await PrinterStore.LoadAsync(settings, printer) ?? Printers.FirstOrDefault();
+        CutPaper = (await settings.GetAsync("Printer.CutPaper") ?? "1") == "1";
+        SelectedRenderMode = (await settings.GetAsync("Printer.RenderMode") ?? "Raw") == "Gdi" ? RenderModes[1] : RenderModes[0];
+        SerialBaud = int.TryParse(await settings.GetAsync("Printer.SerialBaud"), out var baud) && SerialBauds.Contains(baud) ? baud : 9600;
+        SelectedPaperWidthOption = (await settings.GetAsync("Printer.PaperWidth") ?? "80") == "58" ? "58 mm" : "80 mm";
         NetworkPrinter = await settings.GetAsync("Printer.Tcp") ?? "";
         await LoadFlagsAsync();
     }
@@ -734,6 +768,62 @@ public partial class SettingsViewModel(IAuthorizationService authorization, IApp
         foreach (var p in printer.Discover()) Printers.Add(p);
         var tcp = await settings.GetAsync("Printer.Tcp");
         if (!string.IsNullOrWhiteSpace(tcp)) Printers.Add(new PrinterProfile($"Thermique réseau {tcp}", PrinterConnectionKind.TcpIp, tcp, PaperWidth.Mm80));
+    }
+
+    partial void OnSelectedPrinterChanged(PrinterProfile? value) { if (value is not null) _ = PrinterStore.SaveAsync(settings, value); }
+
+    partial void OnCutPaperChanged(bool value) { _ = PersistCutPaperAsync(value); }
+
+    private async Task PersistCutPaperAsync(bool value)
+    {
+        try { await settings.SetAsync("Printer.CutPaper", value ? "1" : "0"); Status = value ? "Découpe du papier activée." : "Découpe du papier désactivée."; }
+        catch (Exception e) { Status = e.Message; }
+    }
+
+    partial void OnSelectedRenderModeChanged(string value) => _ = PersistRenderModeAsync(value);
+
+    private async Task PersistRenderModeAsync(string value)
+    {
+        try
+        {
+            var mode = value.StartsWith("Rendu", StringComparison.Ordinal) ? "Gdi" : "Raw";
+            await settings.SetAsync("Printer.RenderMode", mode);
+            Status = mode == "Gdi" ? "Mode Rendu Windows activé : lancez un ticket test." : "Mode ESC/POS brut activé.";
+        }
+        catch (Exception e) { Status = e.Message; }
+    }
+
+    partial void OnSerialBaudChanged(int value) { _ = PersistSerialBaudAsync(value); }
+
+    private async Task PersistSerialBaudAsync(int value)
+    {
+        try { await settings.SetAsync("Printer.SerialBaud", value.ToString(CultureInfo.InvariantCulture)); Status = $"Vitesse série réglée à {value} bauds."; }
+        catch (Exception e) { Status = e.Message; }
+    }
+
+    partial void OnSelectedPaperWidthOptionChanged(string value) { _ = PersistPaperWidthAsync(value); }
+
+    private async Task PersistPaperWidthAsync(string value)
+    {
+        try
+        {
+            var width = value.StartsWith("58", StringComparison.Ordinal) ? "58" : "80";
+            await settings.SetAsync("Printer.PaperWidth", width);
+            Status = $"Largeur du rouleau réglée sur {width} mm.";
+        }
+        catch (Exception e) { Status = e.Message; }
+    }
+
+    [RelayCommand] private async Task DiagnosePrinter()
+    {
+        if (SelectedPrinter is null) { Status = "Sélectionnez d'abord une imprimante."; return; }
+        try
+        {
+            var report = await printer.DiagnoseAsync(SelectedPrinter);
+            Status = "Diagnostic terminé.";
+            System.Windows.MessageBox.Show(report, $"Diagnostic · {SelectedPrinter.Name}", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception e) { Status = e.Message; }
     }
 
     [RelayCommand] private async Task AddNetworkPrinter()
@@ -765,6 +855,7 @@ public partial class SettingsViewModel(IAuthorizationService authorization, IApp
             SelectedStyle = Styles.Contains(style) ? style : "Moderne";
         }
         catch { }
+        await RefreshPreviewAsync();
     }
 
     [RelayCommand] private async Task Save()
@@ -796,24 +887,69 @@ public partial class SettingsViewModel(IAuthorizationService authorization, IApp
     [RelayCommand] private async Task Backup() { try { Status = $"Sauvegarde: {await backup.CreateAsync()}"; } catch (Exception e) { Status = e.Message; } }
     [RelayCommand] private async Task TestPrinter() { if (SelectedPrinter is null) { Status = "Sélectionnez d'abord une imprimante."; return; } try { await printer.PrintTestAsync(SelectedPrinter); Status = $"Ticket test envoyé vers « {SelectedPrinter.Name} »."; } catch (Exception e) { Status = $"Échec du test sur « {SelectedPrinter.Name} » : {e.Message}"; } }
 
+    private async Task<ReceiptData> BuildSampleWithFlagsAsync()
+    {
+        var sample = await documents.BuildSampleAsync(SelectedDocType);
+        var style = Enum.TryParse<DocumentStyle>(SelectedStyle, true, out var parsed) ? parsed : DocumentStyle.Moderne;
+        return sample with
+        {
+            Style = style,
+            LogoPath = FlagLogo ? sample.LogoPath : null,
+            Slogan = FlagSlogan ? sample.Slogan : null,
+            StampPath = FlagStamp ? sample.StampPath : null,
+            SignaturePath = FlagSignature ? sample.SignaturePath : null
+        };
+    }
+
+    private int previewToken;
+
+    private async Task RefreshPreviewAsync()
+    {
+        try
+        {
+            var token = ++previewToken;
+            var sample = await BuildSampleWithFlagsAsync();
+            var png = await Task.Run(() => a4.CreatePreviewImage(sample));
+            if (token != previewToken) return;
+            var image = new BitmapImage();
+            using var stream = new MemoryStream(png);
+            image.BeginInit();
+            image.CacheOption = BitmapCacheOption.OnLoad;
+            image.StreamSource = stream;
+            image.EndInit();
+            image.Freeze();
+            PreviewImage = image;
+        }
+        catch { }
+    }
+
+    partial void OnSelectedStyleChanged(string value) => _ = RefreshPreviewAsync();
+    partial void OnFlagLogoChanged(bool value) => _ = RefreshPreviewAsync();
+    partial void OnFlagSloganChanged(bool value) => _ = RefreshPreviewAsync();
+    partial void OnFlagStampChanged(bool value) => _ = RefreshPreviewAsync();
+    partial void OnFlagSignatureChanged(bool value) => _ = RefreshPreviewAsync();
+
     [RelayCommand] private async Task PreviewTemplate()
     {
         try
         {
-            var sample = await documents.BuildSampleAsync(SelectedDocType);
-            var style = Enum.TryParse<DocumentStyle>(SelectedStyle, true, out var parsed) ? parsed : DocumentStyle.Moderne;
-            sample = sample with
-            {
-                Style = style,
-                LogoPath = FlagLogo ? sample.LogoPath : null,
-                Slogan = FlagSlogan ? sample.Slogan : null,
-                StampPath = FlagStamp ? sample.StampPath : null,
-                SignaturePath = FlagSignature ? sample.SignaturePath : null
-            };
+            var sample = await BuildSampleWithFlagsAsync();
             var path = Path.Combine(Path.GetTempPath(), $"apercu-{SelectedDocType}-{Guid.NewGuid():N}.pdf");
             await File.WriteAllBytesAsync(path, a4.CreateInvoicePdf(sample));
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true });
             Status = $"Aperçu {SelectedStyle} · {SelectedDocType} ouvert";
+        }
+        catch (Exception e) { Status = e.Message; }
+    }
+
+    [RelayCommand] private async Task PreviewTicket()
+    {
+        try
+        {
+            var paper = SelectedPaperWidthOption.StartsWith("58", StringComparison.Ordinal) ? PaperWidth.Mm58 : PaperWidth.Mm80;
+            var sample = await BuildSampleWithFlagsAsync();
+            TicketPreviewWindow.Show(printer.Preview(sample, paper), $"Aperçu ticket · {SelectedStyle} · {Libelles.Text(SelectedDocType)}", paper);
+            Status = $"Aperçu ticket {SelectedStyle} · {SelectedDocType} affiché";
         }
         catch (Exception e) { Status = e.Message; }
     }
