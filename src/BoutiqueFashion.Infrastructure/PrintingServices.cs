@@ -157,7 +157,7 @@ internal static class EscPosTicketLayout
 
     private static List<TicketLine> BuildClassique(ReceiptData receipt, int width)
     {
-        var lines = new List<TicketLine> { new(Center(receipt.ShopName.ToUpperInvariant(), width), true, true) };
+        var lines = new List<TicketLine> { new(Center(receipt.ShopName.ToUpperInvariant(), width), true) };
         if (!string.IsNullOrWhiteSpace(receipt.Address)) lines.Add(new TicketLine(Center(receipt.Address, width)));
         if (!string.IsNullOrWhiteSpace(receipt.Phone)) lines.Add(new TicketLine(Center(receipt.Phone, width)));
         lines.Add(new TicketLine(new string('-', width)));
@@ -185,7 +185,7 @@ internal static class EscPosTicketLayout
 
     private static List<TicketLine> BuildModerne(ReceiptData receipt, int width)
     {
-        var lines = new List<TicketLine> { new(Center(receipt.ShopName.ToUpperInvariant(), width), true, true) };
+        var lines = new List<TicketLine> { new(Center(receipt.ShopName.ToUpperInvariant(), width), true) };
         if (!string.IsNullOrWhiteSpace(receipt.Slogan)) lines.Add(new TicketLine(Center(Fit($"* {receipt.Slogan} *", width), width)));
         if (!string.IsNullOrWhiteSpace(receipt.Address)) lines.Add(new TicketLine(Center(Fit(receipt.Address, width), width)));
         if (!string.IsNullOrWhiteSpace(receipt.Phone)) lines.Add(new TicketLine(Center(Fit($"Tel. {receipt.Phone}", width), width)));
