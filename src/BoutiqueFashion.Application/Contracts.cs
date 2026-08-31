@@ -162,12 +162,15 @@ public interface ICustomerService
     Task<Customer?> GetAsync(Guid customerId, CancellationToken cancellationToken = default);
     Task<Customer> CreateAsync(string name, string? phone, long creditLimitXof, CancellationToken cancellationToken = default, string? gender = null, string? preferences = null, string? channel = null, bool marketingConsent = false);
     Task<Customer> UpdateAsync(CustomerUpdateRequest request, CancellationToken cancellationToken = default);
+    Task ArchiveAsync(Guid customerId, string managerPin, CancellationToken cancellationToken = default);
+    Task DeleteAsync(Guid customerId, string managerPin, CancellationToken cancellationToken = default);
     Task<CustomerHistory> HistoryAsync(Guid customerId, CancellationToken cancellationToken = default);
 }
 
 public interface IExpenseService
 {
     Task<Expense> CreateAsync(string category, string description, long amountXof, PaymentMode mode, CancellationToken cancellationToken = default);
+    Task DeleteAsync(Guid expenseId, string managerPin, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<Expense>> ListRecentAsync(int count = 20, CancellationToken cancellationToken = default);
 }
 

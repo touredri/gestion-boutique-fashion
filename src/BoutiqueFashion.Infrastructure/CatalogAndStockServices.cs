@@ -169,7 +169,7 @@ public sealed class StockService(IDbContextFactory<BoutiqueDbContext> factory, I
     }
 }
 
-public sealed class CustomerService(IDbContextFactory<BoutiqueDbContext> factory) : ICustomerService
+public sealed class CustomerService(IDbContextFactory<BoutiqueDbContext> factory, IAuthorizationService authorization) : ICustomerService
 {
     public async Task<IReadOnlyList<CustomerRow>> SearchAsync(string? query, CancellationToken cancellationToken = default)
     {
@@ -246,6 +246,32 @@ public sealed class CustomerService(IDbContextFactory<BoutiqueDbContext> factory
         return customer;
     }
 
+    public async Task ArchiveAsync(Guid customerId, string managerPin, CancellationToken cancellationToken = default)
+    {
+        if (!await authorization.AuthorizeSensitiveActionAsync(managerPin, "Archiver client", cancellationToken: cancellationToken)) throw new UnauthorizedAccessException("PIN responsable invalide.");
+        await using var db = await factory.CreateDbContextAsync(cancellationToken);
+        var customer = await db.Customers.SingleOrDefaultAsync(x => x.Id == customerId, cancellationToken) ?? throw new KeyNotFoundException("Client introuvable.");
+        var outstanding = await db.CustomerCredits.Where(c => c.CustomerId == customerId && c.Status != CreditStatus.Paid && c.Status != CreditStatus.Cancelled).SumAsync(c => c.BalanceXof, cancellationToken);
+        if (outstanding > 0) throw new InvalidOperationException("Archivage impossible : le client a un solde de crédit en cours.");
+        customer.IsArchived = true; customer.UpdatedAt = DateTimeOffset.UtcNow;
+        db.AuditEntries.Add(new AuditEntry { Actor = "Responsable", Action = "Archiver client", EntityType = nameof(Customer), EntityId = customer.Id.ToString(), BeforeJson = JsonSerializer.Serialize(new { customer.Name, customer.Phone }) });
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task DeleteAsync(Guid customerId, string managerPin, CancellationToken cancellationToken = default)
+    {
+        if (!await authorization.AuthorizeSensitiveActionAsync(managerPin, "Supprimer client", cancellationToken: cancellationToken)) throw new UnauthorizedAccessException("PIN responsable invalide.");
+        await using var db = await factory.CreateDbContextAsync(cancellationToken);
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        var customer = await db.Customers.SingleOrDefaultAsync(x => x.Id == customerId, cancellationToken) ?? throw new KeyNotFoundException("Client introuvable.");
+        var hasHistory = await db.Sales.AnyAsync(s => s.CustomerId == customerId, cancellationToken) || await db.CustomerCredits.AnyAsync(c => c.CustomerId == customerId, cancellationToken);
+        if (hasHistory) throw new InvalidOperationException("Suppression impossible : le client a un historique. Utilisez « Archiver ».");
+        db.Customers.Remove(customer);
+        db.AuditEntries.Add(new AuditEntry { Actor = "Responsable", Action = "Supprimer client", EntityType = nameof(Customer), EntityId = customer.Id.ToString(), BeforeJson = JsonSerializer.Serialize(new { customer.Name, customer.Phone }) });
+        await db.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+    }
+
     public async Task<CustomerHistory> HistoryAsync(Guid customerId, CancellationToken cancellationToken = default)
     {
         await using var db = await factory.CreateDbContextAsync(cancellationToken);
@@ -273,7 +299,7 @@ public sealed class CustomerService(IDbContextFactory<BoutiqueDbContext> factory
     }
 }
 
-public sealed class ExpenseService(IDbContextFactory<BoutiqueDbContext> factory) : IExpenseService
+public sealed class ExpenseService(IDbContextFactory<BoutiqueDbContext> factory, IAuthorizationService authorization) : IExpenseService
 {
     public async Task<Expense> CreateAsync(string category, string description, long amountXof, PaymentMode mode, CancellationToken cancellationToken = default)
     {
@@ -284,6 +310,16 @@ public sealed class ExpenseService(IDbContextFactory<BoutiqueDbContext> factory)
         db.AuditEntries.Add(new AuditEntry { Actor = "Vendeur boutique", Action = "Créer dépense", EntityType = nameof(Expense), EntityId = expense.Id.ToString() });
         await db.SaveChangesAsync(cancellationToken);
         return expense;
+    }
+
+    public async Task DeleteAsync(Guid expenseId, string managerPin, CancellationToken cancellationToken = default)
+    {
+        if (!await authorization.AuthorizeSensitiveActionAsync(managerPin, "Supprimer dépense", cancellationToken: cancellationToken)) throw new UnauthorizedAccessException("PIN responsable invalide.");
+        await using var db = await factory.CreateDbContextAsync(cancellationToken);
+        var expense = await db.Expenses.SingleOrDefaultAsync(x => x.Id == expenseId, cancellationToken) ?? throw new KeyNotFoundException("Dépense introuvable.");
+        db.AuditEntries.Add(new AuditEntry { Actor = "Responsable", Action = "Supprimer dépense", EntityType = nameof(Expense), EntityId = expense.Id.ToString(), BeforeJson = JsonSerializer.Serialize(new { expense.Category, expense.AmountXof }) });
+        db.Expenses.Remove(expense);
+        await db.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<Expense>> ListRecentAsync(int count = 20, CancellationToken cancellationToken = default)

@@ -2,15 +2,24 @@
   <Grid Margin="14">
     <Grid.ColumnDefinitions><ColumnDefinition Width="1.35*"/><ColumnDefinition Width="440"/></Grid.ColumnDefinitions>
     <Grid Margin="0,0,8,0">
-      <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="1.25*"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+      <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="1.25*"/><RowDefinition Height="*"/></Grid.RowDefinitions>
       <Border Style="{StaticResource Card}" Margin="0,0,0,8" Padding="10">
         <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
           <TextBox Text="{Binding Search, UpdateSourceTrigger=PropertyChanged}" controls:Placeholder.Text="Nom ou téléphone" AutomationProperties.Name="Recherche client"/>
           <Button Grid.Column="1" Content="Rechercher" Command="{Binding SearchCustomersCommand}" Style="{StaticResource PrimaryButton}" VerticalAlignment="Bottom"/>
         </Grid>
       </Border>
-      <DataGrid Grid.Row="1" ItemsSource="{Binding Items}" SelectedItem="{Binding SelectedCustomer}"><DataGrid.Columns><DataGridTextColumn Header="CLIENT" Binding="{Binding Name}" Width="*"/><DataGridTextColumn Header="TÉLÉPHONE" Binding="{Binding Phone}"/><DataGridTextColumn Header="SEGMENT" Binding="{Binding Segment, Converter={StaticResource EnumFr}}"/><DataGridTextColumn Header="RESTE DÛ" Binding="{Binding OutstandingXof,StringFormat={}{0:N0}}"/></DataGrid.Columns></DataGrid>
-      <Grid Grid.Row="2" Margin="0,8,0,0">
+      <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,0,0,8" Padding="10">
+        <WrapPanel>
+          <Button Content="Modifier la fiche" Command="{Binding EditCustomerCommand}" Style="{StaticResource PrimaryButton}"/>
+          <Button Content="Archiver" Command="{Binding ArchiveCustomerCommand}"/>
+          <Button Content="Supprimer" Command="{Binding DeleteCustomerCommand}" Style="{StaticResource DangerButton}"/>
+          <StackPanel Width="170"><TextBlock Text="PIN responsable" Style="{StaticResource FieldLabel}"/><controls:KeypadField Value="{Binding ManagerPin}" Mask="True" Title="PIN responsable"/></StackPanel>
+          <TextBlock Text="{Binding Status}" Style="{StaticResource HelperText}" VerticalAlignment="Center" Margin="10,0,0,0"/>
+        </WrapPanel>
+      </Border>
+      <DataGrid Grid.Row="2" ItemsSource="{Binding Items}" SelectedItem="{Binding SelectedCustomer}"><DataGrid.Columns><DataGridTextColumn Header="CLIENT" Binding="{Binding Name}" Width="*"/><DataGridTextColumn Header="TÉLÉPHONE" Binding="{Binding Phone}"/><DataGridTextColumn Header="SEGMENT" Binding="{Binding Segment, Converter={StaticResource EnumFr}}"/><DataGridTextColumn Header="RESTE DÛ" Binding="{Binding OutstandingXof,StringFormat={}{0:N0}}"/></DataGrid.Columns></DataGrid>
+      <Grid Grid.Row="3" Margin="0,8,0,0">
         <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
         <DataGrid ItemsSource="{Binding HistorySales}" Margin="0,0,4,0"><DataGrid.Columns><DataGridTextColumn Header="ACHATS" Binding="{Binding Number}" Width="*"/><DataGridTextColumn Header="DATE" Binding="{Binding Date,StringFormat=dd/MM/yy}"/><DataGridTextColumn Header="TOTAL" Binding="{Binding TotalXof,StringFormat={}{0:N0}}"/></DataGrid.Columns></DataGrid>
         <DataGrid Grid.Column="1" ItemsSource="{Binding HistoryPayments}" Margin="4,0,0,0"><DataGrid.Columns><DataGridTextColumn Header="VERSEMENTS" Binding="{Binding Number}" Width="*"/><DataGridTextColumn Header="VENTE" Binding="{Binding SaleNumber}"/><DataGridTextColumn Header="MONTANT" Binding="{Binding AmountXof,StringFormat={}{0:N0}}"/></DataGrid.Columns></DataGrid>
@@ -18,7 +27,7 @@
     </Grid>
     <Grid Grid.Column="1">
       <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-      <TabControl Padding="0">
+      <TabControl Padding="0" SelectedIndex="{Binding CustomerTab}">
       <TabItem Header="Fiche client">
         <Grid Margin="8,6">
           <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
@@ -40,7 +49,7 @@
               </Grid>
             </StackPanel>
           </Border>
-          <Expander Grid.Row="1" Header="Compléter la fiche du client sélectionné" Padding="0">
+          <Expander Grid.Row="1" Header="Compléter la fiche du client sélectionné" Padding="0" IsExpanded="{Binding EditExpanded}">
             <Border Style="{StaticResource Card}" Padding="12">
               <StackPanel>
                 <UniformGrid Columns="2">

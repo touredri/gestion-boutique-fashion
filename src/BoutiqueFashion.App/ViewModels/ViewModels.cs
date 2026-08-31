@@ -29,6 +29,11 @@ internal static class UiConfirm
     public static bool Ask(string message) => MessageBox.Show(message, "Confirmation requise", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
 }
 
+internal static class UiFeedback
+{
+    public static void Success(string message) => MessageBox.Show(message, "Succès", MessageBoxButton.OK, MessageBoxImage.Information);
+}
+
 internal static class AppNavigator
 {
     public static Func<string, Task>? Go { get; set; }
@@ -269,6 +274,7 @@ public partial class CatalogViewModel(ICatalogService catalog, IProductImportSer
                 }
             }
             Status = IsEditing ? "Modifications enregistrées" : $"{rows.Count} variante(s) ajoutée(s)";
+            UiFeedback.Success(Status);
             ResetForm();
             await LoadAsync();
         }
@@ -282,20 +288,6 @@ public partial class CatalogViewModel(ICatalogService catalog, IProductImportSer
         VariantRows.Add(new VariantRowViewModel());
         ProductName = Description = Brand = Cost = Price = string.Empty;
     }
-
-    [RelayCommand] private async Task CreateMatrix()
-    {
-        try
-        {
-            var colors = SplitList(MatrixColors); var sizes = SplitList(MatrixSizes);
-            var created = await catalog.CreateMatrixAsync(new MatrixDraft(ProductName, EffectiveCategory, MatrixPrefix, colors, sizes, long.Parse(Cost), long.Parse(Price), decimal.Parse(MatrixQuantity), 2, SelectedType, NullIfEmpty(Brand), NullIfEmpty(SubCategory), NullIfEmpty(Gender), NullIfEmpty(Season), NullIfEmpty(Material), NullIfEmpty(Supplier), NullIfEmpty(ManagerPin)));
-            Status = $"{created.Count} variantes uniques créées";
-            await LoadAsync();
-        }
-        catch (Exception e) { Status = e.Message; }
-    }
-
-    private static List<string> SplitList(string value) => value.Split([';', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
 
     [RelayCommand] private async Task BrowseImportFile()
     {
@@ -490,6 +482,8 @@ public partial class CustomersViewModel(ICustomerService customers, ICreditServi
     [ObservableProperty] private string name = string.Empty; [ObservableProperty] private string phone = string.Empty; [ObservableProperty] private string creditLimit = "0"; [ObservableProperty] private string status = string.Empty;
     [ObservableProperty] private string gender = string.Empty; [ObservableProperty] private string preferences = string.Empty; [ObservableProperty] private string channel = string.Empty; [ObservableProperty] private bool marketingConsent;
     [ObservableProperty] private CustomerRow? selectedCustomer;
+    [ObservableProperty] private int customerTab;
+    [ObservableProperty] private bool editExpanded;
     [ObservableProperty] private string editName = string.Empty; [ObservableProperty] private string editPhone = string.Empty; [ObservableProperty] private string editSecondaryPhone = string.Empty; [ObservableProperty] private string editGender = string.Empty; [ObservableProperty] private string editAddress = string.Empty; [ObservableProperty] private string editNotes = string.Empty; [ObservableProperty] private string editPreferences = string.Empty; [ObservableProperty] private string editChannel = string.Empty; [ObservableProperty] private bool editConsent; [ObservableProperty] private string editCreditLimit = "0";
     [ObservableProperty] private CreditSummary? selectedCredit; [ObservableProperty] private string paymentAmount = ""; [ObservableProperty] private PaymentMode paymentMode = PaymentMode.Cash; [ObservableProperty] private string paymentReference = ""; [ObservableProperty] private string managerPin = "";
 
@@ -500,7 +494,25 @@ public partial class CustomersViewModel(ICustomerService customers, ICreditServi
     }
 
     [RelayCommand] private async Task SearchCustomers() => await LoadAsync();
-    [RelayCommand] private async Task Create() { try { await customers.CreateAsync(Name, Phone, long.Parse(CreditLimit), default, NullIfEmpty(Gender), NullIfEmpty(Preferences), NullIfEmpty(Channel), MarketingConsent); Status = "Client ajouté"; Name = Phone = string.Empty; await LoadAsync(); } catch (Exception e) { Status = e.Message; } }
+    [RelayCommand] private async Task Create() { try { await customers.CreateAsync(Name, Phone, long.Parse(CreditLimit), default, NullIfEmpty(Gender), NullIfEmpty(Preferences), NullIfEmpty(Channel), MarketingConsent); Status = "Client ajouté"; UiFeedback.Success("Client ajouté."); Name = Phone = string.Empty; CreditLimit = "0"; MarketingConsent = false; await LoadAsync(); } catch (Exception e) { Status = e.Message; } }
+
+    [RelayCommand] private void EditCustomer() { if (SelectedCustomer is null) { Status = "Sélectionnez d'abord un client."; return; } CustomerTab = 0; EditExpanded = true; }
+
+    [RelayCommand] private async Task ArchiveCustomer()
+    {
+        if (SelectedCustomer is null) { Status = "Sélectionnez d'abord un client."; return; }
+        if (!UiConfirm.Ask($"Archiver le client {SelectedCustomer.Name} ? Il n'apparaîtra plus dans les listes.")) return;
+        try { await customers.ArchiveAsync(SelectedCustomer.Id, ManagerPin); Status = "Client archivé"; UiFeedback.Success("Client archivé."); SelectedCustomer = null; await LoadAsync(); }
+        catch (Exception e) { Status = e.Message; }
+    }
+
+    [RelayCommand] private async Task DeleteCustomer()
+    {
+        if (SelectedCustomer is null) { Status = "Sélectionnez d'abord un client."; return; }
+        if (!UiConfirm.Ask($"Supprimer définitivement le client {SelectedCustomer.Name} ? Impossible s'il a un historique (utilisez Archiver).")) return;
+        try { await customers.DeleteAsync(SelectedCustomer.Id, ManagerPin); Status = "Client supprimé"; UiFeedback.Success("Client supprimé."); SelectedCustomer = null; await LoadAsync(); }
+        catch (Exception e) { Status = e.Message; }
+    }
 
     partial void OnSelectedCustomerChanged(CustomerRow? value)
     {
@@ -532,6 +544,8 @@ public partial class CustomersViewModel(ICustomerService customers, ICreditServi
         {
             await customers.UpdateAsync(new CustomerUpdateRequest(SelectedCustomer.Id, EditName, NullIfEmpty(EditPhone), NullIfEmpty(EditSecondaryPhone), NullIfEmpty(EditGender), NullIfEmpty(EditAddress), NullIfEmpty(EditNotes), NullIfEmpty(EditPreferences), NullIfEmpty(EditChannel), EditConsent, long.Parse(EditCreditLimit)));
             Status = "Fiche client complétée";
+            UiFeedback.Success("Fiche client enregistrée.");
+            EditExpanded = false;
             await LoadAsync();
         }
         catch (Exception e) { Status = e.Message; }
@@ -567,8 +581,16 @@ public partial class ExpensesViewModel(IExpenseService expenses) : ObservableObj
     public IReadOnlyList<PaymentMode> PaymentModes { get; } = Enum.GetValues<PaymentMode>();
     public IReadOnlyList<string> CategoryOptions { get; } = ["Loyer", "Salaires", "Transport", "Électricité", "Eau", "Internet", "Fournitures", "Marketing", "Maintenance", "Impôts", "Assurance", "Autres"];
     [ObservableProperty] private string category = "Autres"; [ObservableProperty] private string description = string.Empty; [ObservableProperty] private string amount = string.Empty; [ObservableProperty] private PaymentMode selectedMode = PaymentMode.Cash; [ObservableProperty] private string status = string.Empty;
+    [ObservableProperty] private Expense? selectedExpense; [ObservableProperty] private string managerPin = "";
     public async Task LoadAsync() { RecentExpenses.Clear(); foreach (var e in await expenses.ListRecentAsync(20)) RecentExpenses.Add(e); }
-    [RelayCommand] private async Task Create() { try { await expenses.CreateAsync(Category, Description, long.Parse(Amount), SelectedMode); Status = "Dépense enregistrée"; Description = Amount = string.Empty; await LoadAsync(); } catch (Exception e) { Status = e.Message; } }
+    [RelayCommand] private async Task Create() { try { await expenses.CreateAsync(Category, Description, long.Parse(Amount), SelectedMode); Status = "Dépense enregistrée"; UiFeedback.Success("Dépense enregistrée."); Description = Amount = string.Empty; await LoadAsync(); } catch (Exception e) { Status = e.Message; } }
+    [RelayCommand] private async Task DeleteExpense()
+    {
+        if (SelectedExpense is null) { Status = "Sélectionnez d'abord une dépense."; return; }
+        if (!UiConfirm.Ask($"Supprimer la dépense « {SelectedExpense.Category} » de {SelectedExpense.AmountXof:N0} FCFA ?")) return;
+        try { await expenses.DeleteAsync(SelectedExpense.Id, ManagerPin); Status = "Dépense supprimée"; UiFeedback.Success("Dépense supprimée."); SelectedExpense = null; await LoadAsync(); }
+        catch (Exception e) { Status = e.Message; }
+    }
 }
 
 public partial class DocumentsViewModel(IDocumentService documents, IReturnService returns, IThermalPrinterService printers, IAppSettingsService settings, IA4DocumentService a4) : ObservableObject, ILoadable

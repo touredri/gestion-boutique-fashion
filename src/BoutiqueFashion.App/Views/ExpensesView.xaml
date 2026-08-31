@@ -20,9 +20,13 @@
     </Border>
     <Border Grid.Column="1" Style="{StaticResource Card}" Padding="10">
       <Grid>
-        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
         <TextBlock Text="DERNIÈRES DÉPENSES" Style="{StaticResource Eyebrow}" Margin="4,0,0,6"/>
-        <DataGrid Grid.Row="1" ItemsSource="{Binding RecentExpenses}"><DataGrid.Columns><DataGridTextColumn Header="DATE" Binding="{Binding CreatedAt,StringFormat=dd/MM/yy}"/><DataGridTextColumn Header="CATÉGORIE" Binding="{Binding Category}"/><DataGridTextColumn Header="DESCRIPTION" Binding="{Binding Description}" Width="*"/><DataGridTextColumn Header="MODE" Binding="{Binding Mode, Converter={StaticResource EnumFr}}"/><DataGridTextColumn Header="MONTANT" Binding="{Binding AmountXof,StringFormat={}{0:N0}}"/></DataGrid.Columns></DataGrid>
+        <WrapPanel Grid.Row="1" Margin="0,0,0,6">
+          <Button Content="Supprimer la dépense" Command="{Binding DeleteExpenseCommand}" Style="{StaticResource DangerButton}"/>
+          <StackPanel Width="170"><TextBlock Text="PIN responsable" Style="{StaticResource FieldLabel}"/><controls:KeypadField Value="{Binding ManagerPin}" Mask="True" Title="PIN responsable"/></StackPanel>
+        </WrapPanel>
+        <DataGrid Grid.Row="2" ItemsSource="{Binding RecentExpenses}" SelectedItem="{Binding SelectedExpense}"><DataGrid.Columns><DataGridTextColumn Header="DATE" Binding="{Binding CreatedAt,StringFormat=dd/MM/yy}"/><DataGridTextColumn Header="CATÉGORIE" Binding="{Binding Category}"/><DataGridTextColumn Header="DESCRIPTION" Binding="{Binding Description}" Width="*"/><DataGridTextColumn Header="MODE" Binding="{Binding Mode, Converter={StaticResource EnumFr}}"/><DataGridTextColumn Header="MONTANT" Binding="{Binding AmountXof,StringFormat={}{0:N0}}"/></DataGrid.Columns></DataGrid>
       </Grid>
     </Border>
   </Grid>
