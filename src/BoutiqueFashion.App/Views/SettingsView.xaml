@@ -107,7 +107,7 @@
           <StackPanel>
             <TextBlock Text="IMPRIMANTE THERMIQUE" Style="{StaticResource Eyebrow}"/>
             <TextBlock Text="Sélectionnez l'imprimante à utiliser : l'imprimante intégrée du terminal apparaît en tête de liste (par défaut) si son pilote Windows est installé." Style="{StaticResource HelperText}" Margin="0,0,0,8" TextWrapping="Wrap"/>
-            <ComboBox ItemsSource="{Binding Printers}" SelectedItem="{Binding SelectedPrinter}" DisplayMemberPath="Name"/>
+            <ComboBox ItemsSource="{Binding Printers}" SelectedItem="{Binding SelectedPrinter}"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Name}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox>
             <CheckBox Content="Découpe automatique du papier (désactiver si l'imprimante interne n'a pas de cutter)" IsChecked="{Binding CutPaper}" Margin="4,6,4,2"/>
             <Grid Margin="0,2,0,4"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
               <StackPanel Width="120"><TextBlock Text="Largeur rouleau" Style="{StaticResource FieldLabel}"/><ComboBox ItemsSource="{Binding PaperWidthOptions}" SelectedItem="{Binding SelectedPaperWidthOption}" ToolTip="Largeur du papier : 58 mm pour l'imprimante intégrée du terminal, 80 mm pour une caisse standard"/></StackPanel>

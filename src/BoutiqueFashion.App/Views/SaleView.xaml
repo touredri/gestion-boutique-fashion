@@ -94,7 +94,7 @@
                 </Grid>
               </StackPanel>
               <Grid Grid.Row="3"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <ComboBox ItemsSource="{Binding Printers}" SelectedItem="{Binding SelectedPrinter}" DisplayMemberPath="Name" AutomationProperties.Name="Imprimante"/>
+                <ComboBox ItemsSource="{Binding Printers}" SelectedItem="{Binding SelectedPrinter}" AutomationProperties.Name="Imprimante"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Name}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox>
                 <Button Grid.Column="1" Content="Reçu" MinWidth="84" Command="{Binding ChooseReceiptCommand}" AutomationProperties.Name="Imprimer un reçu">
                   <Button.Style><Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}"><Style.Triggers><DataTrigger Binding="{Binding PrintInvoice}" Value="True"><Setter Property="Background" Value="{StaticResource Paper}"/><Setter Property="Foreground" Value="{StaticResource Muted}"/><Setter Property="BorderBrush" Value="{StaticResource LineStrong}"/></DataTrigger></Style.Triggers></Style></Button.Style>
                 </Button>

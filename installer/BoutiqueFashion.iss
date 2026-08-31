@@ -1,5 +1,5 @@
 ﻿#define MyAppName "Boutique Fashion POS"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.1.0"
 #define MyAppPublisher "Boutique Fashion"
 #define MyAppExeName "BoutiqueFashion.exe"
 
