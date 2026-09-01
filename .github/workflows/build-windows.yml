@@ -56,19 +56,6 @@ jobs:
         run: |
           choco install innosetup --yes --no-progress
 
-      - name: Check Inno Setup
-        shell: pwsh
-        run: |
-          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
-
-          if (-not (Test-Path $iscc)) {
-              Write-Error "Inno Setup n'est pas installé."
-              exit 1
-          }
-
-          Write-Host "Inno Setup trouvé : $iscc"
-          & $iscc /?
-
       - name: Build installer
         shell: pwsh
         run: |
