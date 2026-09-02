@@ -59,17 +59,20 @@ jobs:
         shell: pwsh
         run: |
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
-
           if (-not (Test-Path $iscc)) {
-              Write-Error "ISCC.exe introuvable."
-              exit 1
+            Write-Error "ISCC.exe introuvable."
+            exit 1
           }
-
-          & $iscc ".\installer\BoutiqueFashion.iss"
-
+          if ($env:GITHUB_REF -match '^refs/tags/v(.+)$') {
+            $version = $Matches[1]
+          } else {
+            $version = "1.1.0"
+          }
+          Write-Host "Version de l'application : $version"
+          & $iscc "/DMyAppVersion=$version" ".\installer\BoutiqueFashion.iss"
           if ($LASTEXITCODE -ne 0) {
-              Write-Error "La compilation Inno Setup a échoué."
-              exit $LASTEXITCODE
+            Write-Error "La compilation Inno Setup a échoué."
+            exit $LASTEXITCODE
           }
 
       - name: Check installer
