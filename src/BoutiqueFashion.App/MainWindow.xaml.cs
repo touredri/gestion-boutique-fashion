@@ -24,7 +24,7 @@ public partial class MainWindow : Window
         TryOpenTouchKeyboard(e.OriginalSource as DependencyObject);
     }
 
-    private void OnWindowPreviewTouchDown(object sender, TouchEventArgs e)
+    private void OnWindowPreviewTouchDown(object? sender, TouchEventArgs e)
     {
         TryOpenTouchKeyboard(e.OriginalSource as DependencyObject);
     }
