@@ -53,35 +53,35 @@
       <!-- Ventes -->
       <Border Style="{StaticResource Card}" Padding="14">
         <StackPanel>
-          <TextBlock Text="VENTES BRUTES" Style="{StaticResource Eyebrow}" Margin="0,0,0,4"/>
+          <TextBlock Text="Ventes brutes" Style="{StaticResource Eyebrow}" Margin="0,0,0,4"/>
           <TextBlock Text="{Binding Summary.SalesXof, StringFormat={}{0:N0} FCFA}" FontSize="18" FontWeight="Bold" Style="{StaticResource Money}" Foreground="{StaticResource Ink}"/>
         </StackPanel>
       </Border>
       <!-- Encaissé -->
       <Border Style="{StaticResource Card}" Padding="14">
         <StackPanel>
-          <TextBlock Text="ENCAISSÉ" Style="{StaticResource Eyebrow}" Margin="0,0,0,4"/>
+          <TextBlock Text="Encaissé" Style="{StaticResource Eyebrow}" Margin="0,0,0,4"/>
           <TextBlock Text="{Binding Summary.CollectedXof, StringFormat={}{0:N0} FCFA}" FontSize="18" FontWeight="Bold" Style="{StaticResource Money}" Foreground="{StaticResource Success}"/>
         </StackPanel>
       </Border>
       <!-- Marge Brute -->
       <Border Style="{StaticResource Card}" Padding="14">
         <StackPanel>
-          <TextBlock Text="MARGE BRUTE" Style="{StaticResource Eyebrow}" Margin="0,0,0,4"/>
+          <TextBlock Text="Marge brute" Style="{StaticResource Eyebrow}" Margin="0,0,0,4"/>
           <TextBlock Text="{Binding Summary.GrossMarginXof, StringFormat={}{0:N0} FCFA}" FontSize="18" FontWeight="Bold" Style="{StaticResource Money}" Foreground="{StaticResource Gold}"/>
         </StackPanel>
       </Border>
       <!-- Bénéfice Estimé -->
       <Border Style="{StaticResource Card}" Padding="14">
         <StackPanel>
-          <TextBlock Text="BÉNÉFICE ESTIMÉ" Style="{StaticResource Eyebrow}" Margin="0,0,0,4"/>
+          <TextBlock Text="Bénéfice estimé" Style="{StaticResource Eyebrow}" Margin="0,0,0,4"/>
           <TextBlock Text="{Binding Summary.EstimatedProfitXof, StringFormat={}{0:N0} FCFA}" FontSize="18" FontWeight="Bold" Style="{StaticResource Money}" Foreground="{StaticResource Terracotta}"/>
         </StackPanel>
       </Border>
       <!-- Créances -->
       <Border Style="{StaticResource Card}" Padding="14">
         <StackPanel>
-          <TextBlock Text="CRÉANCES RESTANTES" Style="{StaticResource Eyebrow}" Margin="0,0,0,4"/>
+          <TextBlock Text="Créances restantes" Style="{StaticResource Eyebrow}" Margin="0,0,0,4"/>
           <TextBlock Text="{Binding Summary.CreditBalanceXof, StringFormat={}{0:N0} FCFA}" FontSize="18" FontWeight="Bold" Style="{StaticResource Money}" Foreground="{StaticResource TerracottaDark}"/>
         </StackPanel>
       </Border>

@@ -20,7 +20,7 @@
             <!-- Bloc 1 : Informations générales -->
             <Border Style="{StaticResource Card}" Padding="16" Margin="0,0,0,8">
               <StackPanel>
-                <TextBlock Text="1 · INFORMATIONS PRODUIT" Style="{StaticResource Eyebrow}" Margin="0,0,0,8"/>
+                <TextBlock Text="1 · Informations produit" Style="{StaticResource Eyebrow}" Margin="0,0,0,8"/>
                 <Grid Margin="0,0,0,8">
                   <Grid.ColumnDefinitions><ColumnDefinition Width="2*"/><ColumnDefinition Width="1.2*"/><ColumnDefinition Width="1.2*"/></Grid.ColumnDefinitions>
                   <StackPanel Margin="0,0,8,0"><TextBlock Text="Nom du produit *" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding ProductName, UpdateSourceTrigger=PropertyChanged}" controls:Placeholder.Text="Ex: Robe longue en soie"/></StackPanel>
@@ -40,7 +40,7 @@
             <!-- Bloc 2 : Variantes et Tarifs -->
             <Border Style="{StaticResource Card}" Padding="16" Margin="0,0,0,8">
               <StackPanel>
-                <TextBlock Text="2 · VARIANTES ET TARIFICATION" Style="{StaticResource Eyebrow}" Margin="0,0,0,8"/>
+                <TextBlock Text="2 · Variantes et tarification" Style="{StaticResource Eyebrow}" Margin="0,0,0,8"/>
                 <Grid Margin="0,0,0,10">
                   <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
                   <controls:KeypadField Value="{Binding MatrixQuantity}" Title="Stock initial" Margin="0,0,8,0"/>
