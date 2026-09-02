@@ -5,7 +5,7 @@
       <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
       <Border Style="{StaticResource Card}" Margin="0,0,0,8" Padding="12">
         <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="170"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-          <StackPanel><TextBlock Text="Rechercher ou scanner (nom, SKU, code-barres)" Style="{StaticResource FieldLabel}" Margin="4,0,4,1"/><TextBox Text="{Binding Search, UpdateSourceTrigger=PropertyChanged}" controls:Placeholder.Text="Nom, SKU ou code-barres" controls:TouchKeyboard.Suppress="True" KeyDown="SearchBox_OnKeyDown" AutomationProperties.Name="Recherche produit"/></StackPanel>
+          <StackPanel><TextBlock Text="Rechercher ou scanner (nom, SKU, code-barres)" Style="{StaticResource FieldLabel}" Margin="4,0,4,1"/><TextBox Text="{Binding Search, UpdateSourceTrigger=PropertyChanged}" controls:Placeholder.Text="Nom, SKU ou code-barres" KeyDown="SearchBox_OnKeyDown" AutomationProperties.Name="Recherche produit"/></StackPanel>
           <StackPanel Grid.Column="1"><TextBlock Text="Catégorie" Style="{StaticResource FieldLabel}" Margin="4,0,4,1"/><ComboBox ItemsSource="{Binding CategoryFilters}" SelectedItem="{Binding SelectedCategoryFilter}" AutomationProperties.Name="Filtrer par catégorie"/></StackPanel>
           <Button Grid.Column="2" Content="Rechercher" Command="{Binding SearchProductsCommand}" Style="{StaticResource PrimaryButton}" VerticalAlignment="Bottom"/>
         </Grid>
