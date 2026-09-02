@@ -5,11 +5,17 @@ on:
     branches:
       - main
 
+    tags:
+      - 'v*'
+
   pull_request:
     branches:
       - main
 
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -44,13 +50,6 @@ jobs:
           -p:PublishSingleFile=false
           -o .\artifacts\win-x64
 
-      - name: Check published files
-        shell: pwsh
-        run: |
-          Write-Host "=== Published files ==="
-          Get-ChildItem .\artifacts\win-x64 -Recurse |
-            Select-Object FullName, Length
-
       - name: Install Inno Setup
         shell: pwsh
         run: |
@@ -66,11 +65,6 @@ jobs:
               exit 1
           }
 
-          if (-not (Test-Path ".\installer\BoutiqueFashion.iss")) {
-              Write-Error "installer\BoutiqueFashion.iss introuvable."
-              exit 1
-          }
-
           & $iscc ".\installer\BoutiqueFashion.iss"
 
           if ($LASTEXITCODE -ne 0) {
@@ -81,8 +75,6 @@ jobs:
       - name: Check installer
         shell: pwsh
         run: |
-          Write-Host "=== Installer files ==="
-
           if (-not (Test-Path ".\installer\output")) {
               Write-Error "Le dossier installer\output n'existe pas."
               exit 1
@@ -91,20 +83,29 @@ jobs:
           $files = Get-ChildItem ".\installer\output" -Filter "*.exe"
 
           if ($files.Count -eq 0) {
-              Write-Error "Aucun fichier .exe n'a été produit par Inno Setup."
+              Write-Error "Aucun installateur .exe n'a été produit."
               exit 1
           }
 
           $files | Select-Object FullName, Length
 
-      - name: Upload published application
+      - name: Upload application artifact
         uses: actions/upload-artifact@v4
         with:
           name: BanaShop-win-x64
           path: .\artifacts\win-x64
 
-      - name: Upload installer
+      - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
           name: BanaShop-Setup
           path: .\installer\output\*.exe
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: .\installer\output\*.exe
+          generate_release_notes: true
+          draft: false
+          prerelease: false
