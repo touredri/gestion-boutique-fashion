@@ -35,6 +35,7 @@ internal static class UiConfirm
 internal static class UiFeedback
 {
     public static void Success(string message) => MessageBox.Show(message, "Succès", MessageBoxButton.OK, MessageBoxImage.Information);
+    public static void Error(string message) => MessageBox.Show(message, "Erreur", MessageBoxButton.OK, MessageBoxImage.Error);
 }
 
 internal static class AppNavigator
