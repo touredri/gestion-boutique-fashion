@@ -75,7 +75,7 @@
     <!-- Colonne Droite : Panier & Encaissement -->
     <Border Grid.Column="1" Style="{StaticResource RaisedCard}" Margin="0" Padding="0">
       <Grid>
-        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*" MinHeight="100"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*" MinHeight="230"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
         
         <!-- En-tête Panier -->
         <Border Background="{StaticResource Ivory}" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" CornerRadius="14,14,0,0" Padding="16,12">
@@ -138,83 +138,110 @@
           </ListBox.ItemTemplate>
         </ListBox>
 
-        <!-- Onglets Encaissement / Client / Clôture -->
-        <TabControl Grid.Row="2" MinHeight="360" MaxHeight="520" Margin="8,6,8,8" Padding="0">
-          <TabItem Header="Encaissement">
-            <Grid Margin="6,2">
-              <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-              <StackPanel>
-                <TextBlock Text="Moyen de paiement" Style="{StaticResource FieldLabel}"/>
-                <ComboBox ItemsSource="{Binding PaymentModes}" SelectedItem="{Binding SelectedPaymentMode}" AutomationProperties.Name="Moyen de paiement"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Converter={StaticResource EnumFr}}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox>
-              </StackPanel>
-              <Grid Grid.Row="1"><Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <controls:KeypadField Value="{Binding DiscountPercent}" Title="Remise %" Suffix="%" Margin="0,0,4,0"/>
-                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+        <!-- Encaissement -->
+        <Border Grid.Row="2" Background="{StaticResource Ivory}" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" CornerRadius="0,0,14,14" Padding="8,4,8,8">
+          <Grid>
+            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+
+              <!-- Paiement, remise et paiement mixte sur une seule ligne -->
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="102"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel>
+                  <TextBlock Text="Moyen de paiement" Style="{StaticResource FieldLabel}"/>
+                  <ComboBox ItemsSource="{Binding PaymentModes}" SelectedItem="{Binding SelectedPaymentMode}" AutomationProperties.Name="Moyen de paiement"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Converter={StaticResource EnumFr}}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox>
+                </StackPanel>
+                <StackPanel Grid.Column="1">
+                  <TextBlock Text="Remise" Style="{StaticResource FieldLabel}"/>
+                  <controls:KeypadField Value="{Binding DiscountPercent}" Suffix="%" Placeholder="0 %" AutomationProperties.Name="Remise en pourcentage"/>
+                </StackPanel>
+                <StackPanel Grid.Column="2">
+                  <TextBlock Text="Paiement mixte" Style="{StaticResource FieldLabel}"/>
+                  <Button Content="+ Ajouter" Command="{Binding AddPaymentCommand}" MinWidth="100" Margin="4" AutomationProperties.Name="Ajouter un paiement mixte"/>
+                </StackPanel>
+              </Grid>
+
+              <Grid Grid.Row="1"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                   <StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding SelectedPaymentMode}" Value="{x:Static domain:PaymentMode.Credit}"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></StackPanel.Style>
                   <Button Content="+7 j" MinWidth="44" Command="{Binding SetCreditDueCommand}" CommandParameter="7"/>
                   <Button Content="+15 j" MinWidth="44" Command="{Binding SetCreditDueCommand}" CommandParameter="15"/>
                   <Button Content="+30 j" MinWidth="44" Command="{Binding SetCreditDueCommand}" CommandParameter="30"/>
                   <Button Content="+60 j" MinWidth="44" Command="{Binding SetCreditDueCommand}" CommandParameter="60"/>
                 </StackPanel>
-                <TextBlock Grid.Column="2" Text="{Binding CreditDueDate}" FontSize="11" VerticalAlignment="Center" Margin="4,0,2,0">
+                <TextBlock Grid.Column="1" Text="{Binding CreditDueDate}" FontSize="11" VerticalAlignment="Center" Margin="4,0,2,0">
                   <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Foreground" Value="{StaticResource Muted}"/><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding SelectedPaymentMode}" Value="{x:Static domain:PaymentMode.Credit}"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
                 </TextBlock>
               </Grid>
+              <!-- Détail des paiements mixtes -->
               <StackPanel Grid.Row="2">
-                <ItemsControl ItemsSource="{Binding Payments}"><ItemsControl.ItemTemplate><DataTemplate><Grid Margin="0,1"><Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="110"/><ColumnDefinition Width="*"/><ColumnDefinition Width="44"/></Grid.ColumnDefinitions><ComboBox ItemsSource="{Binding Modes}" SelectedItem="{Binding Mode}" AutomationProperties.Name="Mode de paiement"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Converter={StaticResource EnumFr}}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox><controls:KeypadField Grid.Column="1" Value="{Binding AmountXof}" Title="Montant reçu" Margin="2,0"/><TextBox Grid.Column="2" Text="{Binding Reference}" controls:Placeholder.Text="Référence (optionnel)" AutomationProperties.Name="Référence du paiement"/><Button Grid.Column="3" Content="×" MinWidth="0" Width="38" ToolTip="Retirer ce paiement" AutomationProperties.Name="Retirer ce paiement" Style="{StaticResource QuietButton}" Command="{Binding DataContext.RemovePaymentCommand,RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}"/></Grid></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
-                <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                  <Button Content="+ Paiement mixte" Command="{Binding AddPaymentCommand}" Style="{StaticResource QuietButton}" HorizontalAlignment="Left"/>
-                  <TextBlock Grid.Column="2" Text="{Binding ChangePreview, StringFormat=Monnaie à rendre : {0:N0} FCFA}" FontWeight="SemiBold" Foreground="{StaticResource Success}" VerticalAlignment="Center"/>
-                </Grid>
+                <ItemsControl ItemsSource="{Binding Payments}"><ItemsControl.ItemTemplate><DataTemplate><Grid Margin="0,1"><Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="110"/><ColumnDefinition Width="*"/><ColumnDefinition Width="44"/></Grid.ColumnDefinitions><ComboBox ItemsSource="{Binding Modes}" SelectedItem="{Binding Mode}" AutomationProperties.Name="Mode de paiement"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Converter={StaticResource EnumFr}}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox><controls:KeypadField Grid.Column="1" Value="{Binding AmountXof}" Placeholder="Montant reçu" Margin="2,0"/><TextBox Grid.Column="2" Text="{Binding Reference}" controls:Placeholder.Text="Référence (optionnel)" AutomationProperties.Name="Référence du paiement"/><Button Grid.Column="3" Content="×" MinWidth="0" Width="38" ToolTip="Retirer ce paiement" AutomationProperties.Name="Retirer ce paiement" Style="{StaticResource QuietButton}" Command="{Binding DataContext.RemovePaymentCommand,RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}"/></Grid></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+                <TextBlock Text="{Binding ChangePreview, StringFormat=Monnaie à rendre : {0:N0} FCFA}" FontWeight="SemiBold" Foreground="{StaticResource Success}" HorizontalAlignment="Right" Margin="4,2,4,0"/>
               </StackPanel>
-              <Grid Grid.Row="3"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <ComboBox ItemsSource="{Binding Printers}" SelectedItem="{Binding SelectedPrinter}" AutomationProperties.Name="Imprimante"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Name}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox>
-                <Button Grid.Column="1" Content="Reçu" MinWidth="84" Command="{Binding ChooseReceiptCommand}" AutomationProperties.Name="Imprimer un reçu">
-                  <Button.Style><Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}"><Style.Triggers><DataTrigger Binding="{Binding PrintInvoice}" Value="True"><Setter Property="Background" Value="{StaticResource Paper}"/><Setter Property="Foreground" Value="{StaticResource Muted}"/><Setter Property="BorderBrush" Value="{StaticResource LineStrong}"/></DataTrigger></Style.Triggers></Style></Button.Style>
-                </Button>
-                <Button Grid.Column="2" Content="Facture" MinWidth="84" Command="{Binding ChooseInvoiceCommand}" AutomationProperties.Name="Imprimer une facture">
-                  <Button.Style><Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Style.Triggers><DataTrigger Binding="{Binding PrintInvoice}" Value="True"><Setter Property="Background" Value="{StaticResource Terracotta}"/><Setter Property="Foreground" Value="White"/><Setter Property="BorderBrush" Value="{StaticResource Terracotta}"/></DataTrigger></Style.Triggers></Style></Button.Style>
-                </Button>
+
+              <!-- Client et type de document -->
+              <Grid Grid.Row="3"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel>
+                  <TextBlock Text="Client" Style="{StaticResource FieldLabel}"/>
+                  <ComboBox ItemsSource="{Binding CustomerChoices}" SelectedItem="{Binding SelectedCustomerChoice}" AutomationProperties.Name="Client">
+                    <ComboBox.ItemTemplate>
+                      <DataTemplate>
+                        <Grid MinWidth="170">
+                          <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                          <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis"/>
+                          <TextBlock Grid.Column="1" Text="{Binding Phone}" Foreground="{StaticResource Muted}" FontSize="12" Margin="10,0,0,0"/>
+                        </Grid>
+                      </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                  </ComboBox>
+                </StackPanel>
+                <StackPanel Grid.Column="1">
+                  <TextBlock Text="Document" Style="{StaticResource FieldLabel}"/>
+                  <StackPanel Orientation="Horizontal">
+                    <Button Content="Reçu" MinWidth="76" Command="{Binding ChooseReceiptCommand}" AutomationProperties.Name="Imprimer un reçu">
+                      <Button.Style><Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}"><Style.Triggers><DataTrigger Binding="{Binding PrintInvoice}" Value="True"><Setter Property="Background" Value="{StaticResource Paper}"/><Setter Property="Foreground" Value="{StaticResource Muted}"/><Setter Property="BorderBrush" Value="{StaticResource LineStrong}"/></DataTrigger></Style.Triggers></Style></Button.Style>
+                    </Button>
+                    <Button Content="Facture" MinWidth="76" Command="{Binding ChooseInvoiceCommand}" AutomationProperties.Name="Imprimer une facture">
+                      <Button.Style><Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Style.Triggers><DataTrigger Binding="{Binding PrintInvoice}" Value="True"><Setter Property="Background" Value="{StaticResource Terracotta}"/><Setter Property="Foreground" Value="White"/><Setter Property="BorderBrush" Value="{StaticResource Terracotta}"/></DataTrigger></Style.Triggers></Style></Button.Style>
+                    </Button>
+                  </StackPanel>
+                </StackPanel>
               </Grid>
-              <Grid Grid.Row="4"><Grid.ColumnDefinitions><ColumnDefinition Width="190"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                <controls:KeypadField Value="{Binding ManagerPin}" Mask="True" Title="PIN responsable"/>
-                <TextBlock Grid.Column="1" Text="Requis uniquement pour le crédit ou une remise de plus de 10 %." Style="{StaticResource HelperText}" VerticalAlignment="Center" Margin="8,0,0,0"/>
+
+              <!-- Imprimante et PIN (le PIN n'apparaît qu'avec une remise ou un crédit) -->
+              <Grid Grid.Row="4"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <StackPanel>
+                  <TextBlock Text="Imprimante" Style="{StaticResource FieldLabel}"/>
+                  <ComboBox ItemsSource="{Binding Printers}" SelectedItem="{Binding SelectedPrinter}" AutomationProperties.Name="Imprimante"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Name}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Width="152" Visibility="{Binding IsManagerPinRequired, Converter={StaticResource BoolToVis}}">
+                  <TextBlock Text="PIN responsable" Style="{StaticResource FieldLabel}"/>
+                  <controls:KeypadField Value="{Binding ManagerPin}" Mask="True" AutomationProperties.Name="PIN responsable"/>
+                </StackPanel>
               </Grid>
-              <Button Grid.Row="5" Content="Encaisser et imprimer" Command="{Binding CompleteCommand}" Style="{StaticResource HeroButton}" Margin="4,2,4,2"/>
-              <TextBlock Grid.Row="6" Text="{Binding Status}" Style="{StaticResource HelperText}" TextWrapping="Wrap" Margin="4,0,4,4" AutomationProperties.LiveSetting="Polite"/>
-            </Grid>
-          </TabItem>
-          <TabItem Header="Client">
-            <Grid Margin="8,6">
-              <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-              <TextBox Text="{Binding CustomerSearch, UpdateSourceTrigger=PropertyChanged}" controls:Placeholder.Text="Nom ou téléphone" AutomationProperties.Name="Recherche client"/>
-              <ListBox Grid.Row="1" ItemsSource="{Binding Customers}" SelectedItem="{Binding SelectedCustomer}" ScrollViewer.VerticalScrollBarVisibility="Auto">
-                <ListBox.ItemTemplate><DataTemplate><Grid Margin="2,4"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock Text="{Binding Name}" FontWeight="SemiBold"/><TextBlock Grid.Column="1" Text="{Binding Phone}" Foreground="{StaticResource Muted}" Margin="8,0,0,0"/></Grid></DataTemplate></ListBox.ItemTemplate>
-              </ListBox>
-              <TextBlock Grid.Row="2" Margin="4,4" Style="{StaticResource HelperText}"><Run Text="Client sélectionné : "/><Run Text="{Binding SelectedCustomer.Name, Mode=OneWay, FallbackValue=aucun (vente comptoir)}"/></TextBlock>
-              <StackPanel Grid.Row="3">
-                <TextBlock Text="NOUVEAU CLIENT (OPTIONNEL)" Style="{StaticResource Eyebrow}" Margin="4,2,4,0"/>
-                <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
-                  <TextBox Text="{Binding NewCustomerName, UpdateSourceTrigger=PropertyChanged}" controls:Placeholder.Text="Nom du client" AutomationProperties.Name="Nom du nouveau client"/>
-                  <TextBox Grid.Column="1" Text="{Binding NewCustomerPhone, UpdateSourceTrigger=PropertyChanged}" controls:Placeholder.Text="Téléphone" AutomationProperties.Name="Téléphone du nouveau client"/>
-                </Grid>
-                <TextBlock Text="Sans client sélectionné ci-dessus, un client est créé avec ces informations." Style="{StaticResource HelperText}" Margin="4,0,4,4"/>
-              </StackPanel>
-            </Grid>
-          </TabItem>
-          <TabItem Header="Clôture caisse">
-            <StackPanel Margin="8,6">
-              <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <controls:KeypadField Value="{Binding OpeningFloat}" Title="Fond initial" Suffix="FCFA"/>
-                <Button Grid.Column="1" Content="Ouvrir la caisse" Command="{Binding OpenCashCommand}" VerticalAlignment="Center"/>
-              </Grid>
-              <controls:KeypadField Value="{Binding CountedCash}" Title="Espèces comptées" Suffix="FCFA"/>
-              <TextBox Text="{Binding CashDifferenceReason}" ToolTip="Motif de l'écart (obligatoire si écart)"/>
-              <Button Content="Clôturer la caisse" Command="{Binding CloseCashCommand}" Style="{StaticResource DangerButton}" Margin="4,4,4,2"/>
-            </StackPanel>
-          </TabItem>
-        </TabControl>
+
+              <Button Grid.Row="5" Content="Encaisser et imprimer" Command="{Binding CompleteCommand}" Style="{StaticResource HeroButton}" Margin="4,6,4,2"/>
+              <TextBlock Grid.Row="6" Text="{Binding Status}" Style="{StaticResource HelperText}" TextWrapping="Wrap" Margin="4,0,4,2" AutomationProperties.LiveSetting="Polite"/>
+          </Grid>
+        </Border>
       </Grid>
+    </Border>
+
+    <!-- Popup de création rapide d'un client -->
+    <Border Grid.ColumnSpan="2" Margin="-16" Background="#99202522" Visibility="{Binding IsCustomerDialogOpen, Converter={StaticResource BoolToVis}}">
+      <Border Style="{StaticResource RaisedCard}" Width="420" Padding="20" HorizontalAlignment="Center" VerticalAlignment="Center">
+        <StackPanel>
+          <TextBlock Text="NOUVEAU CLIENT" Style="{StaticResource Eyebrow}" Margin="4,0,4,4"/>
+          <TextBlock Text="Nom" Style="{StaticResource FieldLabel}"/>
+          <TextBox Text="{Binding NewCustomerName, UpdateSourceTrigger=PropertyChanged}" controls:Placeholder.Text="Nom du client" AutomationProperties.Name="Nom du nouveau client"/>
+          <TextBlock Text="Numéro" Style="{StaticResource FieldLabel}"/>
+          <TextBox Text="{Binding NewCustomerPhone, UpdateSourceTrigger=PropertyChanged}" controls:Placeholder.Text="Téléphone" AutomationProperties.Name="Téléphone du nouveau client"/>
+          <TextBlock Text="{Binding CustomerDialogError}" Foreground="{StaticResource Danger}" FontSize="12" TextWrapping="Wrap" Margin="4,6,4,0"/>
+          <Grid Margin="0,10,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+            <Button Content="Annuler" Command="{Binding CancelCustomerDialogCommand}"/>
+            <Button Grid.Column="1" Content="Enregistrer" Command="{Binding SaveCustomerCommand}" Style="{StaticResource PrimaryButton}"/>
+          </Grid>
+        </StackPanel>
+      </Border>
     </Border>
   </Grid>
 </UserControl>

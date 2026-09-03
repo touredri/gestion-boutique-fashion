@@ -28,10 +28,12 @@
                   <StackPanel Grid.Column="2"><TextBlock Text="Genre / Public" Style="{StaticResource FieldLabel}"/><ComboBox ItemsSource="{Binding GenderOptions}" SelectedItem="{Binding Gender}"/></StackPanel>
                 </Grid>
                 <Grid Margin="0,0,0,4">
-                  <Grid.ColumnDefinitions><ColumnDefinition Width="2*"/><ColumnDefinition Width="1.2*"/><ColumnDefinition Width="1.2*"/></Grid.ColumnDefinitions>
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="1.8*"/><ColumnDefinition Width="1.1*"/><ColumnDefinition Width="1*"/><ColumnDefinition Width="1.05*"/><ColumnDefinition Width="1.05*"/></Grid.ColumnDefinitions>
                   <StackPanel Margin="0,0,8,0"><TextBlock Text="Description courte" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding Description}" controls:Placeholder.Text="Détails, coupe, style..."/></StackPanel>
-                  <StackPanel Grid.Column="1" Margin="0,0,8,0"><TextBlock Text="Sous-catégorie" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding SubCategory}" controls:Placeholder.Text="Ex: Soirée, Casual"/></StackPanel>
-                  <StackPanel Grid.Column="2"><TextBlock Text="Marque / Créateur" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding Brand}" controls:Placeholder.Text="Ex: Zara, Wax..."/></StackPanel>
+                  <StackPanel Grid.Column="1" Margin="0,0,8,0"><TextBlock Text="Marque / Créateur" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding Brand}" controls:Placeholder.Text="Ex: Zara, Wax..."/></StackPanel>
+                  <StackPanel Grid.Column="2" Margin="0,0,8,0"><TextBlock Text="Stock initial" Style="{StaticResource FieldLabel}"/><controls:KeypadField Value="{Binding MatrixQuantity}" Placeholder="0" AutomationProperties.Name="Stock initial"/></StackPanel>
+                  <StackPanel Grid.Column="3" Margin="0,0,8,0"><TextBlock Text="Coût unitaire *" Style="{StaticResource FieldLabel}"/><controls:KeypadField Value="{Binding Cost}" Suffix="FCFA" Placeholder="Coût d'achat" AutomationProperties.Name="Coût unitaire"/></StackPanel>
+                  <StackPanel Grid.Column="4"><TextBlock Text="Prix de vente *" Style="{StaticResource FieldLabel}"/><controls:KeypadField Value="{Binding Price}" Suffix="FCFA" Placeholder="Prix public" AutomationProperties.Name="Prix de vente"/></StackPanel>
                 </Grid>
                 <TextBlock Text="{Binding ProductNotice}" Style="{StaticResource HelperText}" Foreground="{StaticResource TerracottaDark}" Margin="4,4,4,0"/>
               </StackPanel>
@@ -40,19 +42,12 @@
             <!-- Bloc 2 : Variantes et Tarifs -->
             <Border Style="{StaticResource Card}" Padding="16" Margin="0,0,0,8">
               <StackPanel>
-                <TextBlock Text="2 · Variantes et tarification" Style="{StaticResource Eyebrow}" Margin="0,0,0,8"/>
-                <Grid Margin="0,0,0,10">
-                  <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
-                  <controls:KeypadField Value="{Binding MatrixQuantity}" Title="Stock initial" Margin="0,0,8,0"/>
-                  <controls:KeypadField Grid.Column="1" Value="{Binding Cost}" Title="Coût unitaire" Suffix="FCFA" Margin="0,0,8,0"/>
-                  <controls:KeypadField Grid.Column="2" Value="{Binding Price}" Title="Prix de vente" Suffix="FCFA"/>
-                </Grid>
-
-                <Grid Margin="0,4,0,8">
+                <Grid Margin="0,0,0,4">
                   <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                  <TextBlock Text="LIGNES DE VARIANTES (TAILLE, COULEUR, CODE-BARRES)" Style="{StaticResource Eyebrow}" VerticalAlignment="Center"/>
+                  <TextBlock Text="2 · Variantes et tarification" Style="{StaticResource Eyebrow}" VerticalAlignment="Center"/>
                   <Button Grid.Column="1" Content="+ Ajouter une variante" Command="{Binding AddVariantRowCommand}" MinWidth="170" AutomationProperties.Name="Ajouter une ligne de variante"/>
                 </Grid>
+                <TextBlock Text="Le SKU est généré automatiquement à partir du nom du produit. Le coût et le prix sont hérités du produit : laissez-les vides sauf si cette variante a un tarif différent." Style="{StaticResource HelperText}" Margin="4,0,4,6"/>
 
                 <ItemsControl ItemsSource="{Binding VariantRows}">
                   <ItemsControl.ItemTemplate>
@@ -60,22 +55,20 @@
                       <Border Background="{StaticResource Ivory}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="10" Padding="12,8" Margin="0,4">
                         <Grid>
                           <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="130"/>
-                            <ColumnDefinition Width="130"/>
-                            <ColumnDefinition Width="110"/>
-                            <ColumnDefinition Width="110"/>
+                            <ColumnDefinition Width="132"/>
+                            <ColumnDefinition Width="132"/>
                             <ColumnDefinition Width="120"/>
-                            <ColumnDefinition Width="130"/>
+                            <ColumnDefinition Width="120"/>
+                            <ColumnDefinition Width="140"/>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="40"/>
                           </Grid.ColumnDefinitions>
-                          <StackPanel Margin="0,0,6,0"><TextBlock Text="SKU" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding Sku, UpdateSourceTrigger=PropertyChanged}" controls:Placeholder.Text="SKU"/></StackPanel>
-                          <StackPanel Grid.Column="1" Margin="0,0,6,0"><TextBlock Text="Code-barres" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding Barcode}" controls:Placeholder.Text="Code-barres"/></StackPanel>
+                          <StackPanel Margin="0,0,6,0"><TextBlock Text="Coût unitaire" Style="{StaticResource FieldLabel}"/><controls:KeypadField Value="{Binding Cost}" Suffix="FCFA" Placeholder="{Binding DataContext.Cost, RelativeSource={RelativeSource AncestorType=ItemsControl}}" AutomationProperties.Name="Coût de la variante"/></StackPanel>
+                          <StackPanel Grid.Column="1" Margin="0,0,6,0"><TextBlock Text="Prix de vente" Style="{StaticResource FieldLabel}"/><controls:KeypadField Value="{Binding Price}" Suffix="FCFA" Placeholder="{Binding DataContext.Price, RelativeSource={RelativeSource AncestorType=ItemsControl}}" AutomationProperties.Name="Prix de la variante"/></StackPanel>
                           <StackPanel Grid.Column="2" Margin="0,0,6,0"><TextBlock Text="Taille" Style="{StaticResource FieldLabel}"/><ComboBox ItemsSource="{Binding DataContext.SizeOptions, RelativeSource={RelativeSource AncestorType=ItemsControl}}" SelectedItem="{Binding Size}"/></StackPanel>
                           <StackPanel Grid.Column="3" Margin="0,0,6,0"><TextBlock Text="Couleur" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding Color}" controls:Placeholder.Text="Couleur"/></StackPanel>
                           <StackPanel Grid.Column="4" Margin="0,0,6,0"><TextBlock Text="Matière" Style="{StaticResource FieldLabel}"/><ComboBox ItemsSource="{Binding DataContext.MaterialOptions, RelativeSource={RelativeSource AncestorType=ItemsControl}}" SelectedItem="{Binding Material}"/></StackPanel>
-                          <StackPanel Grid.Column="5" Margin="0,0,6,0"><TextBlock Text="Fournisseur" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding Supplier}" controls:Placeholder.Text="Fournisseur"/></StackPanel>
-                          <StackPanel Grid.Column="6" Margin="0,0,6,0">
+                          <StackPanel Grid.Column="5" Margin="0,0,6,0">
                             <TextBlock Text="Photo" Style="{StaticResource FieldLabel}"/>
                             <Grid>
                               <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
@@ -83,7 +76,7 @@
                               <Button Grid.Column="1" Content="…" Click="BrowseRowPhoto_OnClick" MinWidth="34" Margin="4,0,0,0" ToolTip="Parcourir la photo"/>
                             </Grid>
                           </StackPanel>
-                          <Button Grid.Column="7" Content="×" FontSize="18" FontWeight="Bold" Foreground="{StaticResource Danger}" Background="Transparent" BorderBrush="Transparent" Width="32" Height="36" MinWidth="0" MinHeight="0" Padding="0" VerticalAlignment="Bottom" Margin="0,0,0,4" Command="{Binding DataContext.RemoveVariantRowCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}" AutomationProperties.Name="Retirer cette variante"/>
+                          <Button Grid.Column="6" Content="×" FontSize="18" FontWeight="Bold" Foreground="{StaticResource Danger}" Background="Transparent" BorderBrush="Transparent" Width="32" Height="36" MinWidth="0" MinHeight="0" Padding="0" VerticalAlignment="Bottom" Margin="0,0,0,4" Command="{Binding DataContext.RemoveVariantRowCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}" AutomationProperties.Name="Retirer cette variante"/>
                         </Grid>
                       </Border>
                     </DataTemplate>
@@ -94,7 +87,7 @@
                 <Grid Margin="0,14,0,0">
                   <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="180"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                   <Button Content="{Binding SaveButtonLabel}" Command="{Binding SaveVariantsCommand}" Style="{StaticResource HeroButton}" MinWidth="180" Margin="0,0,10,0"/>
-                  <controls:KeypadField Grid.Column="1" Value="{Binding ManagerPin}" Mask="True" Title="PIN responsable"/>
+                  <StackPanel Grid.Column="1"><TextBlock Text="PIN responsable" Style="{StaticResource FieldLabel}"/><controls:KeypadField Value="{Binding ManagerPin}" Mask="True" AutomationProperties.Name="PIN responsable"/></StackPanel>
                   <TextBlock Grid.Column="2" Text="{Binding Status}" Style="{StaticResource HelperText}" VerticalAlignment="Center" Margin="14,0,0,0" TextWrapping="Wrap"/>
                 </Grid>
               </StackPanel>

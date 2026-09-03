@@ -166,6 +166,8 @@ public partial class SaleViewModel(ICatalogService catalog, ICustomerService cus
     public ObservableCollection<string> CategoryFilters { get; } = ["Tous"];
     public ObservableCollection<CartLineViewModel> Cart { get; } = [];
     public ObservableCollection<CustomerRow> Customers { get; } = [];
+    public ObservableCollection<CustomerChoice> CustomerChoices { get; } = [];
+    private bool suppressCustomerChoice;
     public ObservableCollection<PaymentLineViewModel> Payments { get; } = [];
     public IReadOnlyList<PaymentMode> PaymentModes { get; } = Enum.GetValues<PaymentMode>();
     public ObservableCollection<PrinterProfile> Printers { get; } = [];
@@ -180,10 +182,10 @@ public partial class SaleViewModel(ICatalogService catalog, ICustomerService cus
         if (Payments.Count == 0 && PayableXof > 0)
         {
             var line = new PaymentLineViewModel { Mode = value, AmountXof = PayableXof };
-            line.PropertyChanged += (_, _) => { OnPropertyChanged(nameof(PaymentTotalXof)); OnPropertyChanged(nameof(ChangePreview)); };
+            line.PropertyChanged += OnPaymentLineChanged;
             Payments.Add(line);
-            OnPropertyChanged(nameof(PaymentTotalXof)); OnPropertyChanged(nameof(ChangePreview));
         }
+        RaiseTotals();
     }
     [ObservableProperty] private bool printInvoice;
     [RelayCommand] private void ChooseReceipt() => PrintInvoice = false;
@@ -198,15 +200,26 @@ public partial class SaleViewModel(ICatalogService catalog, ICustomerService cus
     [ObservableProperty] private string cashSessionState = "Caisse fermée";
     [ObservableProperty] private bool isCashOpen;
     [ObservableProperty] private bool isBusy;
-    [ObservableProperty] private string countedCash = "";
-    [ObservableProperty] private string cashDifferenceReason = "";
-    [ObservableProperty] private string openingFloat = "0";
     [ObservableProperty] private string customerSearch = string.Empty;
+    [ObservableProperty] private CustomerChoice? selectedCustomerChoice;
+    [ObservableProperty] private bool isCustomerDialogOpen;
+    [ObservableProperty] private string customerDialogError = string.Empty;
     partial void OnCustomerSearchChanged(string value) => _ = RefreshCustomersAsync();
     public long TotalXof => Cart.Sum(x => x.TotalXof);
     public long PayableXof => TotalXof - BusinessRules.CalculateDiscount(TotalXof, DiscountPercent == 0 ? DiscountKind.None : DiscountKind.Percentage, DiscountPercent);
     public long ChangePreview { get { var sum = Payments.Sum(x => x.AmountXof); return sum > PayableXof ? sum - PayableXof : 0; } }
-    partial void OnDiscountPercentChanged(decimal value) { OnPropertyChanged(nameof(PayableXof)); OnPropertyChanged(nameof(ChangePreview)); }
+    /// <summary>Le PIN responsable n'est demandé que pour une remise ou une vente à crédit.</summary>
+    public bool IsManagerPinRequired => DiscountPercent != 0 || SelectedPaymentMode == PaymentMode.Credit || Payments.Any(x => x.Mode == PaymentMode.Credit);
+    private void RaiseTotals()
+    {
+        OnPropertyChanged(nameof(TotalXof));
+        OnPropertyChanged(nameof(PayableXof));
+        OnPropertyChanged(nameof(PaymentTotalXof));
+        OnPropertyChanged(nameof(ChangePreview));
+        OnPropertyChanged(nameof(IsManagerPinRequired));
+    }
+    private void OnPaymentLineChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => RaiseTotals();
+    partial void OnDiscountPercentChanged(decimal value) => RaiseTotals();
     [RelayCommand] private void SetCreditDue(string days) { if (int.TryParse(days, out var d)) CreditDueDate = DateTime.Today.AddDays(d).ToString("yyyy-MM-dd"); }
 
     public async Task LoadAsync()
@@ -217,7 +230,7 @@ public partial class SaleViewModel(ICatalogService catalog, ICustomerService cus
         if (CategoryFilters.Count <= 1) foreach (var c in await catalog.CategoriesAsync()) if (!CategoryFilters.Contains(c)) CategoryFilters.Add(c);
         await RefreshCustomersAsync();
         var openSession = await cash.GetOpenAsync();
-        CashSessionState = openSession is null ? "Caisse fermée · ouvrez-la dans « Clôture caisse »" : $"Caisse ouverte · {openSession.Number}";
+        CashSessionState = openSession is null ? "Caisse fermée · ouvrez-la depuis le tableau de bord" : $"Caisse ouverte · {openSession.Number}";
         IsCashOpen = openSession is not null;
         Printers.Clear();
         foreach (var p in printerService.Discover()) Printers.Add(p);
@@ -226,10 +239,70 @@ public partial class SaleViewModel(ICatalogService catalog, ICustomerService cus
         if (SelectedPrinter is null) SelectedPrinter = await PrinterStore.LoadAsync(settings, printerService) ?? Printers.FirstOrDefault();
     }
 
-    private async Task RefreshCustomersAsync()
+    private async Task RefreshCustomersAsync(Guid? select = null)
     {
         Customers.Clear();
         foreach (var item in await customers.SearchAsync(string.IsNullOrWhiteSpace(CustomerSearch) ? null : CustomerSearch)) Customers.Add(item);
+        RebuildCustomerChoices(select);
+    }
+
+    private void RebuildCustomerChoices(Guid? select = null)
+    {
+        var wanted = select ?? SelectedCustomer?.Id;
+        suppressCustomerChoice = true;
+        try
+        {
+            CustomerChoices.Clear();
+            CustomerChoices.Add(CustomerChoice.Create);
+            CustomerChoices.Add(CustomerChoice.WalkIn);
+            foreach (var row in Customers) CustomerChoices.Add(new CustomerChoice(row));
+            var match = wanted is null ? null : CustomerChoices.FirstOrDefault(x => x.Row?.Id == wanted);
+            SelectedCustomerChoice = match ?? CustomerChoice.WalkIn;
+            SelectedCustomer = match?.Row;
+        }
+        finally { suppressCustomerChoice = false; }
+    }
+
+    partial void OnSelectedCustomerChoiceChanged(CustomerChoice? value)
+    {
+        if (suppressCustomerChoice) return;
+        if (value is null || value.IsWalkIn) { SelectedCustomer = null; return; }
+        if (!value.IsCreate) { SelectedCustomer = value.Row; return; }
+        // « Créer » n'est pas une sélection : on revient au client courant et on ouvre le formulaire.
+        var current = SelectedCustomer;
+        suppressCustomerChoice = true;
+        SelectedCustomerChoice = (current is null ? null : CustomerChoices.FirstOrDefault(x => x.Row?.Id == current.Id)) ?? CustomerChoice.WalkIn;
+        suppressCustomerChoice = false;
+        OpenCustomerDialog();
+    }
+
+    [RelayCommand]
+    private void OpenCustomerDialog()
+    {
+        NewCustomerName = string.Empty; NewCustomerPhone = string.Empty; CustomerDialogError = string.Empty;
+        IsCustomerDialogOpen = true;
+    }
+
+    [RelayCommand]
+    private void CancelCustomerDialog()
+    {
+        IsCustomerDialogOpen = false;
+        NewCustomerName = string.Empty; NewCustomerPhone = string.Empty; CustomerDialogError = string.Empty;
+    }
+
+    [RelayCommand]
+    private async Task SaveCustomer()
+    {
+        if (string.IsNullOrWhiteSpace(NewCustomerName)) { CustomerDialogError = "Le nom du client est obligatoire."; return; }
+        try
+        {
+            var created = await customers.CreateAsync(NewCustomerName.Trim(), NullIfEmpty(NewCustomerPhone), 0);
+            await RefreshCustomersAsync(created.Id);
+            IsCustomerDialogOpen = false;
+            NewCustomerName = string.Empty; NewCustomerPhone = string.Empty; CustomerDialogError = string.Empty;
+            Status = $"Client {created.Name} créé et sélectionné";
+        }
+        catch (Exception e) { CustomerDialogError = e.Message; }
     }
 
     private void ApplyProductFilter()
@@ -241,18 +314,16 @@ public partial class SaleViewModel(ICatalogService catalog, ICustomerService cus
     [RelayCommand] private async Task FilterCustomers() => await RefreshCustomersAsync();
     [RelayCommand] private async Task SearchProducts() => await LoadAsync();
     private static bool CanAdd(ProductVariant variant) => variant is not null && !variant.IsOutOfStock;
-    [RelayCommand(CanExecute = nameof(CanAdd))] private void Add(ProductVariant variant) { var existing = Cart.FirstOrDefault(x => x.Variant.Id == variant.Id); if (existing is null) { var line = new CartLineViewModel(variant); line.PropertyChanged += (_, _) => { OnPropertyChanged(nameof(TotalXof)); OnPropertyChanged(nameof(ChangePreview)); }; Cart.Add(line); } else existing.Quantity++; OnPropertyChanged(nameof(TotalXof)); OnPropertyChanged(nameof(ChangePreview)); }
-    [RelayCommand] private void Remove(CartLineViewModel line) { Cart.Remove(line); OnPropertyChanged(nameof(TotalXof)); OnPropertyChanged(nameof(ChangePreview)); }
-    [RelayCommand] private void ClearCart() { Cart.Clear(); OnPropertyChanged(nameof(TotalXof)); OnPropertyChanged(nameof(ChangePreview)); }
+    [RelayCommand(CanExecute = nameof(CanAdd))] private void Add(ProductVariant variant) { var existing = Cart.FirstOrDefault(x => x.Variant.Id == variant.Id); if (existing is null) { var line = new CartLineViewModel(variant); line.PropertyChanged += (_, _) => RaiseTotals(); Cart.Add(line); } else existing.Quantity++; RaiseTotals(); }
+    [RelayCommand] private void Remove(CartLineViewModel line) { Cart.Remove(line); RaiseTotals(); }
+    [RelayCommand] private void ClearCart() { Cart.Clear(); RaiseTotals(); }
     [RelayCommand] private void Increment(CartLineViewModel line) { line.Quantity++; }
     [RelayCommand] private void Decrement(CartLineViewModel line) { if (line.Quantity > 1) line.Quantity--; }
     partial void OnSelectedPrinterChanged(PrinterProfile? value) { if (value is not null) _ = PersistPrinterAsync(value); }
     private async Task PersistPrinterAsync(PrinterProfile value) { try { await PrinterStore.SaveAsync(settings, value); } catch { } }
-    [RelayCommand] private async Task OpenCash() { try { var session = await cash.OpenAsync(long.Parse(OpeningFloat)); Status = "Caisse ouverte"; CashSessionState = $"Caisse ouverte · {session.Number}"; IsCashOpen = true; } catch (Exception e) { Status = e.Message; } }
-    [RelayCommand] private void AddPayment() { var line = new PaymentLineViewModel { AmountXof = Math.Max(0, PayableXof - Payments.Sum(x => x.AmountXof)) }; line.PropertyChanged += (_, _) => { OnPropertyChanged(nameof(PaymentTotalXof)); OnPropertyChanged(nameof(ChangePreview)); }; Payments.Add(line); OnPropertyChanged(nameof(PaymentTotalXof)); OnPropertyChanged(nameof(ChangePreview)); }
-    [RelayCommand] private void RemovePayment(PaymentLineViewModel line) { Payments.Remove(line); OnPropertyChanged(nameof(PaymentTotalXof)); OnPropertyChanged(nameof(ChangePreview)); }
+    [RelayCommand] private void AddPayment() { var line = new PaymentLineViewModel { AmountXof = Math.Max(0, PayableXof - Payments.Sum(x => x.AmountXof)) }; line.PropertyChanged += OnPaymentLineChanged; Payments.Add(line); RaiseTotals(); }
+    [RelayCommand] private void RemovePayment(PaymentLineViewModel line) { line.PropertyChanged -= OnPaymentLineChanged; Payments.Remove(line); RaiseTotals(); }
     public long PaymentTotalXof => Payments.Sum(x => x.AmountXof);
-    [RelayCommand] private async Task CloseCash() { try { var result = await cash.CloseAsync(long.Parse(CountedCash), CashDifferenceReason, ManagerPin); Status = $"Caisse clôturée • Écart {result.DifferenceXof:N0} FCFA"; CashSessionState = "Caisse fermée · ouvrez-la dans « Clôture caisse »"; IsCashOpen = false; } catch (Exception e) { Status = e.Message; } }
 
     [RelayCommand] private async Task Complete()
     {
@@ -263,7 +334,7 @@ public partial class SaleViewModel(ICatalogService catalog, ICustomerService cus
             var hasCredit = paymentDrafts.Any(x => x.Mode == PaymentMode.Credit);
             var key = Guid.NewGuid().ToString("N");
             DateTimeOffset? creditDue = hasCredit ? DateTimeOffset.Parse(CreditDueDate) : null;
-            var draft = new SaleDraft(key, Cart.Select(x => new SaleLineDraft(x.Variant.Id, x.Quantity, x.EffectiveDiscountKind, x.DiscountValue)).ToArray(), paymentDrafts, SelectedCustomer?.Id, DiscountPercent == 0 ? DiscountKind.None : DiscountKind.Percentage, DiscountPercent, DiscountReason, ManagerPin, creditDue, SelectedCustomer is null ? NullIfEmpty(NewCustomerName) : null, SelectedCustomer is null ? NullIfEmpty(NewCustomerPhone) : null);
+            var draft = new SaleDraft(key, Cart.Select(x => new SaleLineDraft(x.Variant.Id, x.Quantity, x.EffectiveDiscountKind, x.DiscountValue)).ToArray(), paymentDrafts, SelectedCustomer?.Id, DiscountPercent == 0 ? DiscountKind.None : DiscountKind.Percentage, DiscountPercent, DiscountReason, ManagerPin, creditDue, null, null);
             var result = await sales.CreateAsync(draft);
             var documentLabel = PrintInvoice ? "Facture" : "Reçu";
             var message = $"Vente {result.Number} enregistrée · {documentLabel} créé.";
@@ -276,8 +347,8 @@ public partial class SaleViewModel(ICatalogService catalog, ICustomerService cus
                 try { var receipt = await documents.GetReceiptAsync(documentId, false); await printerService.PrintReceiptAsync(SelectedPrinter, receipt); await documents.MarkPrintedAsync(documentId); message += $"\n{documentLabel} imprimé."; }
                 catch (Exception e) { Status += $" • Impression: {e.Message}"; message += $"\nImpression échouée : {e.Message}"; }
             }
-            Cart.Clear(); Payments.Clear(); DiscountPercent = 0; SelectedPaymentMode = PaymentMode.Cash; PrintInvoice = false; NewCustomerName = string.Empty; NewCustomerPhone = string.Empty; SelectedCustomer = null;
-            OnPropertyChanged(nameof(TotalXof)); OnPropertyChanged(nameof(PayableXof)); OnPropertyChanged(nameof(PaymentTotalXof));
+            Cart.Clear(); Payments.Clear(); DiscountPercent = 0; SelectedPaymentMode = PaymentMode.Cash; PrintInvoice = false; ManagerPin = string.Empty; NewCustomerName = string.Empty; NewCustomerPhone = string.Empty; SelectedCustomer = null;
+            RaiseTotals();
             UiFeedback.Success(message);
             await LoadAsync();
         }
@@ -285,6 +356,24 @@ public partial class SaleViewModel(ICatalogService catalog, ICustomerService cus
     }
 
     private static string? NullIfEmpty(string value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+}
+
+/// <summary>Entrée de la liste déroulante « Client » : création, vente comptoir ou client existant.</summary>
+public sealed class CustomerChoice
+{
+    private CustomerChoice(string label, CustomerRow? row, bool isCreate, bool isWalkIn)
+    { Label = label; Row = row; IsCreate = isCreate; IsWalkIn = isWalkIn; }
+
+    public CustomerChoice(CustomerRow row) : this(row.Name, row, false, false) { }
+
+    public static CustomerChoice Create { get; } = new("＋ Créer un client", null, true, false);
+    public static CustomerChoice WalkIn { get; } = new("Client comptoir", null, false, true);
+
+    public string Label { get; }
+    public string? Phone => Row?.Phone;
+    public CustomerRow? Row { get; }
+    public bool IsCreate { get; }
+    public bool IsWalkIn { get; }
 }
 
 public partial class CatalogViewModel(ICatalogService catalog, IProductImportService import) : ObservableObject, ILoadable
@@ -357,6 +446,40 @@ public partial class CatalogViewModel(ICatalogService catalog, IProductImportSer
     }
     private static string? NullIfEmpty(string value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
+    /// <summary>Ligne neuve dont aucun champ distinctif n'est renseigné : rien ne la différencie des autres.</summary>
+    private static bool IsBlankVariantRow(VariantRowViewModel row) =>
+        row.VariantId == Guid.Empty
+        && string.IsNullOrWhiteSpace(row.Size) && string.IsNullOrWhiteSpace(row.Color)
+        && string.IsNullOrWhiteSpace(row.Material) && string.IsNullOrWhiteSpace(row.PhotoPath)
+        && string.IsNullOrWhiteSpace(row.Cost) && string.IsNullOrWhiteSpace(row.Price);
+
+    /// <summary>Réduit un libellé à une base de SKU : majuscules, sans accents, séparée par des tirets.</summary>
+    private static string SkuSlug(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return string.Empty;
+        var builder = new System.Text.StringBuilder();
+        foreach (var c in value.Normalize(System.Text.NormalizationForm.FormD))
+        {
+            if (CharUnicodeInfo.GetUnicodeCategory(c) == UnicodeCategory.NonSpacingMark) continue;
+            if (char.IsLetterOrDigit(c)) builder.Append(char.ToUpperInvariant(c));
+            else if (builder.Length > 0 && builder[^1] != '-') builder.Append('-');
+        }
+        return builder.ToString().Trim('-');
+    }
+
+    /// <summary>SKU dérivé du produit (+ taille et couleur), suffixé d'un compteur tant qu'il est déjà pris.</summary>
+    private static string BuildSku(string productName, VariantRowViewModel row, HashSet<string> taken)
+    {
+        var parts = new[] { SkuSlug(productName), SkuSlug(row.Size), SkuSlug(row.Color) }.Where(x => x.Length > 0);
+        var root = string.Join('-', parts);
+        if (root.Length == 0) root = "ART";
+        if (root.Length > 60) root = root[..60];
+        var candidate = root;
+        var suffix = 1;
+        while (!taken.Add(candidate)) candidate = $"{root}-{++suffix}";
+        return candidate;
+    }
+
     [RelayCommand] private void AddVariantRow() => VariantRows.Add(new VariantRowViewModel());
 
     [RelayCommand] private void RemoveVariantRow(VariantRowViewModel row) => VariantRows.Remove(row);
@@ -368,21 +491,31 @@ public partial class CatalogViewModel(ICatalogService catalog, IProductImportSer
             if (string.IsNullOrWhiteSpace(ProductName)) { Status = "Renseignez le nom du produit."; return; }
             if (!long.TryParse(Cost, out var cost)) { Status = "Renseignez le coût d'achat."; return; }
             if (!long.TryParse(Price, out var price)) { Status = "Renseignez le prix de vente."; return; }
-            var rows = VariantRows.Where(r => !string.IsNullOrWhiteSpace(r.Sku)).ToList();
-            if (rows.Count == 0) { Status = "Ajoutez au moins une variante avec un SKU (« Variante + »)."; return; }
+            var rows = VariantRows.Where(r => !IsBlankVariantRow(r)).ToList();
+            // Un produit sans déclinaison garde tout de même sa variante unique.
+            if (rows.Count == 0 && VariantRows.Count > 0) rows.Add(VariantRows[0]);
+            if (rows.Count == 0) { Status = "Ajoutez au moins une variante (« + Ajouter une variante »)."; return; }
+            var skipped = VariantRows.Count - rows.Count;
             var initial = string.IsNullOrWhiteSpace(MatrixQuantity) ? 0 : decimal.Parse(MatrixQuantity);
+            var takenSkus = new HashSet<string>((await catalog.SearchAsync(null)).Select(x => x.Sku), StringComparer.OrdinalIgnoreCase);
+            foreach (var row in rows) if (!string.IsNullOrWhiteSpace(row.Sku)) takenSkus.Add(row.Sku.Trim());
             foreach (var row in rows)
             {
+                // Le SKU n'est plus saisi : il est dérivé du nom du produit et rendu unique.
+                var sku = string.IsNullOrWhiteSpace(row.Sku) ? BuildSku(ProductName, row, takenSkus) : row.Sku.Trim();
+                var rowCost = long.TryParse(row.Cost, out var overrideCost) ? overrideCost : cost;
+                var rowPrice = long.TryParse(row.Price, out var overridePrice) ? overridePrice : price;
                 if (row.VariantId == Guid.Empty)
                 {
-                    await catalog.CreateVariantAsync(ProductName, EffectiveCategory, row.Sku.Trim(), NullIfEmpty(row.Barcode), NullIfEmpty(row.Size), NullIfEmpty(row.Color), cost, price, initial, 2, default, NullIfEmpty(SubCategory), NullIfEmpty(Gender), null, NullIfEmpty(row.Material), null, NullIfEmpty(row.Supplier), SelectedType, NullIfEmpty(Description), NullIfEmpty(row.PhotoPath), NullIfEmpty(ManagerPin));
+                    await catalog.CreateVariantAsync(ProductName, EffectiveCategory, sku, NullIfEmpty(row.Barcode), NullIfEmpty(row.Size), NullIfEmpty(row.Color), rowCost, rowPrice, initial, 2, default, NullIfEmpty(SubCategory), NullIfEmpty(Gender), null, NullIfEmpty(row.Material), null, NullIfEmpty(row.Supplier), SelectedType, NullIfEmpty(Description), NullIfEmpty(row.PhotoPath), NullIfEmpty(ManagerPin));
                 }
                 else
                 {
-                    await catalog.UpdateVariantAsync(new ProductUpdate(row.VariantId, ProductName, EffectiveCategory, row.Sku.Trim(), NullIfEmpty(row.Barcode), NullIfEmpty(row.Size), NullIfEmpty(row.Color), cost, price, null, null, null, 2, NullIfEmpty(row.PhotoPath), true, NullIfEmpty(SubCategory), NullIfEmpty(Gender), null, NullIfEmpty(row.Material), null, NullIfEmpty(row.Supplier), SelectedType, NullIfEmpty(Description)), ManagerPin);
+                    await catalog.UpdateVariantAsync(new ProductUpdate(row.VariantId, ProductName, EffectiveCategory, sku, NullIfEmpty(row.Barcode), NullIfEmpty(row.Size), NullIfEmpty(row.Color), rowCost, rowPrice, null, null, null, 2, NullIfEmpty(row.PhotoPath), true, NullIfEmpty(SubCategory), NullIfEmpty(Gender), null, NullIfEmpty(row.Material), null, NullIfEmpty(row.Supplier), SelectedType, NullIfEmpty(Description)), ManagerPin);
                 }
             }
             Status = IsEditing ? "Modifications enregistrées" : $"{rows.Count} variante(s) ajoutée(s)";
+            if (skipped > 0) Status += $" • {skipped} ligne(s) vide(s) ignorée(s)";
             UiFeedback.Success(Status);
             ResetForm();
             await LoadAsync();
@@ -395,7 +528,7 @@ public partial class CatalogViewModel(ICatalogService catalog, IProductImportSer
         IsEditing = false;
         VariantRows.Clear();
         VariantRows.Add(new VariantRowViewModel());
-        ProductName = Description = Brand = Cost = Price = Category = string.Empty;
+        ProductName = Description = Brand = Cost = Price = Category = SubCategory = string.Empty;
     }
 
     [RelayCommand] private async Task BrowseImportFile()
@@ -440,7 +573,15 @@ public partial class CatalogViewModel(ICatalogService catalog, IProductImportSer
         Price = Selected.PriceXof.ToString();
         VariantRows.Clear();
         foreach (var v in Items.Where(x => x.Product?.Id == Selected.Product?.Id))
-            VariantRows.Add(new VariantRowViewModel { VariantId = v.Id, Sku = v.Sku, Barcode = v.Barcode ?? string.Empty, Size = v.Size ?? string.Empty, Color = v.Color ?? string.Empty, Material = v.Material ?? string.Empty, Supplier = v.Supplier ?? string.Empty, PhotoPath = v.PrimaryImagePath ?? string.Empty });
+            VariantRows.Add(new VariantRowViewModel
+            {
+                VariantId = v.Id, Sku = v.Sku, Barcode = v.Barcode ?? string.Empty, Size = v.Size ?? string.Empty,
+                Color = v.Color ?? string.Empty, Material = v.Material ?? string.Empty, Supplier = v.Supplier ?? string.Empty,
+                PhotoPath = v.PrimaryImagePath ?? string.Empty,
+                // Vide tant que la variante suit le tarif du produit.
+                Cost = v.CostXof == Selected.CostXof ? string.Empty : v.CostXof.ToString(),
+                Price = v.PriceXof == Selected.PriceXof ? string.Empty : v.PriceXof.ToString(),
+            });
         if (VariantRows.Count == 0) VariantRows.Add(new VariantRowViewModel());
         IsEditing = true;
         SelectedTab = 0;
@@ -467,6 +608,10 @@ public partial class VariantRowViewModel : ObservableObject
     [ObservableProperty] private string material = string.Empty;
     [ObservableProperty] private string supplier = string.Empty;
     [ObservableProperty] private string photoPath = string.Empty;
+    /// <summary>Vide = hérite du coût saisi au niveau du produit.</summary>
+    [ObservableProperty] private string cost = string.Empty;
+    /// <summary>Vide = hérite du prix saisi au niveau du produit.</summary>
+    [ObservableProperty] private string price = string.Empty;
 }
 
 public partial class InventoryLineViewModel(ProductVariant variant) : ObservableObject
