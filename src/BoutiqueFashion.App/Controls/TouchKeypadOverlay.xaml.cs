@@ -20,7 +20,10 @@ public partial class TouchKeypadOverlay : UserControl
     {
         target = field;
         buffer = new string((field.Value ?? string.Empty).Where(char.IsDigit).Take(MaxLength).ToArray());
-        KeypadTitle.Text = string.IsNullOrEmpty(field.Title) ? "Saisie" : field.Title;
+        // Repli sur le nom accessible pour les champs libellés par un TextBlock voisin plutôt que par Title.
+        var title = field.Title;
+        if (string.IsNullOrWhiteSpace(title)) title = System.Windows.Automation.AutomationProperties.GetName(field);
+        KeypadTitle.Text = string.IsNullOrWhiteSpace(title) ? "Saisie" : title;
         UpdateDisplay();
         Visibility = Visibility.Visible;
     }

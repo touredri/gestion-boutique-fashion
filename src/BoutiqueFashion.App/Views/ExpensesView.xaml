@@ -17,7 +17,10 @@
         
         <Grid Margin="0,0,0,12">
           <Grid.ColumnDefinitions><ColumnDefinition Width="1.2*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-          <controls:KeypadField Value="{Binding Amount}" Title="Montant" Suffix="FCFA" Margin="0,0,6,0"/>
+          <StackPanel Margin="0,0,6,0">
+            <TextBlock Text="Montant" Style="{StaticResource FieldLabel}" Margin="2,0,2,2"/>
+            <controls:KeypadField Value="{Binding Amount}" Title="Montant" ShowTitle="False" Suffix="FCFA" Margin="0"/>
+          </StackPanel>
           <StackPanel Grid.Column="1" Margin="6,0,0,0">
             <TextBlock Text="Payée par" Style="{StaticResource FieldLabel}" Margin="2,0,2,2"/>
             <ComboBox ItemsSource="{Binding PaymentModes}" SelectedItem="{Binding SelectedMode}">

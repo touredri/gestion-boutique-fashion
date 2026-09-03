@@ -112,18 +112,20 @@
                 <controls:KeypadField Value="{Binding OrderExpected}" Title="Quantité attendue"/>
                 <Button Grid.Column="1" Content="+ Ligne" Command="{Binding AddToOrderCommand}" VerticalAlignment="Center" Margin="6,0,0,0" MinWidth="70"/>
               </Grid>
-              <ItemsControl ItemsSource="{Binding OrderLines}" MaxHeight="90" Margin="0,0,0,8">
+              <ScrollViewer MaxHeight="170" VerticalScrollBarVisibility="Auto" Margin="0,0,0,8">
+              <ItemsControl ItemsSource="{Binding OrderLines}">
                 <ItemsControl.ItemTemplate>
                   <DataTemplate>
                     <Grid Margin="0,2">
-                      <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="36"/></Grid.ColumnDefinitions>
+                      <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="56"/></Grid.ColumnDefinitions>
                       <TextBlock Text="{Binding Label}" VerticalAlignment="Center" FontSize="12"/>
                       <TextBlock Grid.Column="1" Text="{Binding Expected, StringFormat=× {0:0.###}}" VerticalAlignment="Center" Style="{StaticResource Money}"/>
-                      <Button Grid.Column="2" Content="×" MinWidth="0" Width="30" Height="28" Style="{StaticResource QuietButton}" Command="{Binding DataContext.RemoveOrderLineCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}"/>
+                      <Button Grid.Column="2" Content="×" FontSize="18" Margin="4,0,0,0" ToolTip="Retirer cette ligne" AutomationProperties.Name="Retirer cette ligne de commande" Style="{StaticResource DangerButton}" Command="{Binding DataContext.RemoveOrderLineCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}"/>
                     </Grid>
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
+              </ScrollViewer>
               <Button Content="Créer commande fournisseur" Command="{Binding CreateOrderCommand}" Margin="0,0,0,10"/>
               <TextBlock Text="Réceptions en attente" Style="{StaticResource FieldLabel}" Margin="2,0,2,2"/>
               <DataGrid ItemsSource="{Binding OpenOrders}" SelectedItem="{Binding SelectedOpenLine}" MaxHeight="130" IsReadOnly="True" Margin="0,0,0,6">

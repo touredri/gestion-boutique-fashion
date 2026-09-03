@@ -114,11 +114,11 @@
                     <StackPanel>
                       <UniformGrid Columns="2" Margin="0,0,0,4">
                         <StackPanel Margin="0,0,4,4"><TextBlock Text="Nom complet" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding EditName}" controls:Placeholder.Text="Nom"/></StackPanel>
-                        <StackPanel Margin="4,0,0,4"><TextBlock Text="Téléphone" Style="{StaticResource FieldLabel}"/><controls:KeypadField Value="{Binding EditPhone}" Title="Téléphone"/></StackPanel>
-                        <StackPanel Margin="0,0,4,4"><TextBlock Text="Tél. secondaire" Style="{StaticResource FieldLabel}"/><controls:KeypadField Value="{Binding EditSecondaryPhone}" Title="Tél. 2"/></StackPanel>
+                        <StackPanel Margin="4,0,0,4"><TextBlock Text="Téléphone" Style="{StaticResource FieldLabel}"/><controls:KeypadField Value="{Binding EditPhone}" Title="Téléphone" ShowTitle="False"/></StackPanel>
+                        <StackPanel Margin="0,0,4,4"><TextBlock Text="Tél. secondaire" Style="{StaticResource FieldLabel}"/><controls:KeypadField Value="{Binding EditSecondaryPhone}" Title="Tél. 2" ShowTitle="False"/></StackPanel>
                         <StackPanel Margin="4,0,0,4"><TextBlock Text="Genre" Style="{StaticResource FieldLabel}"/><ComboBox ItemsSource="{Binding GenderOptions}" SelectedItem="{Binding EditGender}"/></StackPanel>
                         <StackPanel Margin="0,0,4,4"><TextBlock Text="Canal préféré" Style="{StaticResource FieldLabel}"/><ComboBox ItemsSource="{Binding ChannelOptions}" SelectedItem="{Binding EditChannel}"/></StackPanel>
-                        <StackPanel Margin="4,0,0,4"><TextBlock Text="Plafond crédit" Style="{StaticResource FieldLabel}"/><controls:KeypadField Value="{Binding EditCreditLimit}" Title="Plafond" Suffix="F"/></StackPanel>
+                        <StackPanel Margin="4,0,0,4"><TextBlock Text="Plafond crédit" Style="{StaticResource FieldLabel}"/><controls:KeypadField Value="{Binding EditCreditLimit}" Title="Plafond" Suffix="F" ShowTitle="False"/></StackPanel>
                       </UniformGrid>
                       <TextBlock Text="Adresse géographique" Style="{StaticResource FieldLabel}"/>
                       <TextBox Text="{Binding EditAddress}" controls:Placeholder.Text="Adresse ou quartier..." Margin="0,0,0,4"/>
@@ -166,7 +166,7 @@
                     <DataGridTemplateColumn Header="ACTION" Width="*">
                       <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
-                          <Button Content="Contre-passer" Command="{Binding DataContext.ReverseCreditCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}" CommandParameter="{Binding}" Style="{StaticResource QuietButton}" FontSize="11" Padding="4,2"/>
+                          <Button Content="Contre-passer" Command="{Binding DataContext.ReverseCreditCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}" CommandParameter="{Binding}" Style="{StaticResource GridCellButton}" Foreground="{StaticResource Danger}" Background="{StaticResource DangerSoft}" BorderBrush="{StaticResource DangerSoft}" AutomationProperties.Name="Contre-passer ce versement"/>
                         </DataTemplate>
                       </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>

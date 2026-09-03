@@ -24,7 +24,7 @@
                 <Grid.ColumnDefinitions><ColumnDefinition Width="1.5*"/><ColumnDefinition Width="1.5*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                 <StackPanel Margin="0,0,8,0"><TextBlock Text="Nom commercial de la boutique" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding ShopName}" controls:Placeholder.Text="Nom de l'établissement"/></StackPanel>
                 <StackPanel Grid.Column="1" Margin="0,0,8,0"><TextBlock Text="Slogan / Devise" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding Slogan}" controls:Placeholder.Text="Ex: La mode chic &amp; moderne"/></StackPanel>
-                <StackPanel Grid.Column="2"><TextBlock Text="Téléphone boutique" Style="{StaticResource FieldLabel}"/><controls:KeypadField Value="{Binding Phone}" Title="Téléphone"/></StackPanel>
+                <StackPanel Grid.Column="2"><TextBlock Text="Téléphone boutique" Style="{StaticResource FieldLabel}"/><controls:KeypadField Value="{Binding Phone}" Title="Téléphone" ShowTitle="False"/></StackPanel>
               </Grid>
 
               <Grid Margin="0,0,0,12">
@@ -149,11 +149,11 @@
             <TextBlock Text="TOLÉRANCES ET SEGMENTATION DE LA CLIENTÈLE" Style="{StaticResource Eyebrow}" Margin="0,0,0,4"/>
             <TextBlock Text="Définissez les seuils de segmentation automatique et la tolérance d'écart de caisse." Style="{StaticResource HelperText}" Margin="0,0,0,14"/>
             <UniformGrid Columns="3" Margin="0,0,0,8">
-              <StackPanel Margin="0,0,8,8"><TextBlock Text="Tolérance écart de caisse" Style="{StaticResource FieldLabel}"/><controls:KeypadField Value="{Binding VarianceTolerance}" Title="Tolérance" Suffix="FCFA"/></StackPanel>
-              <StackPanel Margin="0,0,8,8"><TextBlock Text="Seuil CA Client VIP (FCFA/an)" Style="{StaticResource FieldLabel}"/><controls:KeypadField Value="{Binding VipRevenue}" Title="Seuil VIP" Suffix="FCFA"/></StackPanel>
-              <StackPanel Margin="0,0,0,8"><TextBlock Text="Nombre d'achats Client Fidèle" Style="{StaticResource FieldLabel}"/><controls:KeypadField Value="{Binding LoyalPurchases}" Title="Achats"/></StackPanel>
-              <StackPanel Margin="0,0,8,0"><TextBlock Text="Client inactif après (jours)" Style="{StaticResource FieldLabel}"/><controls:KeypadField Value="{Binding InactiveDays}" Title="Jours"/></StackPanel>
-              <StackPanel Margin="0,0,8,0"><TextBlock Text="Considéré comme nouveau pendant (jours)" Style="{StaticResource FieldLabel}"/><controls:KeypadField Value="{Binding NewDays}" Title="Jours"/></StackPanel>
+              <StackPanel Margin="0,0,8,8"><TextBlock Text="Tolérance écart de caisse" Style="{StaticResource FieldLabel}"/><controls:KeypadField Value="{Binding VarianceTolerance}" Title="Tolérance" Suffix="FCFA" ShowTitle="False"/></StackPanel>
+              <StackPanel Margin="0,0,8,8"><TextBlock Text="Seuil CA Client VIP (FCFA/an)" Style="{StaticResource FieldLabel}"/><controls:KeypadField Value="{Binding VipRevenue}" Title="Seuil VIP" Suffix="FCFA" ShowTitle="False"/></StackPanel>
+              <StackPanel Margin="0,0,0,8"><TextBlock Text="Nombre d'achats Client Fidèle" Style="{StaticResource FieldLabel}"/><controls:KeypadField Value="{Binding LoyalPurchases}" Title="Achats" ShowTitle="False"/></StackPanel>
+              <StackPanel Margin="0,0,8,0"><TextBlock Text="Client inactif après (jours)" Style="{StaticResource FieldLabel}"/><controls:KeypadField Value="{Binding InactiveDays}" Title="Jours" ShowTitle="False"/></StackPanel>
+              <StackPanel Margin="0,0,8,0"><TextBlock Text="Considéré comme nouveau pendant (jours)" Style="{StaticResource FieldLabel}"/><controls:KeypadField Value="{Binding NewDays}" Title="Jours" ShowTitle="False"/></StackPanel>
             </UniformGrid>
           </StackPanel>
         </Border>
@@ -202,8 +202,8 @@
             
             <Grid Margin="0,0,0,14">
               <Grid.ColumnDefinitions><ColumnDefinition Width="180"/><ColumnDefinition Width="180"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-              <controls:KeypadField Value="{Binding Pin}" Mask="True" Title="PIN actuel" Margin="0,0,8,0"/>
-              <controls:KeypadField Grid.Column="1" Value="{Binding NewPin}" Mask="True" Title="Nouveau PIN" Margin="0,0,8,0"/>
+              <controls:KeypadField Value="{Binding Pin}" Mask="True" Title="PIN actuel" Placeholder="Saisir l'ancien" Margin="0,0,8,0"/>
+              <controls:KeypadField Grid.Column="1" Value="{Binding NewPin}" Mask="True" Title="Nouveau PIN" Placeholder="Choisir le nouveau" Margin="0,0,8,0"/>
               <Button Grid.Column="2" Content="Modifier le code PIN" Command="{Binding ChangePinCommand}" VerticalAlignment="Center" MinWidth="160"/>
             </Grid>
 
