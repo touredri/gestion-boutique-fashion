@@ -14,13 +14,16 @@
 
     <TabControl Grid.Row="1" SelectedIndex="{Binding SelectedTab}" Padding="0">
       <!-- Onglet 1 : Ajouter / Modifier -->
-      <TabItem Header="Ajouter / Modifier un produit" Visibility="{Binding Session.IsManager, Converter={StaticResource BoolToVis}}">
+      <TabItem Header="Ajouter / Modifier un produit">
         <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,4,0,0">
           <StackPanel>
             <!-- Bloc 1 : Informations générales -->
             <Border Style="{StaticResource Card}" Padding="16" Margin="0,0,0,8">
               <StackPanel>
                 <TextBlock Text="1 · Informations produit" Style="{StaticResource Eyebrow}" Margin="0,0,0,8"/>
+                <Border Background="{StaticResource InfoSoft}" BorderBrush="{StaticResource Info}" BorderThickness="1" CornerRadius="8" Padding="10,7" Margin="0,0,0,10" Visibility="{Binding Session.IsSeller, Converter={StaticResource BoolToVis}}">
+                  <TextBlock Text="Votre proposition sera enregistrée en brouillon. Elle n'entrera au catalogue et en stock qu'après validation par le gérant." Foreground="{StaticResource Info}" FontSize="12" TextWrapping="Wrap"/>
+                </Border>
                 <Grid Margin="0,0,0,8">
                   <Grid.ColumnDefinitions><ColumnDefinition Width="2*"/><ColumnDefinition Width="1.2*"/><ColumnDefinition Width="1.2*"/></Grid.ColumnDefinitions>
                   <StackPanel Margin="0,0,8,0"><TextBlock Text="Nom du produit *" Style="{StaticResource FieldLabel}"/><TextBox Text="{Binding ProductName, UpdateSourceTrigger=PropertyChanged}" controls:Placeholder.Text="Ex: Robe longue en soie"/></StackPanel>
@@ -93,6 +96,40 @@
             </Border>
           </StackPanel>
         </ScrollViewer>
+      </TabItem>
+
+      <!-- Onglet Brouillons : propositions des vendeurs à valider -->
+      <TabItem Header="{Binding DraftsTabHeader}" Visibility="{Binding Session.IsManager, Converter={StaticResource BoolToVis}}">
+        <Grid Margin="0,4,0,0">
+          <ItemsControl ItemsSource="{Binding Drafts}">
+            <ItemsControl.Template>
+              <ControlTemplate TargetType="ItemsControl">
+                <ScrollViewer VerticalScrollBarVisibility="Auto"><ItemsPresenter/></ScrollViewer>
+              </ControlTemplate>
+            </ItemsControl.Template>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border Style="{StaticResource Card}" Margin="0,0,0,8" Padding="14">
+                  <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <StackPanel VerticalAlignment="Center">
+                      <TextBlock Text="{Binding ProductName}" FontWeight="SemiBold" FontSize="15"/>
+                      <TextBlock Foreground="{StaticResource Muted}" FontSize="12" Margin="0,2,0,0">
+                        <Run Text="{Binding CategoryName, Mode=OneWay}"/><Run Text=" · "/><Run Text="{Binding Lines.Count, Mode=OneWay}"/><Run Text=" variante(s) · proposé le "/><Run Text="{Binding CreatedAt, Mode=OneWay, StringFormat=dd/MM/yyyy à HH:mm}"/>
+                      </TextBlock>
+                      <TextBlock Foreground="{StaticResource Muted}" FontSize="12" Margin="0,1,0,0">
+                        <Run Text="Coût "/><Run Text="{Binding CostXof, Mode=OneWay, StringFormat={}{0:N0} F}"/><Run Text=" · Prix "/><Run Text="{Binding PriceXof, Mode=OneWay, StringFormat={}{0:N0} F}"/><Run Text=" · Stock initial "/><Run Text="{Binding InitialQuantity, Mode=OneWay}"/>
+                      </TextBlock>
+                    </StackPanel>
+                    <Button Grid.Column="1" Content="Refuser" Command="{Binding DataContext.RejectDraftCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}" Style="{StaticResource DangerButton}" MinWidth="110" Margin="8,0"/>
+                    <Button Grid.Column="2" Content="Valider et publier" Command="{Binding DataContext.ApproveDraftCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}" Style="{StaticResource PrimaryButton}" MinWidth="160"/>
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <TextBlock Text="Aucune proposition en attente." Style="{StaticResource HelperText}" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="16,40,16,0" IsHitTestVisible="False" Visibility="{Binding Drafts.Count, Converter={StaticResource ZeroToVis}}"/>
+        </Grid>
       </TabItem>
 
       <!-- Onglet 2 : Liste des produits -->

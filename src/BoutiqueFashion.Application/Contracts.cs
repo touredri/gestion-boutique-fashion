@@ -160,6 +160,25 @@ public interface ICatalogService
     Task<IReadOnlyList<string>> CategoriesAsync(CancellationToken cancellationToken = default);
 }
 
+/// <summary>Produit proposé par un vendeur, en attente de validation par le gérant.</summary>
+public sealed record ProductDraft(
+    Guid Id, string ProductName, string CategoryName, ProductType Type, string? Brand, string? Description,
+    string? Gender, decimal InitialQuantity, long CostXof, long PriceXof,
+    IReadOnlyList<ProductDraftLine> Lines, DateTimeOffset CreatedAt);
+
+public sealed record ProductDraftLine(string? Size, string? Color, string? Material, string? PhotoPath, long? CostXof, long? PriceXof);
+
+/// <summary>
+/// Stocke les brouillons hors des tables produit : ils ne doivent ni être vendables, ni compter en stock,
+/// et la base est créée par EnsureCreated (aucune migration ne pourrait ajouter une colonne ailleurs).
+/// </summary>
+public interface IProductDraftService
+{
+    Task<Guid> SubmitAsync(ProductDraft draft, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<ProductDraft>> ListAsync(CancellationToken cancellationToken = default);
+    Task DeleteAsync(Guid draftId, CancellationToken cancellationToken = default);
+}
+
 public interface ICustomerService
 {
     Task<IReadOnlyList<CustomerRow>> SearchAsync(string? query, CancellationToken cancellationToken = default);

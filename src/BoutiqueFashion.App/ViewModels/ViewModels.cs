@@ -267,7 +267,6 @@ public partial class SaleViewModel(ICatalogService catalog, ICustomerService cus
     public ObservableCollection<CartLineViewModel> Cart { get; } = [];
     public ObservableCollection<CustomerRow> Customers { get; } = [];
     public ObservableCollection<CustomerChoice> CustomerChoices { get; } = [];
-    private bool suppressCustomerChoice;
     public ObservableCollection<PaymentLineViewModel> Payments { get; } = [];
     public IReadOnlyList<PaymentMode> PaymentModes { get; } = Enum.GetValues<PaymentMode>();
     public ObservableCollection<PrinterProfile> Printers { get; } = [];
@@ -304,10 +303,11 @@ public partial class SaleViewModel(ICatalogService catalog, ICustomerService cus
     [NotifyCanExecuteChangedFor(nameof(CompleteCommand))]
     private bool isBusy;
     [ObservableProperty] private string customerSearch = string.Empty;
-    [ObservableProperty] private CustomerChoice? selectedCustomerChoice;
+    [ObservableProperty] private bool isCustomerPickerOpen;
     [ObservableProperty] private bool isCustomerDialogOpen;
     [ObservableProperty] private string customerDialogError = string.Empty;
-    partial void OnCustomerSearchChanged(string value) => _ = RefreshCustomersAsync();
+    private bool suppressCustomerSearchReload;
+    partial void OnCustomerSearchChanged(string value) { if (!suppressCustomerSearchReload) _ = RefreshCustomersAsync(); }
     public long TotalXof => Cart.Sum(x => x.TotalXof);
     public long PayableXof => TotalXof - BusinessRules.CalculateDiscount(TotalXof, DiscountPercent == 0 ? DiscountKind.None : DiscountKind.Percentage, DiscountPercent);
     public long ChangePreview { get { var sum = Payments.Sum(x => x.AmountXof); return sum > PayableXof ? sum - PayableXof : 0; } }
@@ -354,38 +354,43 @@ public partial class SaleViewModel(ICatalogService catalog, ICustomerService cus
 
     private void RebuildCustomerChoices(Guid? select = null)
     {
-        var wanted = select ?? SelectedCustomer?.Id;
-        suppressCustomerChoice = true;
-        try
-        {
-            CustomerChoices.Clear();
-            CustomerChoices.Add(CustomerChoice.Create);
-            CustomerChoices.Add(CustomerChoice.WalkIn);
-            foreach (var row in Customers) CustomerChoices.Add(new CustomerChoice(row));
-            var match = wanted is null ? null : CustomerChoices.FirstOrDefault(x => x.Row?.Id == wanted);
-            SelectedCustomerChoice = match ?? CustomerChoice.WalkIn;
-            SelectedCustomer = match?.Row;
-        }
-        finally { suppressCustomerChoice = false; }
+        var wanted = select is not null ? Customers.FirstOrDefault(x => x.Id == select) : SelectedCustomer;
+        CustomerChoices.Clear();
+        CustomerChoices.Add(CustomerChoice.WalkIn);
+        foreach (var row in Customers) CustomerChoices.Add(new CustomerChoice(row));
+        // Un client déjà choisi doit survivre à un filtre qui l'exclut, sinon taper une
+        // recherche le désélectionnerait en silence au beau milieu d'une vente.
+        if (wanted is not null && CustomerChoices.All(x => x.Row?.Id != wanted.Id))
+            CustomerChoices.Insert(1, new CustomerChoice(wanted));
+        SelectedCustomer = wanted;
     }
 
-    partial void OnSelectedCustomerChoiceChanged(CustomerChoice? value)
+    /// <summary>Libellé du bouton de sélection : vente comptoir tant qu'aucun client n'est choisi.</summary>
+    public string SelectedCustomerLabel => SelectedCustomer?.Name ?? "Client comptoir";
+
+    partial void OnSelectedCustomerChanged(CustomerRow? value) => OnPropertyChanged(nameof(SelectedCustomerLabel));
+
+    [RelayCommand]
+    private void OpenCustomerPicker()
     {
-        if (suppressCustomerChoice) return;
-        if (value is null || value.IsWalkIn) { SelectedCustomer = null; return; }
-        if (!value.IsCreate) { SelectedCustomer = value.Row; return; }
-        // « Créer » n'est pas une sélection : on revient au client courant et on ouvre le formulaire.
-        var current = SelectedCustomer;
-        suppressCustomerChoice = true;
-        SelectedCustomerChoice = (current is null ? null : CustomerChoices.FirstOrDefault(x => x.Row?.Id == current.Id)) ?? CustomerChoice.WalkIn;
-        suppressCustomerChoice = false;
-        OpenCustomerDialog();
+        CustomerSearch = string.Empty;
+        IsCustomerPickerOpen = true;
+    }
+
+    [RelayCommand] private void CloseCustomerPicker() => IsCustomerPickerOpen = false;
+
+    [RelayCommand]
+    private void PickCustomer(CustomerChoice? choice)
+    {
+        SelectedCustomer = choice is null || choice.IsWalkIn ? null : choice.Row;
+        IsCustomerPickerOpen = false;
     }
 
     [RelayCommand]
     private void OpenCustomerDialog()
     {
         NewCustomerName = string.Empty; NewCustomerPhone = string.Empty; CustomerDialogError = string.Empty;
+        IsCustomerPickerOpen = false;
         IsCustomerDialogOpen = true;
     }
 
@@ -403,6 +408,9 @@ public partial class SaleViewModel(ICatalogService catalog, ICustomerService cus
         try
         {
             var created = await customers.CreateAsync(NewCustomerName.Trim(), NullIfEmpty(NewCustomerPhone), 0);
+            suppressCustomerSearchReload = true;
+            CustomerSearch = string.Empty;
+            suppressCustomerSearchReload = false;
             await RefreshCustomersAsync(created.Id);
             IsCustomerDialogOpen = false;
             NewCustomerName = string.Empty; NewCustomerPhone = string.Empty; CustomerDialogError = string.Empty;
@@ -466,25 +474,23 @@ public partial class SaleViewModel(ICatalogService catalog, ICustomerService cus
     private static string? NullIfEmpty(string value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
 
-/// <summary>Entrée de la liste déroulante « Client » : création, vente comptoir ou client existant.</summary>
+/// <summary>Entrée du sélecteur de client : vente comptoir ou client existant.</summary>
 public sealed class CustomerChoice
 {
-    private CustomerChoice(string label, CustomerRow? row, bool isCreate, bool isWalkIn)
-    { Label = label; Row = row; IsCreate = isCreate; IsWalkIn = isWalkIn; }
+    private CustomerChoice(string label, CustomerRow? row, bool isWalkIn)
+    { Label = label; Row = row; IsWalkIn = isWalkIn; }
 
-    public CustomerChoice(CustomerRow row) : this(row.Name, row, false, false) { }
+    public CustomerChoice(CustomerRow row) : this(row.Name, row, false) { }
 
-    public static CustomerChoice Create { get; } = new("＋ Créer un client", null, true, false);
-    public static CustomerChoice WalkIn { get; } = new("Client comptoir", null, false, true);
+    public static CustomerChoice WalkIn { get; } = new("Client comptoir (aucun)", null, true);
 
     public string Label { get; }
     public string? Phone => Row?.Phone;
     public CustomerRow? Row { get; }
-    public bool IsCreate { get; }
     public bool IsWalkIn { get; }
 }
 
-public partial class CatalogViewModel(ICatalogService catalog, IProductImportService import, ManagerSession session) : ObservableObject, ILoadable
+public partial class CatalogViewModel(ICatalogService catalog, IProductImportService import, IProductDraftService drafts, ManagerSession session) : ObservableObject, ILoadable
 {
     public ObservableCollection<ProductVariant> Items { get; } = [];
     public ObservableCollection<ImportIssue> ImportIssues { get; } = [];
@@ -504,7 +510,9 @@ public partial class CatalogViewModel(ICatalogService catalog, IProductImportSer
     [ObservableProperty] private ProductType selectedType = ProductType.Clothing; [ObservableProperty] private string brand = string.Empty; [ObservableProperty] private string productNotice = string.Empty;
     [ObservableProperty] private string subCategory = string.Empty; [ObservableProperty] private string gender = string.Empty;
     [ObservableProperty] private bool isEditing;
-    public string SaveButtonLabel => IsEditing ? "Enregistrer" : "Ajouter";
+    public ObservableCollection<ProductDraft> Drafts { get; } = [];
+    public string SaveButtonLabel => !session.IsManager ? "Envoyer pour validation" : IsEditing ? "Enregistrer" : "Ajouter";
+    public string DraftsTabHeader => Drafts.Count == 0 ? "Brouillons en attente" : $"Brouillons en attente ({Drafts.Count})";
     partial void OnIsEditingChanged(bool value) => OnPropertyChanged(nameof(SaveButtonLabel));
     public ObservableCollection<VariantRowViewModel> VariantRows { get; } = [];
     [ObservableProperty] private string matrixQuantity = "0";
@@ -515,8 +523,10 @@ public partial class CatalogViewModel(ICatalogService catalog, IProductImportSer
     {
         var rows = await catalog.SearchAsync(null); Items.Clear(); foreach (var row in rows) Items.Add(row);
         RefreshSizeOptions();
-        // Hors mode gérant l'onglet de création est replié : le laisser sélectionné n'afficherait rien.
-        if (!session.IsManager) SelectedTab = 1;
+        Drafts.Clear();
+        foreach (var d in await drafts.ListAsync()) Drafts.Add(d);
+        OnPropertyChanged(nameof(DraftsTabHeader));
+        OnPropertyChanged(nameof(SaveButtonLabel));
     }
 
     private void RefreshSizeOptions()
@@ -610,6 +620,13 @@ public partial class CatalogViewModel(ICatalogService catalog, IProductImportSer
             if (rows.Count == 0) { Status = "Ajoutez au moins une variante (« + Ajouter une variante »)."; return; }
             var skipped = VariantRows.Count - rows.Count;
             var initial = string.IsNullOrWhiteSpace(MatrixQuantity) ? 0 : decimal.Parse(MatrixQuantity);
+
+            if (!session.IsManager)
+            {
+                await SubmitDraftAsync(rows, cost, price, initial);
+                return;
+            }
+
             var takenSkus = new HashSet<string>((await catalog.SearchAsync(null)).Select(x => x.Sku), StringComparer.OrdinalIgnoreCase);
             foreach (var row in rows) if (!string.IsNullOrWhiteSpace(row.Sku)) takenSkus.Add(row.Sku.Trim());
             foreach (var row in rows)
@@ -633,6 +650,50 @@ public partial class CatalogViewModel(ICatalogService catalog, IProductImportSer
             ResetForm();
             await LoadAsync();
         }
+        catch (Exception e) { Status = e.Message; }
+    }
+
+    private static long? OverrideOrNull(string value) => long.TryParse(value, out var v) ? v : null;
+
+    private async Task SubmitDraftAsync(List<VariantRowViewModel> rows, long cost, long price, decimal initial)
+    {
+        var lines = rows.Select(r => new ProductDraftLine(NullIfEmpty(r.Size), NullIfEmpty(r.Color), NullIfEmpty(r.Material), NullIfEmpty(r.PhotoPath), OverrideOrNull(r.Cost), OverrideOrNull(r.Price))).ToArray();
+        var draft = new ProductDraft(Guid.NewGuid(), ProductName.Trim(), EffectiveCategory, SelectedType, NullIfEmpty(Brand), NullIfEmpty(Description), NullIfEmpty(Gender), initial, cost, price, lines, DateTimeOffset.Now);
+        await drafts.SubmitAsync(draft);
+        Status = $"« {draft.ProductName} » envoyé au gérant pour validation ({lines.Length} variante(s)).";
+        UiFeedback.Success(Status);
+        ResetForm();
+        await LoadAsync();
+    }
+
+    [RelayCommand]
+    private async Task ApproveDraft(ProductDraft? draft)
+    {
+        if (draft is null) return;
+        try
+        {
+            var taken = new HashSet<string>((await catalog.SearchAsync(null)).Select(x => x.Sku), StringComparer.OrdinalIgnoreCase);
+            foreach (var line in draft.Lines)
+            {
+                var row = new VariantRowViewModel { Size = line.Size ?? "", Color = line.Color ?? "" };
+                await catalog.CreateVariantAsync(draft.ProductName, draft.CategoryName, BuildSku(draft.ProductName, row, taken), null,
+                    line.Size, line.Color, line.CostXof ?? draft.CostXof, line.PriceXof ?? draft.PriceXof, draft.InitialQuantity, 2, default,
+                    null, draft.Gender, null, line.Material, null, null, draft.Type, draft.Description, line.PhotoPath, ManagerPin);
+            }
+            await drafts.DeleteAsync(draft.Id);
+            Status = $"« {draft.ProductName} » validé et ajouté au catalogue.";
+            UiFeedback.Success(Status);
+            await LoadAsync();
+        }
+        catch (Exception e) { Status = e.Message; }
+    }
+
+    [RelayCommand]
+    private async Task RejectDraft(ProductDraft? draft)
+    {
+        if (draft is null) return;
+        if (!UiConfirm.Ask($"Refuser définitivement la proposition « {draft.ProductName} » ? Elle sera supprimée.")) return;
+        try { await drafts.DeleteAsync(draft.Id); Status = $"Proposition « {draft.ProductName} » refusée."; await LoadAsync(); }
         catch (Exception e) { Status = e.Message; }
     }
 

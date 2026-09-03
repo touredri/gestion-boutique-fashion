@@ -26,6 +26,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IReportService, ReportService>();
         services.AddSingleton<IBackupService, BackupService>();
         services.AddSingleton<IProductImportService, ProductImportService>();
+        services.AddSingleton<IProductDraftService, ProductDraftService>();
         services.AddSingleton<IPurchaseService, PurchaseService>();
         services.AddSingleton<IPrintQueueService, PrintQueueService>();
         services.AddSingleton<IThermalPrinterService, ThermalPrinterService>();
