@@ -129,7 +129,6 @@ public partial class CartLineViewModel(ProductVariant variant) : ObservableObjec
 {
     public ProductVariant Variant { get; } = variant;
     public string Label => string.Join(" - ", new[] { Variant.Product?.Name, Variant.Color, Variant.Size }.Where(x => !string.IsNullOrWhiteSpace(x)));
-    public IReadOnlyList<string> DiscountKindLabels { get; } = ["Aucune", "%", "FCFA"];
     public long UnitPriceXof
     {
         get
@@ -139,11 +138,24 @@ public partial class CartLineViewModel(ProductVariant variant) : ObservableObjec
         }
     }
     [ObservableProperty] private decimal quantity = 1;
-    [ObservableProperty] private string discountKindLabel = "Aucune";
+    /// <summary>Remise de ligne en FCFA : la remise en pourcentage n'existe qu'au niveau de la vente entière.</summary>
     [ObservableProperty] private decimal discountValue;
-    public DiscountKind EffectiveDiscountKind => DiscountKindLabel switch { "%" => DiscountKind.Percentage, "FCFA" => DiscountKind.Amount, _ => DiscountKind.None };
+    public DiscountKind EffectiveDiscountKind => DiscountValue == 0 ? DiscountKind.None : DiscountKind.Amount;
+    public bool HasDiscount => DiscountValue != 0;
+    /// <summary>Texte du champ remise : vide à zéro, pour laisser apparaître l'invite « Remise ».
+    /// Le signe moins est rendu à côté du champ, jamais dans le texte éditable — il casserait l'analyse et ferait sauter le curseur.</summary>
+    public string DiscountText
+    {
+        get => DiscountValue == 0 ? string.Empty : DiscountValue.ToString("0.##", CultureInfo.InvariantCulture);
+        set
+        {
+            var parsed = decimal.TryParse((value ?? string.Empty).Replace(',', '.'), NumberStyles.Number, CultureInfo.InvariantCulture, out var d) && d >= 0 ? d : 0;
+            if (parsed != DiscountValue) DiscountValue = parsed;
+        }
+    }
+    /// <summary>Au-delà du brut, CalculateDiscount lève et la remise est ignorée : il faut le montrer.</summary>
+    public bool IsDiscountTooLarge => DiscountValue > GrossXof;
     public long GrossXof => decimal.ToInt64(Quantity * UnitPriceXof);
-    public long DiscountAmountXof => GrossXof - TotalXof;
     public long TotalXof
     {
         get
@@ -152,9 +164,15 @@ public partial class CartLineViewModel(ProductVariant variant) : ObservableObjec
             catch { return GrossXof; }
         }
     }
-    partial void OnQuantityChanged(decimal value) { OnPropertyChanged(nameof(TotalXof)); OnPropertyChanged(nameof(GrossXof)); OnPropertyChanged(nameof(DiscountAmountXof)); }
-    partial void OnDiscountKindLabelChanged(string value) { OnPropertyChanged(nameof(TotalXof)); OnPropertyChanged(nameof(DiscountAmountXof)); }
-    partial void OnDiscountValueChanged(decimal value) { OnPropertyChanged(nameof(TotalXof)); OnPropertyChanged(nameof(DiscountAmountXof)); }
+    partial void OnQuantityChanged(decimal value) { OnPropertyChanged(nameof(GrossXof)); RaiseLineTotals(); }
+    partial void OnDiscountValueChanged(decimal value) => RaiseLineTotals();
+    private void RaiseLineTotals()
+    {
+        OnPropertyChanged(nameof(TotalXof));
+        OnPropertyChanged(nameof(HasDiscount));
+        OnPropertyChanged(nameof(IsDiscountTooLarge));
+        OnPropertyChanged(nameof(DiscountText));
+    }
 }
 
 public partial class PaymentLineViewModel : ObservableObject { public IReadOnlyList<PaymentMode> Modes { get; } = Enum.GetValues<PaymentMode>(); [ObservableProperty] private PaymentMode mode = PaymentMode.Cash; [ObservableProperty] private long amountXof; [ObservableProperty] private string reference = string.Empty; }
