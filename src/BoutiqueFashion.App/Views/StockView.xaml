@@ -1,7 +1,8 @@
 <UserControl x:Class="BoutiqueFashion.App.Views.StockView" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:controls="clr-namespace:BoutiqueFashion.App.Controls">
   <Grid Margin="16">
     <Grid.ColumnDefinitions><ColumnDefinition Width="1.35*" MinWidth="440"/><ColumnDefinition Width="0.85*" MinWidth="300" MaxWidth="480"/></Grid.ColumnDefinitions>
-    
+    <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+
     <!-- Colonne Gauche : Tables organisées -->
     <Grid Margin="0,0,10,0">
       <Grid.RowDefinitions><RowDefinition Height="1.2*"/><RowDefinition Height="*"/></Grid.RowDefinitions>
@@ -19,6 +20,7 @@
               <DataGridTextColumn Header="SEUIL" Binding="{Binding LowStockThreshold}" Width="80"/>
             </DataGrid.Columns>
           </DataGrid>
+          <TextBlock Grid.Row="1" Text="Aucun produit en stock." Style="{StaticResource HelperText}" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="16,58,16,0" TextAlignment="Center" IsHitTestVisible="False" Visibility="{Binding Items.Count, Converter={StaticResource ZeroToVis}}"/>
         </Grid>
       </Border>
 
@@ -27,6 +29,7 @@
         <TabControl Padding="0">
           <!-- Alertes -->
           <TabItem Header="Alertes réappro">
+            <Grid>
             <DataGrid ItemsSource="{Binding Alerts}" Margin="0,6,0,0">
               <DataGrid.Columns>
                 <DataGridTextColumn Header="SKU" Binding="{Binding Sku}" Width="100"/>
@@ -36,10 +39,13 @@
                 <DataGridTextColumn Header="VENTE LIÉE" Binding="{Binding RelatedSale}" Width="100"/>
               </DataGrid.Columns>
             </DataGrid>
+            <TextBlock Text="Aucune alerte : tous les stocks sont au-dessus de leur seuil." Style="{StaticResource HelperText}" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="16,58,16,0" TextAlignment="Center" IsHitTestVisible="False" Visibility="{Binding Alerts.Count, Converter={StaticResource ZeroToVis}}"/>
+            </Grid>
           </TabItem>
 
           <!-- Historique des mouvements -->
           <TabItem Header="Historique mouvements">
+            <Grid>
             <DataGrid ItemsSource="{Binding History}" Margin="0,6,0,0">
               <DataGrid.Columns>
                 <DataGridTextColumn Header="DATE" Binding="{Binding Date, StringFormat=dd/MM HH:mm}" Width="110"/>
@@ -49,6 +55,8 @@
                 <DataGridTextColumn Header="MOTIF" Binding="{Binding Reason}" Width="*"/>
               </DataGrid.Columns>
             </DataGrid>
+            <TextBlock Text="Aucun mouvement de stock." Style="{StaticResource HelperText}" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="16,58,16,0" TextAlignment="Center" IsHitTestVisible="False" Visibility="{Binding History.Count, Converter={StaticResource ZeroToVis}}"/>
+            </Grid>
           </TabItem>
 
           <!-- Inventaire physique -->
@@ -71,6 +79,7 @@
                   <DataGridTextColumn Header="QUANTITÉ COMPTÉE" Binding="{Binding CountedQuantity, UpdateSourceTrigger=LostFocus}" Width="140"/>
                 </DataGrid.Columns>
               </DataGrid>
+              <TextBlock Grid.Row="1" Text="Chargez l'inventaire pour saisir les quantités comptées." Style="{StaticResource HelperText}" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="16,58,16,0" TextAlignment="Center" IsHitTestVisible="False" Visibility="{Binding InventoryLines.Count, Converter={StaticResource ZeroToVis}}"/>
             </Grid>
           </TabItem>
         </TabControl>
@@ -83,6 +92,7 @@
       <Border Style="{StaticResource Card}" Padding="14">
         <TabControl Padding="0">
           <TabItem Header="Mouvements">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
             <StackPanel Margin="4,8">
               <Border Background="{StaticResource Ivory}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="8" Padding="10,6" Margin="0,0,0,10">
                 <TextBlock Text="Sélectionnez un article à gauche pour ajuster son stock." Style="{StaticResource HelperText}"/>
@@ -93,7 +103,6 @@
                 <controls:KeypadField Grid.Column="1" Value="{Binding CountedQuantity}" Title="Quantité comptée" Margin="4,0,0,0"/>
               </Grid>
               <TextBox Text="{Binding Reason}" controls:Placeholder.Text="Motif obligatoire" ToolTip="Motif obligatoire" Margin="0,0,0,6"/>
-              <controls:KeypadField Value="{Binding ManagerPin}" Mask="True" Title="PIN responsable" Margin="0,0,0,10"/>
               <UniformGrid Columns="2" Margin="0,0,0,10">
                 <Button Content="Réception" Command="{Binding ReceiveCommand}" Margin="2"/>
                 <Button Content="Ajustement" Command="{Binding AdjustCommand}" Margin="2"/>
@@ -102,9 +111,11 @@
               </UniformGrid>
               <Button Content="Valider l'inventaire compté" Command="{Binding ApplyInventoryCommand}" Style="{StaticResource PrimaryButton}" Margin="0,4"/>
             </StackPanel>
+            </ScrollViewer>
           </TabItem>
           
           <TabItem Header="Commandes">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
             <StackPanel Margin="4,8">
               <TextBox Text="{Binding Supplier}" controls:Placeholder.Text="Fournisseur" ToolTip="Fournisseur" Margin="0,0,0,6"/>
               <Grid Margin="0,0,0,6">
@@ -136,6 +147,7 @@
                   <DataGridTextColumn Header="REÇU" Binding="{Binding Received}" Width="60"/>
                 </DataGrid.Columns>
               </DataGrid>
+              <TextBlock Text="Aucune réception en attente." Style="{StaticResource HelperText}" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="16,58,16,0" TextAlignment="Center" IsHitTestVisible="False" Visibility="{Binding OpenOrders.Count, Converter={StaticResource ZeroToVis}}"/>
               <Grid Margin="0,0,0,8">
                 <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
                 <controls:KeypadField Value="{Binding ReceivedQuantity}" Title="Qté reçue" Margin="0,0,4,0"/>
@@ -143,10 +155,12 @@
               </Grid>
               <Button Content="Réceptionner la ligne" Command="{Binding ReceiveSelectedCommand}" Style="{StaticResource PrimaryButton}" Margin="0,2"/>
             </StackPanel>
+            </ScrollViewer>
           </TabItem>
         </TabControl>
       </Border>
-      <TextBlock Grid.Row="1" Text="{Binding Status}" TextWrapping="Wrap" Style="{StaticResource HelperText}" Margin="12,6"/>
     </Grid>
+    <!-- Sur les deux colonnes : les actions de gauche écrivaient leur retour dans la colonne de droite. -->
+    <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding Status}" Style="{StaticResource StatusText}" Margin="4,8,4,0"/>
   </Grid>
 </UserControl>

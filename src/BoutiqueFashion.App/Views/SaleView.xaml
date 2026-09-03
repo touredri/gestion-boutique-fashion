@@ -165,7 +165,7 @@
         <!-- Encaissement -->
         <Border Grid.Row="2" Background="{StaticResource Ivory}" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" CornerRadius="0,0,14,14" Padding="8,4,8,8">
           <Grid>
-            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
 
               <!-- Paiement, remise et paiement mixte sur une seule ligne -->
               <Grid>
@@ -231,27 +231,52 @@
                 </StackPanel>
               </Grid>
 
-              <!-- Imprimante et PIN (le PIN n'apparaît qu'avec une remise ou un crédit) -->
-              <Grid Grid.Row="4"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+              <!-- Imprimante -->
+              <Grid Grid.Row="4">
                 <StackPanel>
                   <TextBlock Text="Imprimante" Style="{StaticResource FieldLabel}"/>
                   <ComboBox ItemsSource="{Binding Printers}" SelectedItem="{Binding SelectedPrinter}" AutomationProperties.Name="Imprimante"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Name}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox>
                 </StackPanel>
-                <StackPanel Grid.Column="1" Width="152" Visibility="{Binding IsManagerPinRequired, Converter={StaticResource BoolToVis}}">
-                  <TextBlock Text="PIN responsable" Style="{StaticResource FieldLabel}"/>
-                  <controls:KeypadField Value="{Binding ManagerPin}" Mask="True" AutomationProperties.Name="PIN responsable"/>
-                </StackPanel>
               </Grid>
 
-              <Button Grid.Row="5" Content="Encaisser et imprimer" Command="{Binding CompleteCommand}" Style="{StaticResource HeroButton}" Margin="4,6,4,2"/>
-              <TextBlock Grid.Row="6" Text="{Binding Status}" Style="{StaticResource HelperText}" TextWrapping="Wrap" Margin="4,0,4,2" AutomationProperties.LiveSetting="Polite"/>
+              <!-- Le PIN n'est plus saisi ici : crédit et forte remise exigent le mode gérant. -->
+              <Border Grid.Row="5" Background="{StaticResource WarningSoft}" BorderBrush="{StaticResource Warning}" BorderThickness="1" CornerRadius="8" Padding="10,7" Margin="4,6,4,0">
+                <Border.Style>
+                  <Style TargetType="Border">
+                    <Setter Property="Visibility" Value="Collapsed"/>
+                    <Style.Triggers>
+                      <MultiDataTrigger>
+                        <MultiDataTrigger.Conditions>
+                          <Condition Binding="{Binding IsSensitiveSale}" Value="True"/>
+                          <Condition Binding="{Binding Session.IsManager}" Value="False"/>
+                        </MultiDataTrigger.Conditions>
+                        <Setter Property="Visibility" Value="Visible"/>
+                      </MultiDataTrigger>
+                    </Style.Triggers>
+                  </Style>
+                </Border.Style>
+                <TextBlock Text="Vente à crédit ou remise importante : basculez en mode gérant depuis le tableau de bord." Foreground="{StaticResource Warning}" FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap"/>
+              </Border>
+
+              <Button Grid.Row="6" Content="Encaisser et imprimer" Command="{Binding CompleteCommand}" Style="{StaticResource HeroButton}" Margin="4,6,4,2"/>
+              <TextBlock Grid.Row="7" Text="{Binding Status}" Style="{StaticResource StatusText}" Margin="4,0,4,2"/>
           </Grid>
         </Border>
       </Grid>
     </Border>
 
+    <!-- Occupation : l'enregistrement en base puis l'impression thermique figeaient l'écran en silence -->
+    <Border Grid.ColumnSpan="2" Margin="-16" Background="{StaticResource Scrim}" Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}">
+      <Border Style="{StaticResource RaisedCard}" Padding="26,20" HorizontalAlignment="Center" VerticalAlignment="Center">
+        <StackPanel>
+          <TextBlock Text="Enregistrement de la vente…" FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+          <TextBlock Text="Impression du document en cours, ne touchez pas l'écran." Style="{StaticResource HelperText}" HorizontalAlignment="Center" Margin="0,4,0,0"/>
+        </StackPanel>
+      </Border>
+    </Border>
+
     <!-- Popup de création rapide d'un client -->
-    <Border Grid.ColumnSpan="2" Margin="-16" Background="#99202522" Visibility="{Binding IsCustomerDialogOpen, Converter={StaticResource BoolToVis}}">
+    <Border Grid.ColumnSpan="2" Margin="-16" Background="{StaticResource Scrim}" Visibility="{Binding IsCustomerDialogOpen, Converter={StaticResource BoolToVis}}">
       <Border Style="{StaticResource RaisedCard}" Width="420" Padding="20" HorizontalAlignment="Center" VerticalAlignment="Center">
         <StackPanel>
           <TextBlock Text="NOUVEAU CLIENT" Style="{StaticResource Eyebrow}" Margin="4,0,4,4"/>

@@ -43,9 +43,7 @@
         <!-- Actions sur sélection -->
         <Border Grid.Row="1" Background="{StaticResource Ivory}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="10" Padding="10,6" Margin="0,0,0,10">
           <Grid>
-            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="180"/></Grid.ColumnDefinitions>
             <Button Content="Supprimer la dépense sélectionnée" Command="{Binding DeleteExpenseCommand}" Style="{StaticResource DangerButton}" HorizontalAlignment="Left" MinWidth="180"/>
-            <controls:KeypadField Grid.Column="1" Value="{Binding ManagerPin}" Mask="True" Title="PIN responsable"/>
           </Grid>
         </Border>
 
@@ -59,6 +57,7 @@
             <DataGridTextColumn Header="MONTANT" Binding="{Binding AmountXof, StringFormat={}{0:N0} F}" Width="110"/>
           </DataGrid.Columns>
         </DataGrid>
+        <TextBlock Grid.Row="2" Text="Aucune dépense enregistrée." Style="{StaticResource HelperText}" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="16,58,16,0" TextAlignment="Center" IsHitTestVisible="False" Visibility="{Binding RecentExpenses.Count, Converter={StaticResource ZeroToVis}}"/>
       </Grid>
     </Border>
   </Grid>

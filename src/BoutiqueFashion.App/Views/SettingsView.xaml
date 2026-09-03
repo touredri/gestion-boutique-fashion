@@ -4,11 +4,14 @@
     
     <!-- En-tête -->
     <Grid Margin="4,0,4,12">
+      <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
       <StackPanel>
         <TextBlock Text="Paramètres système" Style="{StaticResource Eyebrow}" Margin="0,0,0,2"/>
         <TextBlock Text="Configuration de la boutique, des documents et de l'impression" Style="{StaticResource SectionTitle}"/>
       </StackPanel>
-      <Button HorizontalAlignment="Right" VerticalAlignment="Center" Content="Enregistrer tous les paramètres" Command="{Binding SaveCommand}" Style="{StaticResource HeroButton}" MinWidth="220"/>
+      <!-- Au contact du bouton : en pied de vue, la confirmation était hors du champ visuel. -->
+      <TextBlock Grid.Column="1" Text="{Binding Status}" Style="{StaticResource StatusText}" MaxWidth="280" TextAlignment="Right" VerticalAlignment="Center" Margin="0,0,12,0"/>
+      <Button Grid.Column="2" VerticalAlignment="Center" Content="Enregistrer tous les paramètres" Command="{Binding SaveCommand}" Style="{StaticResource HeroButton}" MinWidth="220"/>
     </Grid>
 
     <TabControl Grid.Row="1" Padding="0">
@@ -78,6 +81,7 @@
 
       <!-- Onglet 2 : Modèles de documents -->
       <TabItem Header="Documents &amp; modèles">
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
         <Grid Margin="0,4,0,0">
           <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="400"/></Grid.ColumnDefinitions>
           
@@ -140,10 +144,12 @@
             </Grid>
           </Border>
         </Grid>
+        </ScrollViewer>
       </TabItem>
 
       <!-- Onglet 3 : Règles métier -->
       <TabItem Header="Règles métier &amp; seuils">
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
         <Border Style="{StaticResource Card}" Margin="0,4,0,0" Padding="18">
           <StackPanel>
             <TextBlock Text="TOLÉRANCES ET SEGMENTATION DE LA CLIENTÈLE" Style="{StaticResource Eyebrow}" Margin="0,0,0,4"/>
@@ -157,10 +163,12 @@
             </UniformGrid>
           </StackPanel>
         </Border>
+        </ScrollViewer>
       </TabItem>
 
       <!-- Onglet 4 : Impression -->
       <TabItem Header="Impression thermique">
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
         <Border Style="{StaticResource Card}" Margin="0,4,0,0" Padding="18">
           <StackPanel>
             <TextBlock Text="CONFIGURATION DE L'IMPRIMANTE THERMIQUE" Style="{StaticResource Eyebrow}" Margin="0,0,0,4"/>
@@ -191,15 +199,20 @@
             </Grid>
           </StackPanel>
         </Border>
+        </ScrollViewer>
       </TabItem>
 
       <!-- Onglet 5 : Sécurité & Données -->
       <TabItem Header="Sécurité &amp; base de données">
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
         <Border Style="{StaticResource Card}" Margin="0,4,0,0" Padding="18">
           <StackPanel>
-            <TextBlock Text="CODE PIN DU RESPONSABLE DE BOUTIQUE" Style="{StaticResource Eyebrow}" Margin="0,0,0,4"/>
-            <TextBlock Text="Le code PIN protège les opérations sensibles (annulations, suppressions, remises > 10%, crédits)." Style="{StaticResource HelperText}" Margin="0,0,0,12"/>
-            
+            <TextBlock Text="CODE GÉRANT" Style="{StaticResource Eyebrow}" Margin="0,0,0,4"/>
+            <TextBlock Text="Ce code ouvre le mode gérant depuis le tableau de bord. Il protège les remises, les ventes à crédit, le stock, les dépenses, les documents et ces paramètres." Style="{StaticResource HelperText}" Margin="0,0,0,6"/>
+            <Border Background="{StaticResource SuccessSoft}" BorderBrush="{StaticResource Success}" BorderThickness="1" CornerRadius="8" Padding="10,6" Margin="0,0,0,12" Visibility="{Binding Session.IsPinConfigured, Converter={StaticResource BoolToVis}}">
+              <TextBlock Text="Un code gérant est défini. Il n'est pas affichable : en cas d'oubli, seule la restauration d'une sauvegarde antérieure à sa création permet de repartir." Foreground="{StaticResource Success}" FontSize="12" TextWrapping="Wrap"/>
+            </Border>
+
             <Grid Margin="0,0,0,14">
               <Grid.ColumnDefinitions><ColumnDefinition Width="180"/><ColumnDefinition Width="180"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
               <controls:KeypadField Value="{Binding Pin}" Mask="True" Title="PIN actuel" Placeholder="Saisir l'ancien" Margin="0,0,8,0"/>
@@ -214,9 +227,9 @@
             <Button Content="Créer une sauvegarde maintenant" Command="{Binding BackupCommand}" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Left" MinWidth="240"/>
           </StackPanel>
         </Border>
+        </ScrollViewer>
       </TabItem>
     </TabControl>
 
-    <TextBlock Grid.Row="2" Text="{Binding Status}" Style="{StaticResource HelperText}" Margin="12,6" AutomationProperties.LiveSetting="Polite"/>
   </Grid>
 </UserControl>

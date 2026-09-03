@@ -18,13 +18,11 @@
       <!-- Actions sur sélection -->
       <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,0,0,8" Padding="10">
         <Grid>
-          <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="180"/></Grid.ColumnDefinitions>
           <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
             <Button Content="Modifier la fiche" Command="{Binding EditCustomerCommand}" Style="{StaticResource PrimaryButton}" Margin="0,0,6,0"/>
             <Button Content="Archiver" Command="{Binding ArchiveCustomerCommand}" Margin="0,0,6,0"/>
             <Button Content="Supprimer" Command="{Binding DeleteCustomerCommand}" Style="{StaticResource DangerButton}"/>
           </StackPanel>
-          <controls:KeypadField Grid.Column="1" Value="{Binding ManagerPin}" Mask="True" Title="PIN responsable"/>
         </Grid>
       </Border>
 
@@ -41,6 +39,7 @@
               <DataGridTextColumn Header="RESTE DÛ" Binding="{Binding OutstandingXof, StringFormat={}{0:N0} F}" Width="110"/>
             </DataGrid.Columns>
           </DataGrid>
+          <TextBlock Grid.Row="1" Text="Aucun client enregistré." Style="{StaticResource HelperText}" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="16,58,16,0" TextAlignment="Center" IsHitTestVisible="False" Visibility="{Binding Items.Count, Converter={StaticResource ZeroToVis}}"/>
         </Grid>
       </Border>
 
@@ -59,6 +58,7 @@
                 <DataGridTextColumn Header="TOTAL" Binding="{Binding TotalXof, StringFormat={}{0:N0} F}" Width="95"/>
               </DataGrid.Columns>
             </DataGrid>
+            <TextBlock Grid.Row="1" Text="Aucun achat pour ce client." Style="{StaticResource HelperText}" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="16,58,16,0" TextAlignment="Center" IsHitTestVisible="False" Visibility="{Binding HistorySales.Count, Converter={StaticResource ZeroToVis}}"/>
           </Grid>
           <!-- Versements -->
           <Grid Grid.Column="1" Margin="6,0,0,0">
@@ -71,6 +71,7 @@
                 <DataGridTextColumn Header="MONTANT" Binding="{Binding AmountXof, StringFormat={}{0:N0} F}" Width="95"/>
               </DataGrid.Columns>
             </DataGrid>
+            <TextBlock Grid.Row="1" Text="Aucun versement pour ce client." Style="{StaticResource HelperText}" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="16,58,16,0" TextAlignment="Center" IsHitTestVisible="False" Visibility="{Binding HistoryPayments.Count, Converter={StaticResource ZeroToVis}}"/>
           </Grid>
         </Grid>
       </Border>
@@ -137,6 +138,7 @@
 
           <!-- Onglet Crédits -->
           <TabItem Header="Gestion des crédits">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
             <Grid Margin="2,4">
               <Grid.RowDefinitions><RowDefinition Height="1.2*"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
               
@@ -152,6 +154,7 @@
                     <DataGridTextColumn Header="ÉCHÉANCE" Binding="{Binding DueAt, StringFormat=dd/MM/yy}" Width="80"/>
                   </DataGrid.Columns>
                 </DataGrid>
+                <TextBlock Grid.Row="1" Text="Aucun crédit en cours." Style="{StaticResource HelperText}" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="16,58,16,0" TextAlignment="Center" IsHitTestVisible="False" Visibility="{Binding Credits.Count, Converter={StaticResource ZeroToVis}}"/>
               </Grid>
 
               <!-- Versements associés -->
@@ -172,6 +175,7 @@
                     </DataGridTemplateColumn>
                   </DataGrid.Columns>
                 </DataGrid>
+                <TextBlock Grid.Row="1" Text="Aucun versement enregistré." Style="{StaticResource HelperText}" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="16,58,16,0" TextAlignment="Center" IsHitTestVisible="False" Visibility="{Binding CreditPayments.Count, Converter={StaticResource ZeroToVis}}"/>
               </Grid>
 
               <!-- Formulaire de règlement -->
@@ -184,14 +188,13 @@
                     <ComboBox Grid.Column="1" ItemsSource="{Binding PaymentModes}" SelectedItem="{Binding PaymentMode}" Margin="4,0,0,0"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Converter={StaticResource EnumFr}}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox>
                   </Grid>
                   <Grid Margin="0,0,0,8">
-                    <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
-                    <TextBox Text="{Binding PaymentReference}" controls:Placeholder.Text="Référence du virement" Margin="0,0,4,0"/>
-                    <controls:KeypadField Grid.Column="1" Value="{Binding ManagerPin}" Mask="True" Title="PIN responsable" Margin="4,0,0,0"/>
+                    <TextBox Text="{Binding PaymentReference}" controls:Placeholder.Text="Référence du virement"/>
                   </Grid>
                   <Button Content="Enregistrer le versement" Command="{Binding PayCreditCommand}" Style="{StaticResource PrimaryButton}"/>
                 </StackPanel>
               </Border>
             </Grid>
+            </ScrollViewer>
           </TabItem>
         </TabControl>
       </Border>

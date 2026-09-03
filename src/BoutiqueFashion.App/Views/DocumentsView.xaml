@@ -23,6 +23,7 @@
 
       <!-- Table des documents -->
       <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,0,0,8" Padding="12">
+        <Grid>
         <DataGrid ItemsSource="{Binding Items}" SelectedItem="{Binding SelectedDocument}">
           <DataGrid.Columns>
             <DataGridTextColumn Header="NUMÉRO" Binding="{Binding Number}" Width="*"/>
@@ -31,6 +32,8 @@
             <DataGridTextColumn Header="IMPRESSIONS" Binding="{Binding PrintCount}" Width="110"/>
           </DataGrid.Columns>
         </DataGrid>
+        <TextBlock Text="Aucun document sur cette période." Style="{StaticResource HelperText}" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="16,58,16,0" TextAlignment="Center" IsHitTestVisible="False" Visibility="{Binding Items.Count, Converter={StaticResource ZeroToVis}}"/>
+        </Grid>
       </Border>
 
       <!-- Actions d'impression -->
@@ -92,7 +95,6 @@
                   <TextBox Grid.Column="2" Text="{Binding ExchangePaymentReference}" controls:Placeholder.Text="Réf." Margin="2,0,0,0"/>
                 </Grid>
                 <TextBox Text="{Binding Reason}" controls:Placeholder.Text="Motif du retour (obligatoire)" Margin="0,0,0,4"/>
-                <controls:KeypadField Value="{Binding ManagerPin}" Mask="True" Title="PIN responsable" Margin="0,0,0,6"/>
                 <Button Content="Valider le retour ou échange" Command="{Binding ReturnExchangeCommand}" Style="{StaticResource PrimaryButton}"/>
               </StackPanel>
             </ScrollViewer>
@@ -100,6 +102,7 @@
 
           <!-- Annulation -->
           <TabItem Header="Annulation">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
             <StackPanel Margin="4,6">
               <Border Background="{StaticResource DangerSoft}" BorderBrush="{StaticResource Danger}" BorderThickness="1" CornerRadius="8" Padding="10,8" Margin="0,0,0,10">
                 <TextBlock Text="Annule l'intégralité de la vente : les articles sont réintégrés et les règlements contre-passés." Foreground="{StaticResource Danger}" FontSize="12" TextWrapping="Wrap"/>
@@ -107,19 +110,21 @@
               <TextBlock Text="Numéro de vente à annuler" Style="{StaticResource FieldLabel}"/>
               <TextBlock Text="{Binding SaleNumber}" FontWeight="Bold" FontSize="18" Foreground="{StaticResource TerracottaDark}" Margin="0,0,0,8"/>
               <TextBox Text="{Binding Reason}" controls:Placeholder.Text="Motif obligatoire d'annulation" Margin="0,0,0,6"/>
-              <controls:KeypadField Value="{Binding ManagerPin}" Mask="True" Title="PIN responsable" Margin="0,0,0,10"/>
               <Button Content="Annuler définitivement la vente" Command="{Binding CancelSaleCommand}" Style="{StaticResource DangerButton}"/>
             </StackPanel>
+            </ScrollViewer>
           </TabItem>
 
           <!-- Proforma -->
           <TabItem Header="Proforma">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
             <StackPanel Margin="4,6">
               <TextBlock Text="Établir une facture proforma / devis sans mouvement de caisse." Style="{StaticResource HelperText}" Margin="0,0,0,8"/>
               <TextBox Text="{Binding ProformaDescription}" controls:Placeholder.Text="Description de la commande..." Margin="0,0,0,6"/>
               <controls:KeypadField Value="{Binding ProformaTotal}" Title="Total Proforma" Suffix="FCFA" Margin="0,0,0,10"/>
               <Button Content="Créer la proforma" Command="{Binding ProformaCommand}" Style="{StaticResource PrimaryButton}"/>
             </StackPanel>
+            </ScrollViewer>
           </TabItem>
         </TabControl>
       </Border>

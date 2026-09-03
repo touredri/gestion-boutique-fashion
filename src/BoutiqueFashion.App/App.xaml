@@ -6,9 +6,17 @@
     <conv:BoolFrConverter x:Key="BoolFr"/>
     <BooleanToVisibilityConverter x:Key="BoolToVis"/>
     <SolidColorBrush x:Key="Canvas" Color="#FFF1F3F0"/><SolidColorBrush x:Key="Ivory" Color="#FFF7F8F5"/><SolidColorBrush x:Key="Paper" Color="#FFFFFFFF"/>
-    <SolidColorBrush x:Key="Ink" Color="#FF202522"/><SolidColorBrush x:Key="Muted" Color="#FF66706A"/><SolidColorBrush x:Key="MutedLight" Color="#FF9AA49D"/>
+    <!-- MutedLight relevé de #9AA49D (2,6:1) à 4,8:1 sur Paper et 4,5:1 sur Ivory : c'est la couleur de tous les textes d'invite. -->
+    <SolidColorBrush x:Key="Ink" Color="#FF202522"/><SolidColorBrush x:Key="Muted" Color="#FF66706A"/><SolidColorBrush x:Key="MutedLight" Color="#FF6A746E"/>
     <SolidColorBrush x:Key="Terracotta" Color="#FFB35F4A"/><SolidColorBrush x:Key="TerracottaDark" Color="#FF8F4636"/><SolidColorBrush x:Key="TerracottaSoft" Color="#FFF7E9E5"/>
-    <SolidColorBrush x:Key="Gold" Color="#FFA9824A"/><SolidColorBrush x:Key="GoldSoft" Color="#FFF6F0E4"/><SolidColorBrush x:Key="Line" Color="#FFE0E6E1"/><SolidColorBrush x:Key="LineStrong" Color="#FFC8D1CB"/>
+    <SolidColorBrush x:Key="Gold" Color="#FFA9824A"/><SolidColorBrush x:Key="GoldSoft" Color="#FFF6F0E4"/><SolidColorBrush x:Key="Line" Color="#FFE0E6E1"/>
+    <!-- LineStrong relevé de #C8D1CB (1,6:1) à 3,2:1 : c'est la bordure au repos des champs et boutons, elle doit se voir. -->
+    <SolidColorBrush x:Key="LineStrong" Color="#FF86928A"/>
+    <!-- Sémantiques qui manquaient : avertissement, information, focus, désactivé, voile de superposition. -->
+    <SolidColorBrush x:Key="Warning" Color="#FF8A6410"/><SolidColorBrush x:Key="WarningSoft" Color="#FFFBF2DE"/>
+    <SolidColorBrush x:Key="Info" Color="#FF2C5A73"/><SolidColorBrush x:Key="InfoSoft" Color="#FFE7F0F5"/>
+    <SolidColorBrush x:Key="Focus" Color="#FFB35F4A"/><SolidColorBrush x:Key="Disabled" Color="#FF9AA49D"/>
+    <SolidColorBrush x:Key="Scrim" Color="#99202522"/>
     <SolidColorBrush x:Key="Success" Color="#FF287158"/><SolidColorBrush x:Key="SuccessSoft" Color="#FFE5F3ED"/><SolidColorBrush x:Key="Danger" Color="#FFB43C3C"/><SolidColorBrush x:Key="DangerSoft" Color="#FFF9E7E7"/>
     <SolidColorBrush x:Key="Nav" Color="#FF202522"/><SolidColorBrush x:Key="NavHover" Color="#FF2B322E"/><SolidColorBrush x:Key="NavActive" Color="#FF35423B"/>
     <DropShadowEffect x:Key="CardShadow" BlurRadius="14" ShadowDepth="1" Opacity="0.06" Color="#FF26332C"/>
@@ -22,6 +30,14 @@
     <!-- Libellé rendu À L'INTÉRIEUR d'un KeypadField : pas de marge latérale, contrairement à FieldLabel qui coiffe un champ frère. -->
     <Style x:Key="FieldLabelInline" TargetType="TextBlock"><Setter Property="FontSize" Value="11"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="Foreground" Value="{StaticResource Muted}"/><Setter Property="Margin" Value="0,0,0,1"/><Setter Property="TextTrimming" Value="CharacterEllipsis"/></Style>
     <Style x:Key="HelperText" TargetType="TextBlock"><Setter Property="FontSize" Value="12"/><Setter Property="Foreground" Value="{StaticResource Muted}"/><Setter Property="TextWrapping" Value="Wrap"/></Style>
+    <!-- Message de retour d'action : se replie tout seul quand le texte est vide, et s'annonce aux lecteurs d'écran. -->
+    <Style x:Key="StatusText" TargetType="TextBlock">
+      <Setter Property="FontSize" Value="12"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="Foreground" Value="{StaticResource Ink}"/><Setter Property="TextWrapping" Value="Wrap"/>
+      <Setter Property="AutomationProperties.LiveSetting" Value="Polite"/>
+      <Style.Triggers>
+        <DataTrigger Binding="{Binding Text, RelativeSource={RelativeSource Self}}" Value=""><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
+      </Style.Triggers>
+    </Style>
     <Style x:Key="Money" TargetType="TextBlock"><Setter Property="FontFamily" Value="Cascadia Mono, Consolas"/><Setter Property="FontWeight" Value="SemiBold"/></Style>
 
     <Style TargetType="Button">
@@ -32,7 +48,8 @@
     <Style x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Setter Property="Foreground" Value="{StaticResource Danger}"/><Setter Property="Background" Value="{StaticResource DangerSoft}"/><Setter Property="BorderBrush" Value="{StaticResource DangerSoft}"/></Style>
     <Style x:Key="QuietButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Setter Property="Background" Value="Transparent"/><Setter Property="BorderBrush" Value="Transparent"/><Setter Property="Foreground" Value="{StaticResource Muted}"/></Style>
     <Style x:Key="KeypadButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Setter Property="MinHeight" Value="64"/><Setter Property="MinWidth" Value="72"/><Setter Property="Margin" Value="4"/><Setter Property="Padding" Value="0"/><Setter Property="FontSize" Value="22"/><Setter Property="FontWeight" Value="Bold"/><Setter Property="Focusable" Value="False"/></Style>
-    <Style x:Key="KeyboardButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Setter Property="MinHeight" Value="44"/><Setter Property="MinWidth" Value="0"/><Setter Property="Margin" Value="2"/><Setter Property="Padding" Value="0"/><Setter Property="FontSize" Value="16"/><Setter Property="Focusable" Value="False"/></Style>
+    <!-- 48 et non 44 : la marge de 2 de chaque côté ramenait la surface tactile nette à 40. -->
+    <Style x:Key="KeyboardButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Setter Property="MinHeight" Value="48"/><Setter Property="MinWidth" Value="0"/><Setter Property="Margin" Value="2"/><Setter Property="Padding" Value="0"/><Setter Property="FontSize" Value="16"/><Setter Property="Focusable" Value="False"/></Style>
     <Style x:Key="HeroButton" TargetType="Button" BasedOn="{StaticResource PrimaryButton}"><Setter Property="MinHeight" Value="56"/><Setter Property="FontSize" Value="16"/></Style>
     <!-- Bouton logé dans une cellule de DataGrid : le 48 par défaut déborde d'une ligne de 46. -->
     <Style x:Key="GridCellButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Setter Property="MinHeight" Value="34"/><Setter Property="MinWidth" Value="0"/><Setter Property="Margin" Value="0"/><Setter Property="Padding" Value="10,4"/><Setter Property="FontSize" Value="12"/></Style>
@@ -130,10 +147,14 @@
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="TabItem">
-            <Border x:Name="TabSurface" Background="Transparent" CornerRadius="9" Padding="{TemplateBinding Padding}" Margin="2,0">
+            <Border x:Name="TabSurface" Background="Transparent" BorderBrush="Transparent" BorderThickness="2" CornerRadius="9" Padding="{TemplateBinding Padding}" Margin="2,0">
               <ContentPresenter ContentSource="Header" VerticalAlignment="Center" HorizontalAlignment="Center"/>
             </Border>
             <ControlTemplate.Triggers>
+              <!-- FocusVisualStyle est neutralisé plus haut : il faut donc un focus de remplacement, sinon la navigation clavier est invisible. -->
+              <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                <Setter TargetName="TabSurface" Property="BorderBrush" Value="{StaticResource Focus}"/>
+              </Trigger>
               <Trigger Property="IsMouseOver" Value="True">
                 <Setter TargetName="TabSurface" Property="Background" Value="{StaticResource Canvas}"/>
                 <Setter Property="Foreground" Value="{StaticResource Ink}"/>
@@ -182,12 +203,6 @@
       <Setter Property="Effect" Value="{StaticResource CardShadow}"/>
       <Setter Property="BorderThickness" Value="0"/>
     </Style>
-    <Style x:Key="StatusPill" TargetType="Border">
-      <Setter Property="Background" Value="{StaticResource SuccessSoft}"/>
-      <Setter Property="CornerRadius" Value="16"/>
-      <Setter Property="Padding" Value="11,6"/>
-    </Style>
-
     <Style x:Key="NavItem" TargetType="RadioButton"><Setter Property="Foreground" Value="#FFD9D2CA"/><Setter Property="Background" Value="Transparent"/><Setter Property="Height" Value="48"/><Setter Property="Margin" Value="0,2"/><Setter Property="Cursor" Value="Hand"/><Setter Property="FontSize" Value="14"/><Setter Property="FontWeight" Value="SemiBold"/>
       <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="RadioButton"><Border x:Name="NavSurface" Background="{TemplateBinding Background}" BorderBrush="Transparent" BorderThickness="1" CornerRadius="9" Padding="12,0"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="30"/><ColumnDefinition Width="*"/><ColumnDefinition Width="3"/></Grid.ColumnDefinitions><TextBlock Text="{TemplateBinding Tag}" FontFamily="Segoe MDL2 Assets" FontSize="17" Foreground="{TemplateBinding Foreground}" VerticalAlignment="Center"/><ContentPresenter Grid.Column="1" VerticalAlignment="Center"/><Border x:Name="Marker" Grid.Column="2" Width="3" Height="22" CornerRadius="2" Background="Transparent"/></Grid></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="NavSurface" Property="Background" Value="{StaticResource NavHover}"/></Trigger><Trigger Property="IsChecked" Value="True"><Setter TargetName="NavSurface" Property="Background" Value="{StaticResource NavActive}"/><Setter Property="Foreground" Value="White"/><Setter TargetName="Marker" Property="Background" Value="{StaticResource Gold}"/></Trigger><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="NavSurface" Property="BorderBrush" Value="{StaticResource Gold}"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
     </Style>

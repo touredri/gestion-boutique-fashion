@@ -1,5 +1,4 @@
 <UserControl x:Class="BoutiqueFashion.App.Views.ReportsView" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:controls="clr-namespace:BoutiqueFashion.App.Controls">
-  <UserControl.Resources><BooleanToVisibilityConverter x:Key="BoolToVis"/></UserControl.Resources>
   <Grid Margin="16">
     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
     
@@ -41,9 +40,13 @@
         </StackPanel>
 
         <!-- Boutons d'action -->
-        <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Bottom">
-          <Button Content="Actualiser" Command="{Binding RefreshCommand}" Style="{StaticResource PrimaryButton}" MinWidth="100" Margin="0,0,6,0"/>
-          <Button Content="Exporter CSV" Command="{Binding ExportCsvCommand}" MinWidth="110"/>
+        <StackPanel Grid.Column="4" VerticalAlignment="Bottom">
+          <StackPanel Orientation="Horizontal">
+            <Button Content="Actualiser" Command="{Binding RefreshCommand}" Style="{StaticResource PrimaryButton}" MinWidth="100" Margin="0,0,6,0"/>
+            <Button Content="Exporter CSV" Command="{Binding ExportCsvCommand}" MinWidth="110"/>
+          </StackPanel>
+          <!-- Sans ce binding, « Exporter CSV » ne disait ni où allait le fichier ni s'il avait échoué. -->
+          <TextBlock Text="{Binding Status}" Style="{StaticResource StatusText}" MaxWidth="230" Margin="2,4,2,0"/>
         </StackPanel>
       </Grid>
     </Border>
@@ -108,6 +111,7 @@
               <DataGridTextColumn Header="QTÉ / ÉCART" Binding="{Binding Quantity}" Width="110"/>
             </DataGrid.Columns>
           </DataGrid>
+          <TextBlock Grid.Row="1" Text="Aucune donnée sur cette période. Ajustez les dates puis Actualiser." Style="{StaticResource HelperText}" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="16,58,16,0" TextAlignment="Center" IsHitTestVisible="False" Visibility="{Binding Rows.Count, Converter={StaticResource ZeroToVis}}"/>
         </Grid>
       </Border>
 
@@ -123,6 +127,7 @@
               <DataGridTextColumn Header="MOTIF DE L'ÉCART" Binding="{Binding Reason}" Width="*"/>
             </DataGrid.Columns>
           </DataGrid>
+          <TextBlock Grid.Row="1" Text="Aucune clôture de caisse sur cette période." Style="{StaticResource HelperText}" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="16,58,16,0" TextAlignment="Center" IsHitTestVisible="False" Visibility="{Binding Closings.Count, Converter={StaticResource ZeroToVis}}"/>
         </Grid>
       </Border>
     </Grid>

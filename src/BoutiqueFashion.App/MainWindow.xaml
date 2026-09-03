@@ -32,18 +32,18 @@
               <TextBlock Text="POINT DE VENTE" Foreground="{StaticResource Gold}" FontSize="10" FontWeight="SemiBold"/>
             </StackPanel>
           </Grid>
-          <TextBlock Text="Espace de travail" Foreground="#FF9AA49D" FontSize="11" FontWeight="SemiBold" Margin="10,0,0,7"/>
-          <RadioButton Content="Tableau de bord" Tag="&#xE80F;" GroupName="Navigation" IsChecked="True" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Dashboard"/>
-          <RadioButton Content="Vente / Caisse" Tag="&#xE719;" GroupName="Navigation" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Sale"/>
-          <RadioButton Content="Produits" Tag="&#xE7BF;" GroupName="Navigation" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Catalog"/>
-          <RadioButton Content="Stock" Tag="&#xE8B7;" GroupName="Navigation" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Stock"/>
-          <RadioButton Content="Clients" Tag="&#xE77B;" GroupName="Navigation" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Customers"/>
-          <RadioButton Content="Dépenses" Tag="&#xE8C7;" GroupName="Navigation" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Expenses"/>
-          <RadioButton Content="Documents" Tag="&#xE8A5;" GroupName="Navigation" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Documents"/>
-          <RadioButton Content="Rapports" Tag="&#xE9D2;" GroupName="Navigation" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Reports"/>
-          <RadioButton Content="Paramètres" Tag="&#xE713;" GroupName="Navigation" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Settings"/>
+          <TextBlock Text="Espace de travail" Foreground="{StaticResource MutedLight}" FontSize="11" FontWeight="SemiBold" Margin="10,0,0,7"/>
+          <RadioButton Content="Tableau de bord" Tag="&#xE80F;" GroupName="Navigation" AutomationProperties.Name="Tableau de bord" IsChecked="True" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Dashboard"/>
+          <RadioButton Content="Vente / Caisse" Tag="&#xE719;" GroupName="Navigation" AutomationProperties.Name="Vente / Caisse" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Sale"/>
+          <RadioButton Content="Produits" Tag="&#xE7BF;" GroupName="Navigation" AutomationProperties.Name="Produits" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Catalog"/>
+          <RadioButton Content="Stock" Tag="&#xE8B7;" GroupName="Navigation" AutomationProperties.Name="Stock" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Stock" Visibility="{Binding Session.IsManager, Converter={StaticResource BoolToVis}}"/>
+          <RadioButton Content="Clients" Tag="&#xE77B;" GroupName="Navigation" AutomationProperties.Name="Clients" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Customers"/>
+          <RadioButton Content="Dépenses" Tag="&#xE8C7;" GroupName="Navigation" AutomationProperties.Name="Dépenses" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Expenses" Visibility="{Binding Session.IsManager, Converter={StaticResource BoolToVis}}"/>
+          <RadioButton Content="Documents" Tag="&#xE8A5;" GroupName="Navigation" AutomationProperties.Name="Documents" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Documents" Visibility="{Binding Session.IsManager, Converter={StaticResource BoolToVis}}"/>
+          <RadioButton Content="Rapports" Tag="&#xE9D2;" GroupName="Navigation" AutomationProperties.Name="Rapports" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Reports"/>
+          <RadioButton Content="Paramètres" Tag="&#xE713;" GroupName="Navigation" AutomationProperties.Name="Paramètres" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Settings" Visibility="{Binding Session.IsManager, Converter={StaticResource BoolToVis}}"/>
         </StackPanel>
-        <Border DockPanel.Dock="Bottom" Background="#FF2B322E" CornerRadius="8" Padding="12" Margin="0,14,0,0">
+        <Border DockPanel.Dock="Bottom" Background="{StaticResource NavHover}" CornerRadius="8" Padding="12" Margin="0,14,0,0">
           <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="34"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
             <Border Width="30" Height="30" Background="{StaticResource GoldSoft}" CornerRadius="15"><TextBlock Text="V" Foreground="{StaticResource TerracottaDark}" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
             <StackPanel Grid.Column="1" Margin="8,0,0,0"><TextBlock Text="Vendeur boutique" Foreground="White" FontWeight="SemiBold" FontSize="12"/><TextBlock Text="Session active" Foreground="#FF9B948C" FontSize="11"/></StackPanel>
@@ -59,6 +59,13 @@
             <TextBlock Text="Boutique Fashion" Foreground="{StaticResource Muted}" FontSize="11" FontWeight="SemiBold"/>
             <TextBlock Text="{Binding PageTitle}" Style="{StaticResource PageTitle}"/>
           </StackPanel>
+          <!-- Indicateur de mode : sans lui, impossible de savoir si la caisse est déverrouillée. -->
+          <Border Grid.Column="1" Background="{StaticResource WarningSoft}" BorderBrush="{StaticResource Warning}" BorderThickness="1" CornerRadius="8" Padding="10,5" VerticalAlignment="Center" Visibility="{Binding Session.IsManager, Converter={StaticResource BoolToVis}}">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Text="MODE GÉRANT" Foreground="{StaticResource Warning}" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
+              <TextBlock Text="· expire après 15 min d'inactivité" Foreground="{StaticResource Warning}" FontSize="11" VerticalAlignment="Center" Margin="6,0,0,0"/>
+            </StackPanel>
+          </Border>
         </Grid>
       </Border>
       <ContentControl Grid.Row="1" Content="{Binding CurrentPage}" Focusable="False"/>

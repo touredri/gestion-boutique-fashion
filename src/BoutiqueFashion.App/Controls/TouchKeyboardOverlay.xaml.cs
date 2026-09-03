@@ -12,17 +12,22 @@ public partial class TouchKeyboardOverlay : UserControl
     [
         ["a", "z", "e", "r", "t", "y", "u", "i", "o", "p"],
         ["q", "s", "d", "f", "g", "h", "j", "k", "l", "m"],
-        ["w", "x", "c", "v", "b", "n", ",", ";", ":", "!"]
+        ["w", "x", "c", "v", "b", "n", ",", ";", ":", "!"],
+        // Sans cette rangée, aucun nom français ou ivoirien ne pouvait être saisi correctement,
+        // et la recherche client par nom ne retrouvait donc rien.
+        ["é", "è", "ê", "à", "â", "ç", "ù", "î", "ô", "'"]
     ];
 
     private static readonly string[][] DigitRows =
     [
         ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"],
         ["@", "#", "€", "$", "%", "*", "+", "-", "=", "/"],
-        ["(", ")", "_", ".", "?", "'", "\"", "&", "<", ">"]
+        ["(", ")", "_", ".", "?", "'", "\"", "&", "<", ">"],
+        ["[", "]", "{", "}", "|", "\\", "~", "^", "°", ";"]
     ];
 
     private TextBox? target;
+    private string original = string.Empty;
     private bool shifted;
     private bool digitsMode;
 
@@ -35,6 +40,7 @@ public partial class TouchKeyboardOverlay : UserControl
     internal void Open(TextBox textBox)
     {
         target = textBox;
+        original = textBox.Text ?? string.Empty;
         shifted = false;
         digitsMode = false;
         ModeButton.Content = "123";
@@ -53,7 +59,8 @@ public partial class TouchKeyboardOverlay : UserControl
         UpdateDisplay();
         Render();
         Visibility = Visibility.Visible;
-
+        // On ne prend PAS le focus ici : le TextBox cible doit le garder, sinon un binding
+        // en UpdateSourceTrigger=LostFocus n'aurait plus jamais d'occasion de se propager.
         textBox.BringIntoView();
     }
 
@@ -76,6 +83,7 @@ public partial class TouchKeyboardOverlay : UserControl
         Fill(Row1, DigitOrLetter(0));
         Fill(Row2, DigitOrLetter(1));
         Fill(Row3, DigitOrLetter(2));
+        Fill(Row4, DigitOrLetter(3));
     }
 
     private string[] DigitOrLetter(int row) =>
@@ -161,16 +169,27 @@ public partial class TouchKeyboardOverlay : UserControl
         Render();
     }
 
+    // Même règle que le pavé numérique : valider et fermer par le voile conservent la saisie,
+    // seul « Annuler » restaure le texte d'origine.
     private void OnOk(object sender, RoutedEventArgs e) => Close();
 
     private void OnCancel(object sender, MouseButtonEventArgs e) => Close();
 
-    private void OnCancelClick(object sender, RoutedEventArgs e) => Close();
+    private void OnCancelClick(object sender, RoutedEventArgs e) => Revert();
+
+    private void Revert()
+    {
+        // Le clavier écrit en direct dans le TextBox : annuler consiste à réécrire l'état initial.
+        if (target is not null) { target.Text = original; target.SelectionStart = original.Length; }
+        Close();
+    }
 
     private void Close()
     {
+        var box = target;
         target = null;
         Visibility = Visibility.Collapsed;
+        box?.Focus();
     }
 
     private void OnCardTap(object sender, MouseButtonEventArgs e) => e.Handled = true;

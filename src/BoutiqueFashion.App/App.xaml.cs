@@ -13,6 +13,7 @@ public partial class App : System.Windows.Application
     private readonly IHost host = Host.CreateDefaultBuilder().ConfigureServices(services =>
     {
         services.AddBoutiqueInfrastructure();
+        services.AddSingleton<ManagerSession>();
         services.AddSingleton<ShellViewModel>(); services.AddSingleton<DashboardViewModel>(); services.AddSingleton<SaleViewModel>();
         services.AddSingleton<CatalogViewModel>(); services.AddSingleton<StockViewModel>(); services.AddSingleton<CustomersViewModel>();
         services.AddSingleton<ExpensesViewModel>(); services.AddSingleton<DocumentsViewModel>(); services.AddSingleton<ReportsViewModel>(); services.AddSingleton<SettingsViewModel>(); services.AddSingleton<MainWindow>();

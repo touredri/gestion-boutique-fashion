@@ -17,13 +17,22 @@
       </StackPanel>
       <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
         <Button Content="Nouvelle vente" Command="{Binding QuickSellCommand}" Style="{StaticResource HeroButton}" MinWidth="160" Margin="4,0"/>
-        <Button Content="Gérer les produits" Command="{Binding QuickProductsCommand}" MinHeight="56" MinWidth="160" FontSize="15" Margin="4,0"/>
+        <Button Content="Gérer les produits" Command="{Binding QuickProductsCommand}" MinHeight="56" MinWidth="160" FontSize="15" Margin="4,0" Visibility="{Binding Session.IsManager, Converter={StaticResource BoolToVis}}"/>
+        <!-- Bascule de mode : un seul code, saisi une fois, au lieu d'un PIN dans chaque écran. -->
+        <Button Command="{Binding OpenManagerModeCommand}" MinHeight="56" MinWidth="170" FontSize="15" Margin="4,0" AutomationProperties.Name="Passer en mode gérant" Visibility="{Binding Session.IsSeller, Converter={StaticResource BoolToVis}}">
+          <StackPanel Orientation="Horizontal">
+            <TextBlock Text="&#xE72E;" FontFamily="Segoe MDL2 Assets" FontSize="15" VerticalAlignment="Center" Margin="0,0,8,0"/>
+            <TextBlock Text="Mode gérant" VerticalAlignment="Center"/>
+          </StackPanel>
+        </Button>
+        <Button Content="Quitter le mode gérant" Command="{Binding LeaveManagerModeCommand}" Style="{StaticResource DangerButton}" MinHeight="56" MinWidth="190" FontSize="15" Margin="4,0" Visibility="{Binding Session.IsManager, Converter={StaticResource BoolToVis}}"/>
       </StackPanel>
     </Grid>
 
     <!-- SECTION GESTION & ÉTAT DE LA CAISSE DU JOUR -->
     <Border Grid.Row="1" Style="{StaticResource Card}" Margin="4,0,4,12" Padding="16">
       <Grid>
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
         <!-- Cas 1 : Caisse Fermée -->
         <Grid>
           <Grid.Style>
@@ -92,7 +101,6 @@
                 <Grid.ColumnDefinitions>
                   <ColumnDefinition Width="1.2*"/>
                   <ColumnDefinition Width="2*"/>
-                  <ColumnDefinition Width="140"/>
                   <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <controls:KeypadField Value="{Binding CountedCash}" Title="Espèces réelles comptées" Suffix="FCFA" Margin="0,0,8,0"/>
@@ -100,12 +108,14 @@
                   <TextBlock Text="Motif de l'écart (si constaté)" Style="{StaticResource FieldLabel}" Margin="2,0,2,2"/>
                   <TextBox Text="{Binding CashDifferenceReason}" controls:Placeholder.Text="Justification de l'écart..."/>
                 </StackPanel>
-                <controls:KeypadField Grid.Column="2" Value="{Binding ManagerPin}" Mask="True" Title="PIN responsable" Margin="0,0,8,0"/>
-                <Button Grid.Column="3" Content="Clôturer la caisse" Command="{Binding CloseCashCommand}" Style="{StaticResource DangerButton}" VerticalAlignment="Bottom" MinWidth="160"/>
+                <Button Grid.Column="2" Content="Clôturer la caisse" Command="{Binding CloseCashCommand}" Style="{StaticResource DangerButton}" VerticalAlignment="Bottom" MinWidth="160"/>
               </Grid>
             </Border>
           </Expander>
         </Grid>
+
+        <!-- Retour d'action de la caisse : sans ce binding, les refus d'ouverture/clôture étaient muets. -->
+        <TextBlock Grid.Row="1" Text="{Binding CashStatus}" Style="{StaticResource StatusText}" Margin="2,10,2,0"/>
       </Grid>
     </Border>
 
@@ -209,5 +219,48 @@
         </Grid>
       </Border>
     </Grid>
+
+    <!-- Dialogue du code gérant. Overlay dans la page et non fenêtre modale : le pavé tactile
+         est ancré dans MainWindow et passerait derrière une modale. -->
+    <Border Grid.RowSpan="5" Margin="-18" Background="{StaticResource Scrim}" Visibility="{Binding IsPinDialogOpen, Converter={StaticResource BoolToVis}}">
+      <Border Style="{StaticResource RaisedCard}" Width="430" Padding="22" HorizontalAlignment="Center" VerticalAlignment="Center">
+        <StackPanel>
+          <TextBlock Text="MODE GÉRANT" Style="{StaticResource Eyebrow}" Margin="2,0,2,4"/>
+
+          <!-- Premier lancement : aucun code n'existe en base, on le fait créer. -->
+          <StackPanel Visibility="{Binding IsPinCreation, Converter={StaticResource BoolToVis}}">
+            <TextBlock Text="Créez votre code gérant" Style="{StaticResource SectionTitle}"/>
+            <TextBlock Text="Aucun code n'est encore défini. Choisissez 4 à 12 chiffres. Il protège les remises, les ventes à crédit, le stock et les paramètres — notez-le, il n'est récupérable que par restauration d'une sauvegarde." Style="{StaticResource HelperText}" Margin="2,0,2,10"/>
+            <TextBlock Text="Nouveau code" Style="{StaticResource FieldLabel}"/>
+            <controls:KeypadField Value="{Binding PinEntry}" Mask="True" Placeholder="4 à 12 chiffres" AutomationProperties.Name="Nouveau code gérant"/>
+            <TextBlock Text="Confirmer le code" Style="{StaticResource FieldLabel}"/>
+            <controls:KeypadField Value="{Binding PinConfirm}" Mask="True" Placeholder="Ressaisir le code" AutomationProperties.Name="Confirmation du code gérant"/>
+          </StackPanel>
+
+          <!-- Pas de Visibility en attribut : une valeur locale l'emporterait sur le déclencheur du style. -->
+          <StackPanel>
+            <StackPanel.Style>
+              <Style TargetType="StackPanel">
+                <Setter Property="Visibility" Value="Visible"/>
+                <Style.Triggers>
+                  <DataTrigger Binding="{Binding IsPinCreation}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
+                </Style.Triggers>
+              </Style>
+            </StackPanel.Style>
+            <TextBlock Text="Saisissez le code gérant" Style="{StaticResource SectionTitle}"/>
+            <TextBlock Text="Débloque les produits, le stock, les dépenses, les documents et les paramètres, ainsi que les remises et ventes à crédit." Style="{StaticResource HelperText}" Margin="2,0,2,10"/>
+            <TextBlock Text="Code gérant" Style="{StaticResource FieldLabel}"/>
+            <controls:KeypadField Value="{Binding PinEntry}" Mask="True" Placeholder="Toucher pour saisir" AutomationProperties.Name="Code gérant"/>
+          </StackPanel>
+
+          <TextBlock Text="{Binding PinDialogError}" Foreground="{StaticResource Danger}" FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap" Margin="2,8,2,0"/>
+          <Grid Margin="0,14,0,0">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+            <Button Content="Annuler" Command="{Binding CancelPinDialogCommand}"/>
+            <Button Grid.Column="1" Content="Valider" Command="{Binding SubmitPinCommand}" Style="{StaticResource PrimaryButton}"/>
+          </Grid>
+        </StackPanel>
+      </Border>
+    </Border>
   </Grid>
 </UserControl>

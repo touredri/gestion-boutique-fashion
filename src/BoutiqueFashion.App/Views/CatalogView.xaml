@@ -14,7 +14,7 @@
 
     <TabControl Grid.Row="1" SelectedIndex="{Binding SelectedTab}" Padding="0">
       <!-- Onglet 1 : Ajouter / Modifier -->
-      <TabItem Header="Ajouter / Modifier un produit">
+      <TabItem Header="Ajouter / Modifier un produit" Visibility="{Binding Session.IsManager, Converter={StaticResource BoolToVis}}">
         <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,4,0,0">
           <StackPanel>
             <!-- Bloc 1 : Informations générales -->
@@ -85,10 +85,9 @@
 
                 <!-- Actions de validation -->
                 <Grid Margin="0,14,0,0">
-                  <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="180"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                   <Button Content="{Binding SaveButtonLabel}" Command="{Binding SaveVariantsCommand}" Style="{StaticResource HeroButton}" MinWidth="180" Margin="0,0,10,0"/>
-                  <StackPanel Grid.Column="1"><TextBlock Text="PIN responsable" Style="{StaticResource FieldLabel}"/><controls:KeypadField Value="{Binding ManagerPin}" Mask="True" AutomationProperties.Name="PIN responsable"/></StackPanel>
-                  <TextBlock Grid.Column="2" Text="{Binding Status}" Style="{StaticResource HelperText}" VerticalAlignment="Center" Margin="14,0,0,0" TextWrapping="Wrap"/>
+                  <TextBlock Grid.Column="1" Text="{Binding Status}" Style="{StaticResource StatusText}" VerticalAlignment="Center" Margin="14,0,0,0"/>
                 </Grid>
               </StackPanel>
             </Border>
@@ -118,8 +117,8 @@
             </StackPanel>
           </Border>
 
-          <!-- Barre d'action sur sélection -->
-          <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,0,0,8" Padding="12">
+          <!-- Barre d'action sur sélection : modifier, archiver et supprimer sont des actions gérant. -->
+          <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,0,0,8" Padding="12" Visibility="{Binding Session.IsManager, Converter={StaticResource BoolToVis}}">
             <Grid>
               <StackPanel Orientation="Horizontal" Visibility="{Binding HasSelection, Converter={StaticResource BoolToVis}}">
                 <Button Content="Modifier le produit" Command="{Binding EditSelectedCommand}" Style="{StaticResource PrimaryButton}" MinWidth="140" Margin="0,0,8,0"/>
@@ -160,6 +159,7 @@
               <DataGridTextColumn Header="PROMO" Binding="{Binding PromotionalPriceXof, StringFormat={}{0:N0} F}" Width="100"/>
             </DataGrid.Columns>
           </DataGrid>
+          <TextBlock Grid.Row="2" Text="Aucun produit enregistré. Créez-en un dans l'onglet précédent." Style="{StaticResource HelperText}" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="16,58,16,0" TextAlignment="Center" IsHitTestVisible="False" Visibility="{Binding Items.Count, Converter={StaticResource ZeroToVis}}"/>
         </Grid>
       </TabItem>
     </TabControl>

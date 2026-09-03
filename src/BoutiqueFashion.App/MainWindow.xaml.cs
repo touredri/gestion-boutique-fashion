@@ -10,24 +10,33 @@ namespace BoutiqueFashion.App;
 
 public partial class MainWindow : Window
 {
-    public MainWindow(ShellViewModel viewModel)
+    private readonly ManagerSession session;
+
+    public MainWindow(ShellViewModel viewModel, ManagerSession session)
     {
         InitializeComponent();
         DataContext = viewModel;
+        this.session = session;
 
         AddHandler(UIElement.PreviewMouseLeftButtonDownEvent, new MouseButtonEventHandler(OnWindowPreviewMouseDown), true);
         AddHandler(UIElement.PreviewTouchDownEvent, new EventHandler<TouchEventArgs>(OnWindowPreviewTouchDown), true);
+        AddHandler(UIElement.PreviewKeyDownEvent, new KeyEventHandler(OnWindowPreviewKeyDown), true);
     }
 
     private void OnWindowPreviewMouseDown(object sender, MouseButtonEventArgs e)
     {
+        session.Touch();
         TryOpenTouchKeyboard(e.OriginalSource as DependencyObject);
     }
 
     private void OnWindowPreviewTouchDown(object? sender, TouchEventArgs e)
     {
+        session.Touch();
         TryOpenTouchKeyboard(e.OriginalSource as DependencyObject);
     }
+
+    // Toute interaction repousse l'expiration du mode gérant.
+    private void OnWindowPreviewKeyDown(object sender, KeyEventArgs e) => session.Touch();
 
     private static void TryOpenTouchKeyboard(DependencyObject? source)
     {

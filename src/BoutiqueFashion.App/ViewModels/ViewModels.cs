@@ -13,14 +13,48 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace BoutiqueFashion.App.ViewModels;
 
-public partial class ShellViewModel(DashboardViewModel dashboard, SaleViewModel sale, CatalogViewModel catalog, StockViewModel stock, CustomersViewModel customers, ExpensesViewModel expenses, DocumentsViewModel documents, ReportsViewModel reports, SettingsViewModel settings) : ObservableObject
+public partial class ShellViewModel : ObservableObject
 {
-    [ObservableProperty] private object currentPage = dashboard; [ObservableProperty] private string pageTitle = "Tableau de bord";
-    public async Task InitializeAsync() { AppNavigator.Go = Navigate; await dashboard.LoadAsync(); await sale.LoadAsync(); }
+    /// <summary>Écrans réservés au gérant : quitter le mode doit en faire sortir immédiatement.</summary>
+    private static readonly string[] ManagerOnlyPages = ["Stock", "Expenses", "Documents", "Settings"];
+
+    private readonly DashboardViewModel dashboard; private readonly SaleViewModel sale; private readonly CatalogViewModel catalog;
+    private readonly StockViewModel stock; private readonly CustomersViewModel customers; private readonly ExpensesViewModel expenses;
+    private readonly DocumentsViewModel documents; private readonly ReportsViewModel reports; private readonly SettingsViewModel settings;
+
+    public ShellViewModel(ManagerSession session, DashboardViewModel dashboard, SaleViewModel sale, CatalogViewModel catalog, StockViewModel stock, CustomersViewModel customers, ExpensesViewModel expenses, DocumentsViewModel documents, ReportsViewModel reports, SettingsViewModel settings)
+    {
+        Session = session;
+        this.dashboard = dashboard; this.sale = sale; this.catalog = catalog; this.stock = stock; this.customers = customers;
+        this.expenses = expenses; this.documents = documents; this.reports = reports; this.settings = settings;
+        CurrentPage = dashboard;
+        Session.PropertyChanged += OnSessionChanged;
+    }
+
+    public ManagerSession Session { get; }
+    [ObservableProperty] private object currentPage; [ObservableProperty] private string pageTitle = "Tableau de bord";
+    [ObservableProperty] private string currentTarget = "Dashboard";
+
+    public async Task InitializeAsync()
+    {
+        AppNavigator.Go = Navigate;
+        await Session.RefreshPinStateAsync();
+        await dashboard.LoadAsync();
+        await sale.LoadAsync();
+    }
+
+    private void OnSessionChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(ManagerSession.IsManager) || Session.IsManager) return;
+        if (ManagerOnlyPages.Contains(CurrentTarget)) _ = Navigate("Dashboard");
+    }
+
     [RelayCommand] private async Task Navigate(string target)
     {
+        // Une navigation forcée (lien direct, retour de verrouillage) ne doit pas ouvrir un écran gérant.
+        if (ManagerOnlyPages.Contains(target) && !Session.IsManager) target = "Dashboard";
         (object Page, string Title) next = target switch { "Sale" => (sale, "Vente / Caisse"), "Catalog" => (catalog, "Produits et variantes"), "Stock" => (stock, "Gestion du stock"), "Customers" => (customers, "Clients et crédits"), "Expenses" => (expenses, "Dépenses"), "Documents" => (documents, "Documents et opérations"), "Reports" => (reports, "Rapports"), "Settings" => (settings, "Paramètres"), _ => (dashboard, "Tableau de bord") };
-        CurrentPage = next.Page; PageTitle = next.Title;
+        CurrentPage = next.Page; PageTitle = next.Title; CurrentTarget = target;
         if (CurrentPage is ILoadable loadable) await loadable.LoadAsync();
     }
 }
@@ -43,17 +77,66 @@ internal static class AppNavigator
     public static Func<string, Task>? Go { get; set; }
 }
 
-public partial class DashboardViewModel(IReportService reports, ICashSessionService cash) : ObservableObject, ILoadable
+public partial class DashboardViewModel(IReportService reports, ICashSessionService cash, ManagerSession session) : ObservableObject, ILoadable
 {
     public ObservableCollection<RecentSaleRow> RecentSales { get; } = [];
+    public ManagerSession Session => session;
     [ObservableProperty] private DashboardSummary summary = new(0, 0, 0, 0, 0, 0);
     [ObservableProperty] private string cashSessionState = "Caisse fermée";
     [ObservableProperty] private bool isCashOpen;
     [ObservableProperty] private string openingFloat = "0";
     [ObservableProperty] private string countedCash = "";
     [ObservableProperty] private string cashDifferenceReason = "";
-    [ObservableProperty] private string managerPin = "";
     [ObservableProperty] private string cashStatus = "";
+    /// <summary>Le PIN vient de la session gérant : plus aucun écran ne le redemande.</summary>
+    private string ManagerPin => session.Pin;
+
+    // --- Bascule vers le mode gérant ---
+    [ObservableProperty] private bool isPinDialogOpen;
+    [ObservableProperty] private bool isPinCreation;
+    [ObservableProperty] private string pinEntry = string.Empty;
+    [ObservableProperty] private string pinConfirm = string.Empty;
+    [ObservableProperty] private string pinDialogError = string.Empty;
+
+    [RelayCommand]
+    private async Task OpenManagerMode()
+    {
+        await session.RefreshPinStateAsync();
+        // Premier lancement : aucun PIN en base, on le fait créer au lieu de le demander.
+        IsPinCreation = !session.IsPinConfigured;
+        PinEntry = PinConfirm = PinDialogError = string.Empty;
+        IsPinDialogOpen = true;
+    }
+
+    [RelayCommand]
+    private void CancelPinDialog()
+    {
+        IsPinDialogOpen = false;
+        PinEntry = PinConfirm = PinDialogError = string.Empty;
+    }
+
+    [RelayCommand]
+    private async Task SubmitPin()
+    {
+        try
+        {
+            if (IsPinCreation)
+            {
+                await session.CreatePinAsync(PinEntry, PinConfirm);
+                CashStatus = "Code gérant créé. Notez-le : il n'est récupérable que par restauration d'une sauvegarde.";
+            }
+            else if (!await session.TryUnlockAsync(PinEntry))
+            {
+                PinDialogError = "Code gérant incorrect.";
+                return;
+            }
+            IsPinDialogOpen = false;
+            PinEntry = PinConfirm = PinDialogError = string.Empty;
+        }
+        catch (Exception e) { PinDialogError = e.Message; }
+    }
+
+    [RelayCommand] private void LeaveManagerMode() => session.Lock();
 
     public async Task LoadAsync()
     {
@@ -110,7 +193,6 @@ public partial class DashboardViewModel(IReportService reports, ICashSessionServ
             IsCashOpen = false;
             CountedCash = "";
             CashDifferenceReason = "";
-            ManagerPin = "";
             UiFeedback.Success($"Caisse clôturée. Écart : {result.DifferenceXof:N0} FCFA");
             await LoadAsync();
         }
@@ -177,7 +259,7 @@ public partial class CartLineViewModel(ProductVariant variant) : ObservableObjec
 
 public partial class PaymentLineViewModel : ObservableObject { public IReadOnlyList<PaymentMode> Modes { get; } = Enum.GetValues<PaymentMode>(); [ObservableProperty] private PaymentMode mode = PaymentMode.Cash; [ObservableProperty] private long amountXof; [ObservableProperty] private string reference = string.Empty; }
 
-public partial class SaleViewModel(ICatalogService catalog, ICustomerService customers, ISaleService sales, ICashSessionService cash, IThermalPrinterService printerService, IAppSettingsService settings, IDocumentService documents) : ObservableObject, ILoadable
+public partial class SaleViewModel(ICatalogService catalog, ICustomerService customers, ISaleService sales, ICashSessionService cash, IThermalPrinterService printerService, IAppSettingsService settings, IDocumentService documents, ManagerSession session) : ObservableObject, ILoadable
 {
     public ObservableCollection<ProductVariant> Products { get; } = [];
     private readonly List<ProductVariant> masterProducts = [];
@@ -212,12 +294,15 @@ public partial class SaleViewModel(ICatalogService catalog, ICustomerService cus
     [ObservableProperty] private CustomerRow? selectedCustomer;
     [ObservableProperty] private decimal discountPercent;
     [ObservableProperty] private string discountReason = string.Empty;
-    [ObservableProperty] private string managerPin = string.Empty;
+    /// <summary>Le PIN vient de la session gérant : plus aucun écran ne le redemande.</summary>
+    private string ManagerPin => session.Pin;
     [ObservableProperty] private string creditDueDate = DateTime.Today.AddDays(30).ToString("yyyy-MM-dd");
     [ObservableProperty] private string status = "Prêt";
     [ObservableProperty] private string cashSessionState = "Caisse fermée";
     [ObservableProperty] private bool isCashOpen;
-    [ObservableProperty] private bool isBusy;
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(CompleteCommand))]
+    private bool isBusy;
     [ObservableProperty] private string customerSearch = string.Empty;
     [ObservableProperty] private CustomerChoice? selectedCustomerChoice;
     [ObservableProperty] private bool isCustomerDialogOpen;
@@ -226,15 +311,18 @@ public partial class SaleViewModel(ICatalogService catalog, ICustomerService cus
     public long TotalXof => Cart.Sum(x => x.TotalXof);
     public long PayableXof => TotalXof - BusinessRules.CalculateDiscount(TotalXof, DiscountPercent == 0 ? DiscountKind.None : DiscountKind.Percentage, DiscountPercent);
     public long ChangePreview { get { var sum = Payments.Sum(x => x.AmountXof); return sum > PayableXof ? sum - PayableXof : 0; } }
-    /// <summary>Le PIN responsable n'est demandé que pour une remise ou une vente à crédit.</summary>
-    public bool IsManagerPinRequired => DiscountPercent != 0 || SelectedPaymentMode == PaymentMode.Credit || Payments.Any(x => x.Mode == PaymentMode.Credit);
+    public ManagerSession Session => session;
+    /// <summary>Vente que le service refusera sans PIN valide. Croisé avec Session.IsManager dans la vue,
+    /// car l'état de session change hors de ce ViewModel et ne serait pas notifié ici.</summary>
+    public bool IsSensitiveSale => DiscountPercent != 0 || SelectedPaymentMode == PaymentMode.Credit || Payments.Any(x => x.Mode == PaymentMode.Credit);
     private void RaiseTotals()
     {
         OnPropertyChanged(nameof(TotalXof));
         OnPropertyChanged(nameof(PayableXof));
         OnPropertyChanged(nameof(PaymentTotalXof));
         OnPropertyChanged(nameof(ChangePreview));
-        OnPropertyChanged(nameof(IsManagerPinRequired));
+        OnPropertyChanged(nameof(IsSensitiveSale));
+        CompleteCommand.NotifyCanExecuteChanged();
     }
     private void OnPaymentLineChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => RaiseTotals();
     partial void OnDiscountPercentChanged(decimal value) => RaiseTotals();
@@ -343,7 +431,9 @@ public partial class SaleViewModel(ICatalogService catalog, ICustomerService cus
     [RelayCommand] private void RemovePayment(PaymentLineViewModel line) { line.PropertyChanged -= OnPaymentLineChanged; Payments.Remove(line); RaiseTotals(); }
     public long PaymentTotalXof => Payments.Sum(x => x.AmountXof);
 
-    [RelayCommand] private async Task Complete()
+    private bool CanComplete() => !IsBusy && Cart.Count > 0;
+
+    [RelayCommand(CanExecute = nameof(CanComplete))] private async Task Complete()
     {
         if (Cart.Count == 0 || IsBusy) return; IsBusy = true;
         try
@@ -365,7 +455,7 @@ public partial class SaleViewModel(ICatalogService catalog, ICustomerService cus
                 try { var receipt = await documents.GetReceiptAsync(documentId, false); await printerService.PrintReceiptAsync(SelectedPrinter, receipt); await documents.MarkPrintedAsync(documentId); message += $"\n{documentLabel} imprimé."; }
                 catch (Exception e) { Status += $" • Impression: {e.Message}"; message += $"\nImpression échouée : {e.Message}"; }
             }
-            Cart.Clear(); Payments.Clear(); DiscountPercent = 0; SelectedPaymentMode = PaymentMode.Cash; PrintInvoice = false; ManagerPin = string.Empty; NewCustomerName = string.Empty; NewCustomerPhone = string.Empty; SelectedCustomer = null;
+            Cart.Clear(); Payments.Clear(); DiscountPercent = 0; SelectedPaymentMode = PaymentMode.Cash; PrintInvoice = false; NewCustomerName = string.Empty; NewCustomerPhone = string.Empty; SelectedCustomer = null;
             RaiseTotals();
             UiFeedback.Success(message);
             await LoadAsync();
@@ -394,10 +484,11 @@ public sealed class CustomerChoice
     public bool IsWalkIn { get; }
 }
 
-public partial class CatalogViewModel(ICatalogService catalog, IProductImportService import) : ObservableObject, ILoadable
+public partial class CatalogViewModel(ICatalogService catalog, IProductImportService import, ManagerSession session) : ObservableObject, ILoadable
 {
     public ObservableCollection<ProductVariant> Items { get; } = [];
     public ObservableCollection<ImportIssue> ImportIssues { get; } = [];
+    public ManagerSession Session => session;
     public ObservableCollection<string> SizeOptions { get; } = [];
     public IReadOnlyList<ProductType> ProductTypes { get; } = Enum.GetValues<ProductType>();
     public IReadOnlyList<string> GenderOptions { get; } = ["Femme", "Homme", "Enfant", "Mixte"];
@@ -417,11 +508,15 @@ public partial class CatalogViewModel(ICatalogService catalog, IProductImportSer
     partial void OnIsEditingChanged(bool value) => OnPropertyChanged(nameof(SaveButtonLabel));
     public ObservableCollection<VariantRowViewModel> VariantRows { get; } = [];
     [ObservableProperty] private string matrixQuantity = "0";
-    [ObservableProperty] private ProductVariant? selected; [ObservableProperty] private string managerPin = "";
+    [ObservableProperty] private ProductVariant? selected;
+    /// <summary>Le PIN vient de la session gérant : plus aucun écran ne le redemande.</summary>
+    private string ManagerPin => session.Pin;
     public async Task LoadAsync()
     {
         var rows = await catalog.SearchAsync(null); Items.Clear(); foreach (var row in rows) Items.Add(row);
         RefreshSizeOptions();
+        // Hors mode gérant l'onglet de création est replié : le laisser sélectionné n'afficherait rien.
+        if (!session.IsManager) SelectedTab = 1;
     }
 
     private void RefreshSizeOptions()
@@ -646,7 +741,7 @@ public partial class OrderDraftLine(string label, decimal expected) : Observable
     public decimal Expected { get; } = expected;
 }
 
-public partial class StockViewModel(ICatalogService catalog, IStockService stock, IInventoryService inventory, IReportService reports, IPurchaseService purchases) : ObservableObject, ILoadable
+public partial class StockViewModel(ICatalogService catalog, IStockService stock, IInventoryService inventory, IReportService reports, IPurchaseService purchases, ManagerSession session) : ObservableObject, ILoadable
 {
     public ObservableCollection<ProductVariant> Items { get; } = [];
     public ObservableCollection<StockHistoryRow> History { get; } = [];
@@ -655,7 +750,9 @@ public partial class StockViewModel(ICatalogService catalog, IStockService stock
     public ObservableCollection<OrderDraftLine> OrderLines { get; } = [];
     public ObservableCollection<PurchaseOrderRow> OpenOrders { get; } = [];
     public ObservableCollection<string> Categories { get; } = [];
-    [ObservableProperty] private ProductVariant? selected; [ObservableProperty] private string quantity = string.Empty; [ObservableProperty] private string reason = string.Empty; [ObservableProperty] private string managerPin = string.Empty; [ObservableProperty] private string status = string.Empty;
+    [ObservableProperty] private ProductVariant? selected; [ObservableProperty] private string quantity = string.Empty; [ObservableProperty] private string reason = string.Empty; [ObservableProperty] private string status = string.Empty;
+    /// <summary>Le PIN vient de la session gérant : plus aucun écran ne le redemande.</summary>
+    private string ManagerPin => session.Pin;
     [ObservableProperty] private string countedQuantity = ""; [ObservableProperty] private string categoryFilter = string.Empty;
     [ObservableProperty] private string supplier = string.Empty; [ObservableProperty] private string orderExpected = "1";
     [ObservableProperty] private PurchaseOrderRow? selectedOpenLine; [ObservableProperty] private string receivedQuantity = "0"; [ObservableProperty] private string receivedCost = "";
@@ -736,7 +833,7 @@ public partial class StockViewModel(ICatalogService catalog, IStockService stock
     }
 }
 
-public partial class CustomersViewModel(ICustomerService customers, ICreditService credits) : ObservableObject, ILoadable
+public partial class CustomersViewModel(ICustomerService customers, ICreditService credits, ManagerSession session) : ObservableObject, ILoadable
 {
     public ObservableCollection<CustomerRow> Items { get; } = [];
     public ObservableCollection<CreditSummary> Credits { get; } = [];
@@ -755,7 +852,9 @@ public partial class CustomersViewModel(ICustomerService customers, ICreditServi
     [ObservableProperty] private int customerTab;
     [ObservableProperty] private bool editExpanded;
     [ObservableProperty] private string editName = string.Empty; [ObservableProperty] private string editPhone = string.Empty; [ObservableProperty] private string editSecondaryPhone = string.Empty; [ObservableProperty] private string editGender = string.Empty; [ObservableProperty] private string editAddress = string.Empty; [ObservableProperty] private string editNotes = string.Empty; [ObservableProperty] private string editPreferences = string.Empty; [ObservableProperty] private string editChannel = string.Empty; [ObservableProperty] private bool editConsent; [ObservableProperty] private string editCreditLimit = "0";
-    [ObservableProperty] private CreditSummary? selectedCredit; [ObservableProperty] private string paymentAmount = ""; [ObservableProperty] private PaymentMode paymentMode = PaymentMode.Cash; [ObservableProperty] private string paymentReference = ""; [ObservableProperty] private string managerPin = "";
+    [ObservableProperty] private CreditSummary? selectedCredit; [ObservableProperty] private string paymentAmount = ""; [ObservableProperty] private PaymentMode paymentMode = PaymentMode.Cash; [ObservableProperty] private string paymentReference = "";
+    /// <summary>Le PIN vient de la session gérant : plus aucun écran ne le redemande.</summary>
+    private string ManagerPin => session.Pin;
 
     public async Task LoadAsync()
     {
@@ -845,13 +944,15 @@ public partial class CustomersViewModel(ICustomerService customers, ICreditServi
     private static string? NullIfEmpty(string value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
 
-public partial class ExpensesViewModel(IExpenseService expenses) : ObservableObject, ILoadable
+public partial class ExpensesViewModel(IExpenseService expenses, ManagerSession session) : ObservableObject, ILoadable
 {
     public ObservableCollection<Expense> RecentExpenses { get; } = [];
     public IReadOnlyList<PaymentMode> PaymentModes { get; } = Enum.GetValues<PaymentMode>();
     public IReadOnlyList<string> CategoryOptions { get; } = ["Loyer", "Salaires", "Transport", "Électricité", "Eau", "Internet", "Fournitures", "Marketing", "Maintenance", "Impôts", "Assurance", "Autres"];
     [ObservableProperty] private string category = "Autres"; [ObservableProperty] private string description = string.Empty; [ObservableProperty] private string amount = string.Empty; [ObservableProperty] private PaymentMode selectedMode = PaymentMode.Cash; [ObservableProperty] private string status = string.Empty;
-    [ObservableProperty] private Expense? selectedExpense; [ObservableProperty] private string managerPin = "";
+    [ObservableProperty] private Expense? selectedExpense;
+    /// <summary>Le PIN vient de la session gérant : plus aucun écran ne le redemande.</summary>
+    private string ManagerPin => session.Pin;
     public async Task LoadAsync() { RecentExpenses.Clear(); foreach (var e in await expenses.ListRecentAsync(20)) RecentExpenses.Add(e); }
     [RelayCommand] private async Task Create() { try { await expenses.CreateAsync(Category, Description, long.Parse(Amount), SelectedMode); Status = "Dépense enregistrée"; UiFeedback.Success("Dépense enregistrée."); Description = Amount = string.Empty; await LoadAsync(); } catch (Exception e) { Status = e.Message; } }
     [RelayCommand] private async Task DeleteExpense()
@@ -863,13 +964,15 @@ public partial class ExpensesViewModel(IExpenseService expenses) : ObservableObj
     }
 }
 
-public partial class DocumentsViewModel(IDocumentService documents, IReturnService returns, IThermalPrinterService printers, IAppSettingsService settings, IA4DocumentService a4) : ObservableObject, ILoadable
+public partial class DocumentsViewModel(IDocumentService documents, IReturnService returns, IThermalPrinterService printers, IAppSettingsService settings, IA4DocumentService a4, ManagerSession session) : ObservableObject, ILoadable
 {
     public ObservableCollection<DocumentListItem> Items { get; } = [];
     public IReadOnlyList<PaymentMode> PaymentModes { get; } = Enum.GetValues<PaymentMode>().Where(x => x != PaymentMode.Credit).ToArray();
     [ObservableProperty] private string search = string.Empty;
     partial void OnSearchChanged(string value) => _ = LoadAsync();
-    [ObservableProperty] private DocumentListItem? selectedDocument; [ObservableProperty] private string saleNumber = ""; [ObservableProperty] private string returnedSku = ""; [ObservableProperty] private string returnedQuantity = "1"; [ObservableProperty] private string replacementSku = ""; [ObservableProperty] private string replacementQuantity = "1"; [ObservableProperty] private string exchangePaymentAmount = "0"; [ObservableProperty] private PaymentMode exchangePaymentMode = PaymentMode.Cash; [ObservableProperty] private string exchangePaymentReference = ""; [ObservableProperty] private string reason = ""; [ObservableProperty] private string managerPin = ""; [ObservableProperty] private bool restock = true; [ObservableProperty] private string proformaDescription = "Article"; [ObservableProperty] private string proformaTotal = "0"; [ObservableProperty] private string status = "";
+    [ObservableProperty] private DocumentListItem? selectedDocument; [ObservableProperty] private string saleNumber = ""; [ObservableProperty] private string returnedSku = ""; [ObservableProperty] private string returnedQuantity = "1"; [ObservableProperty] private string replacementSku = ""; [ObservableProperty] private string replacementQuantity = "1"; [ObservableProperty] private string exchangePaymentAmount = "0"; [ObservableProperty] private PaymentMode exchangePaymentMode = PaymentMode.Cash; [ObservableProperty] private string exchangePaymentReference = ""; [ObservableProperty] private string reason = ""; [ObservableProperty] private bool restock = true; [ObservableProperty] private string proformaDescription = "Article"; [ObservableProperty] private string proformaTotal = "0"; [ObservableProperty] private string status = "";
+    /// <summary>Le PIN vient de la session gérant : plus aucun écran ne le redemande.</summary>
+    private string ManagerPin => session.Pin;
     partial void OnSelectedDocumentChanged(DocumentListItem? value) => _ = RefreshPreviewAsync();
     public ObservableCollection<PrinterProfile> Printers { get; } = [];
     public ObservableCollection<string> A4Printers { get; } = [];
@@ -1042,9 +1145,10 @@ public partial class ReportsViewModel(IReportService reports) : ObservableObject
     }
 }
 
-public partial class SettingsViewModel(IAuthorizationService authorization, IAppSettingsService settings, IBackupService backup, IThermalPrinterService printer, IDocumentService documents, IA4DocumentService a4) : ObservableObject, ILoadable
+public partial class SettingsViewModel(IAuthorizationService authorization, IAppSettingsService settings, IBackupService backup, IThermalPrinterService printer, IDocumentService documents, IA4DocumentService a4, ManagerSession session) : ObservableObject, ILoadable
 {
     public ObservableCollection<PrinterProfile> Printers { get; } = [];
+    public ManagerSession Session => session;
     public IReadOnlyList<DocumentType> DocumentTypes { get; } = Enum.GetValues<DocumentType>();
     public IReadOnlyList<string> Styles { get; } = ["Classique", "Moderne", "Minimal"];
     public IReadOnlyList<string> RenderModes { get; } = ["ESC/POS brut (recommandé)", "Rendu Windows (si rien ne sort)"];
@@ -1181,8 +1285,7 @@ public partial class SettingsViewModel(IAuthorizationService authorization, IApp
     {
         try
         {
-            if (!await authorization.IsConfiguredAsync()) await authorization.ConfigurePinAsync(Pin);
-            else if (!await authorization.AuthorizeSensitiveActionAsync(Pin, "Modifier paramètres")) throw new UnauthorizedAccessException("PIN responsable invalide.");
+            if (!await authorization.AuthorizeSensitiveActionAsync(session.Pin, "Modifier paramètres")) throw new UnauthorizedAccessException("Session gérant expirée : rebasculez en mode gérant.");
             var values = new Dictionary<string, string>
             {
                 {"Shop.Name", ShopName}, {"Shop.Address", Address}, {"Shop.Phone", Phone}, {"Shop.Email", Email}, {"Shop.TaxId", TaxId}, {"Shop.Slogan", Slogan}, {"Shop.Footer", Footer}, {"Shop.ReturnPolicy", ReturnPolicy}, {"Shop.Logo", LogoPath}, {"Shop.Stamp", StampPath}, {"Shop.Signature", SignaturePath},
@@ -1199,7 +1302,7 @@ public partial class SettingsViewModel(IAuthorizationService authorization, IApp
 
     [RelayCommand] private async Task ChangePin()
     {
-        try { await authorization.ChangePinAsync(Pin, NewPin); Status = "PIN modifié"; NewPin = string.Empty; }
+        try { await authorization.ChangePinAsync(Pin, NewPin); session.UpdatePin(NewPin); Status = "Code gérant modifié"; Pin = NewPin = string.Empty; }
         catch (Exception e) { Status = e.Message; }
     }
 
