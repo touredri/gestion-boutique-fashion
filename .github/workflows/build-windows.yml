@@ -1,0 +1,114 @@
+name: Build Windows
+
+on:
+  push:
+    branches:
+      - main
+
+    tags:
+      - 'v*'
+
+  pull_request:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build & Test Windows x64
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Display .NET version
+        run: dotnet --info
+
+      - name: Restore
+        run: dotnet restore .\BoutiqueFashion.slnx
+
+      - name: Run tests
+        run: dotnet test .\BoutiqueFashion.slnx --configuration Release --no-restore
+
+      - name: Publish Windows x64
+        run: >
+          dotnet publish
+          .\src\BoutiqueFashion.App\BoutiqueFashion.App.csproj
+          --configuration Release
+          --runtime win-x64
+          --self-contained true
+          -p:PublishSingleFile=false
+          -o .\artifacts\win-x64
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup --yes --no-progress
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            Write-Error "ISCC.exe introuvable."
+            exit 1
+          }
+          if ($env:GITHUB_REF -match '^refs/tags/v(.+)$') {
+            $version = $Matches[1]
+          } else {
+            $version = "1.1.0"
+          }
+          Write-Host "Version de l'application : $version"
+          & $iscc "/DMyAppVersion=$version" ".\installer\BoutiqueFashion.iss"
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "La compilation Inno Setup a échoué."
+            exit $LASTEXITCODE
+          }
+
+      - name: Check installer
+        shell: pwsh
+        run: |
+          if (-not (Test-Path ".\installer\output")) {
+              Write-Error "Le dossier installer\output n'existe pas."
+              exit 1
+          }
+
+          $files = Get-ChildItem ".\installer\output" -Filter "*.exe"
+
+          if ($files.Count -eq 0) {
+              Write-Error "Aucun installateur .exe n'a été produit."
+              exit 1
+          }
+
+          $files | Select-Object FullName, Length
+
+      - name: Upload application artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BanaShop-win-x64
+          path: .\artifacts\win-x64
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BanaShop-Setup
+          path: .\installer\output\*.exe
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: .\installer\output\*.exe
+          generate_release_notes: true
+          draft: false
+          prerelease: false

@@ -1,76 +1,212 @@
-<UserControl x:Class="BoutiqueFashion.App.Views.DashboardView" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+<UserControl x:Class="BoutiqueFashion.App.Views.DashboardView" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:controls="clr-namespace:BoutiqueFashion.App.Controls">
   <Grid Margin="18">
-    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-    <Grid Margin="6,0,6,12">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="*"/>
+    </Grid.RowDefinitions>
+    
+    <!-- En-tête avec titre et actions rapides -->
+    <Grid Margin="4,0,4,12">
       <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
       <StackPanel>
-        <TextBlock Text="AUJOURD'HUI" Style="{StaticResource Eyebrow}" Margin="0,0,0,2"/>
-        <TextBlock Text="L'essentiel de la journée, en un coup d'œil" FontSize="20" FontWeight="SemiBold"/>
+        <TextBlock Text="Aujourd'hui" Style="{StaticResource Eyebrow}" Margin="0,0,0,3"/>
+        <TextBlock Text="L'essentiel de la journée en un coup d'œil" FontSize="22" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/>
       </StackPanel>
       <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-        <Button Content="Vendre" Command="{Binding QuickSellCommand}" Style="{StaticResource HeroButton}" MinWidth="140"/>
-        <Button Content="Produits" Command="{Binding QuickProductsCommand}" MinHeight="56" MinWidth="140" FontSize="16"/>
+        <Button Content="Nouvelle vente" Command="{Binding QuickSellCommand}" Style="{StaticResource HeroButton}" MinWidth="160" Margin="4,0"/>
+        <Button Content="Gérer les produits" Command="{Binding QuickProductsCommand}" MinHeight="56" MinWidth="160" FontSize="15" Margin="4,0"/>
       </StackPanel>
     </Grid>
 
-    <Grid Grid.Row="1">
-      <Grid.ColumnDefinitions><ColumnDefinition Width="1.4*"/><ColumnDefinition/></Grid.ColumnDefinitions>
-      <Border Style="{StaticResource RaisedCard}" Background="{StaticResource Nav}" Padding="20">
+    <!-- SECTION GESTION & ÉTAT DE LA CAISSE DU JOUR -->
+    <Border Grid.Row="1" Style="{StaticResource Card}" Margin="4,0,4,12" Padding="16">
+      <Grid>
+        <!-- Cas 1 : Caisse Fermée -->
+        <Grid>
+          <Grid.Style>
+            <Style TargetType="Grid">
+              <Setter Property="Visibility" Value="Collapsed"/>
+              <Style.Triggers>
+                <DataTrigger Binding="{Binding IsCashOpen}" Value="False">
+                  <Setter Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+              </Style.Triggers>
+            </Style>
+          </Grid.Style>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="220"/>
+            <ColumnDefinition Width="Auto"/>
+          </Grid.ColumnDefinitions>
+          <StackPanel VerticalAlignment="Center" Margin="0,0,12,0">
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+              <Border Background="{StaticResource DangerSoft}" BorderBrush="{StaticResource Danger}" BorderThickness="1" CornerRadius="6" Padding="8,3" Margin="0,0,8,0">
+                <TextBlock Text="● CAISSE FERMÉE" Foreground="{StaticResource Danger}" FontSize="11" FontWeight="Bold"/>
+              </Border>
+              <TextBlock Text="Démarrage de la journée" FontWeight="Bold" FontSize="15" Foreground="{StaticResource Ink}" VerticalAlignment="Center"/>
+            </StackPanel>
+            <TextBlock Text="Indiquez le montant du fond de caisse initial pour ouvrir la session et commencer à encaisser." Style="{StaticResource HelperText}"/>
+          </StackPanel>
+          <controls:KeypadField Grid.Column="1" Value="{Binding OpeningFloat}" Title="Fond de caisse initial" Suffix="FCFA" VerticalAlignment="Center" Margin="0,0,10,0"/>
+          <Button Grid.Column="2" Content="Ouvrir la caisse" Command="{Binding OpenCashCommand}" Style="{StaticResource PrimaryButton}" VerticalAlignment="Center" MinWidth="160" MinHeight="50"/>
+        </Grid>
+
+        <!-- Cas 2 : Caisse Ouverte -->
+        <Grid>
+          <Grid.Style>
+            <Style TargetType="Grid">
+              <Setter Property="Visibility" Value="Collapsed"/>
+              <Style.Triggers>
+                <DataTrigger Binding="{Binding IsCashOpen}" Value="True">
+                  <Setter Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+              </Style.Triggers>
+            </Style>
+          </Grid.Style>
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+          </Grid.RowDefinitions>
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*"/>
+              <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+              <Border Background="{StaticResource SuccessSoft}" BorderBrush="{StaticResource Success}" BorderThickness="1" CornerRadius="6" Padding="8,4" Margin="0,0,10,0">
+                <TextBlock Text="● CAISSE OUVERTE" Foreground="{StaticResource Success}" FontSize="11" FontWeight="Bold"/>
+              </Border>
+              <TextBlock Text="{Binding CashSessionState}" FontWeight="Bold" FontSize="15" Foreground="{StaticResource Ink}" VerticalAlignment="Center"/>
+              <TextBlock Text="· Les ventes et encaissements sont actifs" Style="{StaticResource HelperText}" VerticalAlignment="Center" Margin="10,0,0,0"/>
+            </StackPanel>
+            <Button Grid.Column="1" Content="Aller encaisser une vente" Command="{Binding QuickSellCommand}" Style="{StaticResource PrimaryButton}" MinWidth="200"/>
+          </Grid>
+
+          <!-- Bloc Clôture en fin de journée (Expander rétractable) -->
+          <Expander Grid.Row="1" Header="Clôturer la caisse en fin de journée" Margin="0,10,0,0">
+            <Border Background="{StaticResource Ivory}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="10" Padding="14" Margin="0,6,0,0">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="1.2*"/>
+                  <ColumnDefinition Width="2*"/>
+                  <ColumnDefinition Width="140"/>
+                  <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <controls:KeypadField Value="{Binding CountedCash}" Title="Espèces réelles comptées" Suffix="FCFA" Margin="0,0,8,0"/>
+                <StackPanel Grid.Column="1" Margin="0,0,8,0">
+                  <TextBlock Text="Motif de l'écart (si constaté)" Style="{StaticResource FieldLabel}" Margin="2,0,2,2"/>
+                  <TextBox Text="{Binding CashDifferenceReason}" controls:Placeholder.Text="Justification de l'écart..."/>
+                </StackPanel>
+                <controls:KeypadField Grid.Column="2" Value="{Binding ManagerPin}" Mask="True" Title="PIN responsable" Margin="0,0,8,0"/>
+                <Button Grid.Column="3" Content="Clôturer la caisse" Command="{Binding CloseCashCommand}" Style="{StaticResource DangerButton}" VerticalAlignment="Bottom" MinWidth="160"/>
+              </Grid>
+            </Border>
+          </Expander>
+        </Grid>
+      </Grid>
+    </Border>
+
+    <!-- Cartes KPI principales -->
+    <Grid Grid.Row="2">
+      <Grid.ColumnDefinitions><ColumnDefinition Width="1.3*"/><ColumnDefinition/></Grid.ColumnDefinitions>
+      <Border Style="{StaticResource RaisedCard}" Background="{StaticResource Terracotta}" Padding="22" Margin="4">
         <StackPanel>
-          <TextBlock Text="VENTES DU JOUR" Foreground="#FFBDB5AC" FontSize="12" FontWeight="SemiBold"/>
-          <TextBlock Text="{Binding Summary.SalesXof, StringFormat={}{0:N0} FCFA}" Foreground="White" FontSize="34" Style="{StaticResource Money}" Margin="0,6,0,2"/>
-          <TextBlock Text="{Binding Summary.SalesCount, StringFormat={}{0} tickets enregistrés}" Foreground="#FFD4CDC5" FontSize="13"/>
+          <TextBlock Text="Ventes du jour" Foreground="#FFFFF7" FontSize="12" FontWeight="Bold"/>
+          <TextBlock Text="{Binding Summary.SalesXof, StringFormat={}{0:N0} FCFA}" Foreground="White" FontSize="36" Style="{StaticResource Money}" Margin="0,6,0,4"/>
+          <Border Background="#33FFFFFF" CornerRadius="8" Padding="10,4" HorizontalAlignment="Left">
+            <TextBlock Text="{Binding Summary.SalesCount, StringFormat={}{0} tickets enregistrés}" Foreground="White" FontSize="13" FontWeight="SemiBold"/>
+          </Border>
         </StackPanel>
       </Border>
-      <Border Grid.Column="1" Style="{StaticResource Card}">
+      <Border Grid.Column="1" Style="{StaticResource Card}" Padding="22" Margin="4">
         <StackPanel>
-          <TextBlock Text="ARGENT ENCAISSÉ" Style="{StaticResource Eyebrow}"/>
-          <TextBlock Text="{Binding Summary.CollectedXof, StringFormat={}{0:N0} FCFA}" FontSize="27" Style="{StaticResource Money}" Foreground="{StaticResource Success}" Margin="0,6,0,2"/>
+          <TextBlock Text="Argent encaissé" Style="{StaticResource Eyebrow}"/>
+          <TextBlock Text="{Binding Summary.CollectedXof, StringFormat={}{0:N0} FCFA}" FontSize="30" Style="{StaticResource Money}" Foreground="{StaticResource Success}" Margin="0,6,0,4"/>
           <TextBlock Text="Espèces, mobile money et carte" Foreground="{StaticResource Muted}" FontSize="12"/>
         </StackPanel>
       </Border>
     </Grid>
 
-    <Grid Grid.Row="2" Margin="0,10,0,0">
+    <!-- Alertes et indicateurs secondaires -->
+    <Grid Grid.Row="3" Margin="0,8,0,0">
       <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
-      <Border Style="{StaticResource Card}" Background="{StaticResource TerracottaSoft}" Padding="14">
+      <Border Style="{StaticResource Card}" Background="{StaticResource TerracottaSoft}" BorderBrush="{StaticResource Terracotta}" BorderThickness="1" Padding="16" Margin="4">
         <StackPanel Orientation="Horizontal">
-          <TextBlock Text="{Binding Summary.LowStockCount}" FontSize="24" Foreground="{StaticResource TerracottaDark}" Style="{StaticResource Money}" VerticalAlignment="Center"/>
-          <TextBlock Text=" articles à réapprovisionner&#10;(stock faible, rupture ou négatif)" Foreground="{StaticResource TerracottaDark}" FontSize="12" Margin="10,0,0,0" VerticalAlignment="Center"/>
+          <Border Background="{StaticResource TerracottaDark}" CornerRadius="10" Width="44" Height="44" VerticalAlignment="Center">
+            <TextBlock Text="!" Foreground="White" FontSize="22" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          </Border>
+          <StackPanel Margin="14,0,0,0" VerticalAlignment="Center">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Text="{Binding Summary.LowStockCount}" FontSize="22" FontWeight="Bold" Foreground="{StaticResource TerracottaDark}" Style="{StaticResource Money}"/>
+              <TextBlock Text=" articles en alerte stock" FontSize="14" FontWeight="Bold" Foreground="{StaticResource TerracottaDark}" VerticalAlignment="Center" Margin="6,0,0,0"/>
+            </StackPanel>
+            <TextBlock Text="Articles à réapprovisionner (faible, rupture ou négatif)" Foreground="{StaticResource TerracottaDark}" FontSize="12" Margin="0,2,0,0"/>
+          </StackPanel>
         </StackPanel>
       </Border>
-      <Border Grid.Column="1" Style="{StaticResource Card}" Background="{StaticResource GoldSoft}" Padding="14">
+      <Border Grid.Column="1" Style="{StaticResource Card}" Background="{StaticResource GoldSoft}" BorderBrush="{StaticResource Gold}" BorderThickness="1" Padding="16" Margin="4">
         <StackPanel Orientation="Horizontal">
-          <TextBlock Text="{Binding Summary.CreditBalanceXof, StringFormat={}{0:N0}}" FontSize="24" Foreground="{StaticResource TerracottaDark}" Style="{StaticResource Money}" VerticalAlignment="Center"/>
-          <TextBlock Text=" FCFA à encaisser&#10;chez les clients (crédits)" Foreground="{StaticResource TerracottaDark}" FontSize="12" Margin="6,0,0,0" VerticalAlignment="Center"/>
+          <Border Background="{StaticResource Gold}" CornerRadius="10" Width="44" Height="44" VerticalAlignment="Center">
+            <TextBlock Text="FCFA" Foreground="White" FontSize="12" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          </Border>
+          <StackPanel Margin="14,0,0,0" VerticalAlignment="Center">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Text="{Binding Summary.CreditBalanceXof, StringFormat={}{0:N0}}" FontSize="22" FontWeight="Bold" Foreground="{StaticResource Ink}" Style="{StaticResource Money}"/>
+              <TextBlock Text=" FCFA à encaisser" FontSize="14" FontWeight="Bold" Foreground="{StaticResource Ink}" VerticalAlignment="Center" Margin="4,0,0,0"/>
+            </StackPanel>
+            <TextBlock Text="Solde des crédits clients en attente" Foreground="{StaticResource Muted}" FontSize="12" Margin="0,2,0,0"/>
+          </StackPanel>
         </StackPanel>
       </Border>
     </Grid>
 
-    <Grid Grid.Row="3" Margin="0,10,0,0">
+    <!-- Dernières ventes avec en-tête structuré -->
+    <Grid Grid.Row="4" Margin="0,12,0,0">
       <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-      <TextBlock Text="DERNIÈRES VENTES" Style="{StaticResource Eyebrow}" Margin="6,0,0,4"/>
-      <Border Grid.Row="1" Style="{StaticResource Card}" Padding="6">
-        <ScrollViewer VerticalScrollBarVisibility="Auto">
-          <StackPanel>
-            <ItemsControl ItemsSource="{Binding RecentSales}">
-              <ItemsControl.ItemTemplate>
-                <DataTemplate>
-                  <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="12,9">
-                    <Grid>
-                      <Grid.ColumnDefinitions><ColumnDefinition Width="60"/><ColumnDefinition Width="150"/><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                      <TextBlock Text="{Binding Time}" Foreground="{StaticResource Muted}" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                      <TextBlock Grid.Column="1" Text="{Binding Number}" Foreground="{StaticResource Muted}" VerticalAlignment="Center"/>
-                      <TextBlock Grid.Column="2" Text="{Binding Customer}" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                      <TextBlock Grid.Column="3" Text="{Binding TotalXof, StringFormat={}{0:N0} FCFA}" Style="{StaticResource Money}" VerticalAlignment="Center"/>
-                    </Grid>
-                  </Border>
-                </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
-            <TextBlock Text="Aucune vente pour l'instant aujourd'hui." Style="{StaticResource HelperText}" Margin="14,10" Visibility="{Binding Summary.SalesCount, Converter={StaticResource ZeroToVis}}"/>
-          </StackPanel>
-        </ScrollViewer>
+      <TextBlock Text="Dernières ventes" Style="{StaticResource Eyebrow}" Margin="6,0,0,6"/>
+      <Border Grid.Row="1" Style="{StaticResource Card}" Padding="0" Margin="4">
+        <Grid>
+          <Grid.RowDefinitions>
+            <RowDefinition Height="38"/>
+            <RowDefinition Height="*"/>
+          </Grid.RowDefinitions>
+          <!-- En-tête du tableau -->
+          <Border Background="{StaticResource Ivory}" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" CornerRadius="14,14,0,0" Padding="16,0">
+            <Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="80"/><ColumnDefinition Width="170"/><ColumnDefinition/><ColumnDefinition Width="140"/></Grid.ColumnDefinitions>
+              <TextBlock Text="HEURE" FontSize="11" FontWeight="Bold" Foreground="{StaticResource Muted}" VerticalAlignment="Center"/>
+              <TextBlock Grid.Column="1" Text="NUMÉRO" FontSize="11" FontWeight="Bold" Foreground="{StaticResource Muted}" VerticalAlignment="Center"/>
+              <TextBlock Grid.Column="2" Text="CLIENT" FontSize="11" FontWeight="Bold" Foreground="{StaticResource Muted}" VerticalAlignment="Center"/>
+              <TextBlock Grid.Column="3" Text="TOTAL" FontSize="11" FontWeight="Bold" Foreground="{StaticResource Muted}" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+            </Grid>
+          </Border>
+          <!-- Liste des ventes -->
+          <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+              <ItemsControl ItemsSource="{Binding RecentSales}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="16,12">
+                      <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="80"/><ColumnDefinition Width="170"/><ColumnDefinition/><ColumnDefinition Width="140"/></Grid.ColumnDefinitions>
+                        <TextBlock Text="{Binding Time}" Foreground="{StaticResource Muted}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                        <TextBlock Grid.Column="1" Text="{Binding Number}" Foreground="{StaticResource Muted}" VerticalAlignment="Center"/>
+                        <TextBlock Grid.Column="2" Text="{Binding Customer}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                        <TextBlock Grid.Column="3" Text="{Binding TotalXof, StringFormat={}{0:N0} FCFA}" Style="{StaticResource Money}" FontWeight="Bold" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <Border Visibility="{Binding Summary.SalesCount, Converter={StaticResource ZeroToVis}}" Padding="24" HorizontalAlignment="Center">
+                <TextBlock Text="Aucune vente enregistrée aujourd'hui." Style="{StaticResource HelperText}" FontSize="13" HorizontalAlignment="Center"/>
+              </Border>
+            </StackPanel>
+          </ScrollViewer>
+        </Grid>
       </Border>
     </Grid>
   </Grid>

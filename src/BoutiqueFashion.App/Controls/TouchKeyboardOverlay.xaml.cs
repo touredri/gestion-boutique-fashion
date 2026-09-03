@@ -38,8 +38,37 @@ public partial class TouchKeyboardOverlay : UserControl
         shifted = false;
         digitsMode = false;
         ModeButton.Content = "123";
+        ShiftButton.Content = "Maj";
+        ShiftButton.IsEnabled = true;
+
+        var title = Placeholder.GetText(textBox);
+        if (string.IsNullOrWhiteSpace(title))
+            title = AutomationProperties.GetName(textBox);
+        if (string.IsNullOrWhiteSpace(title) && textBox.ToolTip is string tooltip)
+            title = tooltip;
+        if (string.IsNullOrWhiteSpace(title))
+            title = "Saisie de texte";
+
+        KeyboardTitle.Text = title;
+        UpdateDisplay();
         Render();
         Visibility = Visibility.Visible;
+
+        textBox.BringIntoView();
+    }
+
+    private void UpdateDisplay()
+    {
+        if (target is null)
+        {
+            PreviewText.Text = string.Empty;
+            PreviewPlaceholder.Visibility = Visibility.Visible;
+            return;
+        }
+
+        var text = target.Text ?? string.Empty;
+        PreviewText.Text = text;
+        PreviewPlaceholder.Visibility = string.IsNullOrEmpty(text) ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void Render()
@@ -73,8 +102,14 @@ public partial class TouchKeyboardOverlay : UserControl
     {
         if (target is null) return;
         var start = target.SelectionStart;
-        target.Text = target.Text.Remove(start, target.SelectionLength).Insert(start, text);
+        var len = target.SelectionLength;
+        var current = target.Text ?? string.Empty;
+        if (start > current.Length) start = current.Length;
+
+        target.Text = current.Remove(start, len).Insert(start, text);
         target.SelectionStart = start + text.Length;
+        target.SelectionLength = 0;
+        UpdateDisplay();
     }
 
     private void OnChar(object sender, RoutedEventArgs e) => Insert((string)((Button)sender).Tag);
@@ -85,16 +120,44 @@ public partial class TouchKeyboardOverlay : UserControl
     {
         if (target is null) return;
         var start = target.SelectionStart;
-        if (target.SelectionLength > 0) { target.Text = target.Text.Remove(start, target.SelectionLength); target.SelectionStart = start; return; }
-        if (start > 0) { target.Text = target.Text.Remove(start - 1, 1); target.SelectionStart = start - 1; }
+        var len = target.SelectionLength;
+        var current = target.Text ?? string.Empty;
+
+        if (len > 0)
+        {
+            target.Text = current.Remove(start, len);
+            target.SelectionStart = start;
+        }
+        else if (start > 0 && start <= current.Length)
+        {
+            target.Text = current.Remove(start - 1, 1);
+            target.SelectionStart = start - 1;
+        }
+        target.SelectionLength = 0;
+        UpdateDisplay();
     }
 
-    private void OnShift(object sender, RoutedEventArgs e) { shifted = !shifted; Render(); }
+    private void OnClearText(object sender, RoutedEventArgs e)
+    {
+        if (target is null) return;
+        target.Text = string.Empty;
+        target.SelectionStart = 0;
+        target.SelectionLength = 0;
+        UpdateDisplay();
+    }
+
+    private void OnShift(object sender, RoutedEventArgs e)
+    {
+        shifted = !shifted;
+        ShiftButton.Content = shifted ? "min" : "Maj";
+        Render();
+    }
 
     private void OnMode(object sender, RoutedEventArgs e)
     {
         digitsMode = !digitsMode;
         ModeButton.Content = digitsMode ? "ABC" : "123";
+        ShiftButton.IsEnabled = !digitsMode;
         Render();
     }
 

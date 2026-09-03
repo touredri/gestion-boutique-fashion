@@ -5,17 +5,17 @@
     <conv:EnumFrConverter x:Key="EnumFr"/>
     <conv:BoolFrConverter x:Key="BoolFr"/>
     <BooleanToVisibilityConverter x:Key="BoolToVis"/>
-    <SolidColorBrush x:Key="Canvas" Color="#FFF4EFE8"/><SolidColorBrush x:Key="Ivory" Color="#FFFFFBF6"/><SolidColorBrush x:Key="Paper" Color="#FFFFFFFF"/>
-    <SolidColorBrush x:Key="Ink" Color="#FF211E1A"/><SolidColorBrush x:Key="Muted" Color="#FF6D665F"/><SolidColorBrush x:Key="MutedLight" Color="#FFA0988F"/>
-    <SolidColorBrush x:Key="Terracotta" Color="#FFA84F35"/><SolidColorBrush x:Key="TerracottaDark" Color="#FF843923"/><SolidColorBrush x:Key="TerracottaSoft" Color="#FFF6E7E1"/>
-    <SolidColorBrush x:Key="Gold" Color="#FFB88A42"/><SolidColorBrush x:Key="GoldSoft" Color="#FFF7EEDC"/><SolidColorBrush x:Key="Line" Color="#FFE3DBD1"/><SolidColorBrush x:Key="LineStrong" Color="#FFCFC4B7"/>
+    <SolidColorBrush x:Key="Canvas" Color="#FFF1F3F0"/><SolidColorBrush x:Key="Ivory" Color="#FFF7F8F5"/><SolidColorBrush x:Key="Paper" Color="#FFFFFFFF"/>
+    <SolidColorBrush x:Key="Ink" Color="#FF202522"/><SolidColorBrush x:Key="Muted" Color="#FF66706A"/><SolidColorBrush x:Key="MutedLight" Color="#FF9AA49D"/>
+    <SolidColorBrush x:Key="Terracotta" Color="#FFB35F4A"/><SolidColorBrush x:Key="TerracottaDark" Color="#FF8F4636"/><SolidColorBrush x:Key="TerracottaSoft" Color="#FFF7E9E5"/>
+    <SolidColorBrush x:Key="Gold" Color="#FFA9824A"/><SolidColorBrush x:Key="GoldSoft" Color="#FFF6F0E4"/><SolidColorBrush x:Key="Line" Color="#FFE0E6E1"/><SolidColorBrush x:Key="LineStrong" Color="#FFC8D1CB"/>
     <SolidColorBrush x:Key="Success" Color="#FF287158"/><SolidColorBrush x:Key="SuccessSoft" Color="#FFE5F3ED"/><SolidColorBrush x:Key="Danger" Color="#FFB43C3C"/><SolidColorBrush x:Key="DangerSoft" Color="#FFF9E7E7"/>
-    <SolidColorBrush x:Key="Nav" Color="#FF211F1C"/><SolidColorBrush x:Key="NavHover" Color="#FF302D29"/><SolidColorBrush x:Key="NavActive" Color="#FF3A312B"/>
-    <DropShadowEffect x:Key="CardShadow" BlurRadius="16" ShadowDepth="2" Opacity="0.08" Color="#FF352A23"/>
+    <SolidColorBrush x:Key="Nav" Color="#FF202522"/><SolidColorBrush x:Key="NavHover" Color="#FF2B322E"/><SolidColorBrush x:Key="NavActive" Color="#FF35423B"/>
+    <DropShadowEffect x:Key="CardShadow" BlurRadius="14" ShadowDepth="1" Opacity="0.06" Color="#FF26332C"/>
 
     <Style TargetType="Window"><Setter Property="FontFamily" Value="Segoe UI Variable Text, Segoe UI"/><Setter Property="FontSize" Value="14"/><Setter Property="Foreground" Value="{StaticResource Ink}"/><Setter Property="Background" Value="{StaticResource Canvas}"/><Setter Property="TextOptions.TextFormattingMode" Value="Display"/></Style>
     <Style TargetType="UserControl"><Setter Property="FontFamily" Value="Segoe UI Variable Text, Segoe UI"/><Setter Property="Foreground" Value="{StaticResource Ink}"/><Setter Property="Background" Value="Transparent"/><Setter Property="KeyboardNavigation.TabNavigation" Value="Continue"/></Style>
-    <Style x:Key="PageTitle" TargetType="TextBlock"><Setter Property="FontSize" Value="20"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="Foreground" Value="{StaticResource Ink}"/></Style>
+    <Style x:Key="PageTitle" TargetType="TextBlock"><Setter Property="FontSize" Value="22"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="Foreground" Value="{StaticResource Ink}"/></Style>
     <Style x:Key="SectionTitle" TargetType="TextBlock"><Setter Property="FontSize" Value="18"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="Foreground" Value="{StaticResource Ink}"/><Setter Property="Margin" Value="0,0,0,4"/></Style>
     <Style x:Key="Eyebrow" TargetType="TextBlock"><Setter Property="FontSize" Value="11"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="Foreground" Value="{StaticResource Muted}"/></Style>
     <Style x:Key="FieldLabel" TargetType="TextBlock"><Setter Property="FontSize" Value="12"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="Foreground" Value="{StaticResource Muted}"/><Setter Property="Margin" Value="4,5,4,1"/></Style>
@@ -37,16 +37,141 @@
     <Style TargetType="ComboBox"><Setter Property="MinHeight" Value="48"/><Setter Property="Padding" Value="11,8"/><Setter Property="Margin" Value="4"/><Setter Property="FontSize" Value="14"/><Setter Property="Background" Value="{StaticResource Paper}"/><Setter Property="BorderBrush" Value="{StaticResource LineStrong}"/><Setter Property="BorderThickness" Value="1"/><Setter Property="VerticalContentAlignment" Value="Center"/><Setter Property="ScrollViewer.CanContentScroll" Value="False"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ComboBox"><Grid SnapsToDevicePixels="True"><Border x:Name="Surface" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="10"/><ToggleButton x:Name="Toggle" Focusable="False" ClickMode="Press" IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}" Background="Transparent" BorderBrush="Transparent"><ToggleButton.Template><ControlTemplate TargetType="ToggleButton"><Border Background="Transparent" CornerRadius="10"><Path Data="M0,0 L4,4 L8,0" Stroke="{StaticResource Muted}" StrokeThickness="1.6" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,12,0"/></Border></ControlTemplate></ToggleButton.Template></ToggleButton><ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Left" VerticalAlignment="Center" Content="{TemplateBinding SelectionBoxItem}" ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}" IsHitTestVisible="False"/><Popup x:Name="PART_Popup" AllowsTransparency="True" Placement="Bottom" IsOpen="{TemplateBinding IsDropDownOpen}" PopupAnimation="Fade"><Border MinWidth="{TemplateBinding ActualWidth}" MaxHeight="260" Background="{StaticResource Paper}" BorderBrush="{StaticResource LineStrong}" BorderThickness="1" CornerRadius="10" Margin="0,4,0,0"><ScrollViewer><ItemsPresenter/></ScrollViewer></Border></Popup></Grid><ControlTemplate.Triggers><Trigger Property="IsKeyboardFocusWithin" Value="True"><Setter TargetName="Surface" Property="BorderBrush" Value="{StaticResource Terracotta}"/><Setter TargetName="Surface" Property="BorderThickness" Value="2"/></Trigger><Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.45"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>
     <Style TargetType="ComboBoxItem"><Setter Property="Padding" Value="11,8"/><Setter Property="FontSize" Value="14"/><Setter Property="Foreground" Value="{StaticResource Ink}"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ComboBoxItem"><Border x:Name="ItemSurface" Background="Transparent" Padding="{TemplateBinding Padding}"><ContentPresenter/></Border><ControlTemplate.Triggers><Trigger Property="IsHighlighted" Value="True"><Setter TargetName="ItemSurface" Property="Background" Value="{StaticResource Ivory}"/></Trigger><Trigger Property="IsSelected" Value="True"><Setter TargetName="ItemSurface" Property="Background" Value="{StaticResource TerracottaSoft}"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>
 
-    <Style TargetType="DataGrid"><Setter Property="RowHeight" Value="48"/><Setter Property="ColumnHeaderHeight" Value="44"/><Setter Property="GridLinesVisibility" Value="Horizontal"/><Setter Property="HorizontalGridLinesBrush" Value="{StaticResource Line}"/><Setter Property="VerticalGridLinesBrush" Value="Transparent"/><Setter Property="BorderBrush" Value="{StaticResource Line}"/><Setter Property="BorderThickness" Value="1"/><Setter Property="Background" Value="{StaticResource Paper}"/><Setter Property="RowBackground" Value="{StaticResource Paper}"/><Setter Property="AlternatingRowBackground" Value="{StaticResource Ivory}"/><Setter Property="AlternationCount" Value="2"/><Setter Property="AutoGenerateColumns" Value="False"/><Setter Property="IsReadOnly" Value="True"/><Setter Property="SelectionMode" Value="Single"/><Setter Property="SelectionUnit" Value="FullRow"/><Setter Property="HeadersVisibility" Value="Column"/><Setter Property="CanUserAddRows" Value="False"/></Style>
-    <Style TargetType="DataGridColumnHeader"><Setter Property="Background" Value="{StaticResource Ivory}"/><Setter Property="Foreground" Value="{StaticResource Muted}"/><Setter Property="FontSize" Value="12"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="Padding" Value="12,0"/><Setter Property="BorderBrush" Value="{StaticResource Line}"/><Setter Property="BorderThickness" Value="0,0,0,1"/></Style>
-    <Style TargetType="DataGridCell"><Setter Property="Padding" Value="12,0"/><Setter Property="BorderThickness" Value="0"/><Setter Property="VerticalContentAlignment" Value="Center"/></Style>
-    <Style TargetType="DataGridRow"><Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{StaticResource GoldSoft}"/></Trigger><Trigger Property="IsSelected" Value="True"><Setter Property="Background" Value="{StaticResource TerracottaSoft}"/><Setter Property="Foreground" Value="{StaticResource Ink}"/></Trigger></Style.Triggers></Style>
-    <Style TargetType="TabItem"><Setter Property="Padding" Value="16,9"/><Setter Property="FontSize" Value="14"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="Cursor" Value="Hand"/><Setter Property="Foreground" Value="{StaticResource Muted}"/><Style.Triggers><Trigger Property="IsSelected" Value="True"><Setter Property="Foreground" Value="{StaticResource TerracottaDark}"/></Trigger></Style.Triggers></Style>
-    <Style TargetType="ListBox"><Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/><Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled"/></Style>
-    <Style TargetType="Separator"><Setter Property="Background" Value="{StaticResource Line}"/><Setter Property="Margin" Value="0,10"/></Style>
-    <Style x:Key="Card" TargetType="Border"><Setter Property="Background" Value="{StaticResource Paper}"/><Setter Property="BorderBrush" Value="{StaticResource Line}"/><Setter Property="BorderThickness" Value="1"/><Setter Property="CornerRadius" Value="12"/><Setter Property="Padding" Value="18"/><Setter Property="Margin" Value="6"/></Style>
-    <Style x:Key="RaisedCard" TargetType="Border" BasedOn="{StaticResource Card}"><Setter Property="Effect" Value="{StaticResource CardShadow}"/><Setter Property="BorderThickness" Value="0"/></Style>
-    <Style x:Key="StatusPill" TargetType="Border"><Setter Property="Background" Value="{StaticResource SuccessSoft}"/><Setter Property="CornerRadius" Value="16"/><Setter Property="Padding" Value="11,6"/></Style>
+    <Style TargetType="DataGrid">
+      <Setter Property="RowHeight" Value="46"/>
+      <Setter Property="ColumnHeaderHeight" Value="40"/>
+      <Setter Property="GridLinesVisibility" Value="Horizontal"/>
+      <Setter Property="HorizontalGridLinesBrush" Value="{StaticResource Line}"/>
+      <Setter Property="VerticalGridLinesBrush" Value="Transparent"/>
+      <Setter Property="BorderBrush" Value="{StaticResource Line}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Background" Value="{StaticResource Paper}"/>
+      <Setter Property="RowBackground" Value="{StaticResource Paper}"/>
+      <Setter Property="AlternatingRowBackground" Value="{StaticResource Ivory}"/>
+      <Setter Property="AlternationCount" Value="2"/>
+      <Setter Property="AutoGenerateColumns" Value="False"/>
+      <Setter Property="IsReadOnly" Value="True"/>
+      <Setter Property="SelectionMode" Value="Single"/>
+      <Setter Property="SelectionUnit" Value="FullRow"/>
+      <Setter Property="HeadersVisibility" Value="Column"/>
+      <Setter Property="CanUserAddRows" Value="False"/>
+      <Setter Property="FontSize" Value="13"/>
+    </Style>
+    <Style TargetType="DataGridColumnHeader">
+      <Setter Property="Background" Value="{StaticResource Ivory}"/>
+      <Setter Property="Foreground" Value="{StaticResource Muted}"/>
+      <Setter Property="FontSize" Value="11"/>
+      <Setter Property="FontWeight" Value="Bold"/>
+      <Setter Property="Padding" Value="12,0"/>
+      <Setter Property="BorderBrush" Value="{StaticResource Line}"/>
+      <Setter Property="BorderThickness" Value="0,0,0,1"/>
+      <Setter Property="VerticalContentAlignment" Value="Center"/>
+    </Style>
+    <Style TargetType="DataGridCell">
+      <Setter Property="Padding" Value="12,0"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="VerticalContentAlignment" Value="Center"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="DataGridCell">
+            <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
+              <ContentPresenter VerticalAlignment="Center"/>
+            </Border>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style TargetType="DataGridRow">
+      <Setter Property="SnapsToDevicePixels" Value="True"/>
+      <Style.Triggers>
+        <Trigger Property="IsMouseOver" Value="True">
+          <Setter Property="Background" Value="{StaticResource GoldSoft}"/>
+        </Trigger>
+        <Trigger Property="IsSelected" Value="True">
+          <Setter Property="Background" Value="{StaticResource TerracottaSoft}"/>
+          <Setter Property="Foreground" Value="{StaticResource Ink}"/>
+        </Trigger>
+      </Style.Triggers>
+    </Style>
+
+    <Style TargetType="TabControl">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Padding" Value="0"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="TabControl">
+            <Grid SnapsToDevicePixels="True">
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+              </Grid.RowDefinitions>
+              <Border Background="{StaticResource Ivory}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="12" Padding="4" Margin="0,0,0,10" HorizontalAlignment="Left">
+                <TabPanel x:Name="HeaderPanel" IsItemsHost="True" Background="Transparent"/>
+              </Border>
+              <ContentPresenter Grid.Row="1" x:Name="PART_SelectedContentHost" ContentSource="SelectedContent" Margin="{TemplateBinding Padding}"/>
+            </Grid>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <Style TargetType="TabItem">
+      <Setter Property="Padding" Value="16,8"/>
+      <Setter Property="FontSize" Value="13"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Foreground" Value="{StaticResource Muted}"/>
+      <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="TabItem">
+            <Border x:Name="TabSurface" Background="Transparent" CornerRadius="9" Padding="{TemplateBinding Padding}" Margin="2,0">
+              <ContentPresenter ContentSource="Header" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="TabSurface" Property="Background" Value="{StaticResource Canvas}"/>
+                <Setter Property="Foreground" Value="{StaticResource Ink}"/>
+              </Trigger>
+              <Trigger Property="IsSelected" Value="True">
+                <Setter TargetName="TabSurface" Property="Background" Value="{StaticResource Paper}"/>
+                <Setter TargetName="TabSurface" Property="Effect" Value="{StaticResource CardShadow}"/>
+                <Setter Property="Foreground" Value="{StaticResource TerracottaDark}"/>
+                <Setter Property="FontWeight" Value="Bold"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <Style TargetType="ListBox">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled"/>
+    </Style>
+    <Style TargetType="Separator">
+      <Setter Property="Background" Value="{StaticResource Line}"/>
+      <Setter Property="Margin" Value="0,10"/>
+    </Style>
+    <Style x:Key="Card" TargetType="Border">
+      <Setter Property="Background" Value="{StaticResource Paper}"/>
+      <Setter Property="BorderBrush" Value="{StaticResource Line}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="14"/>
+      <Setter Property="Padding" Value="16"/>
+      <Setter Property="Margin" Value="4"/>
+    </Style>
+    <Style x:Key="RaisedCard" TargetType="Border" BasedOn="{StaticResource Card}">
+      <Setter Property="Effect" Value="{StaticResource CardShadow}"/>
+      <Setter Property="BorderThickness" Value="0"/>
+    </Style>
+    <Style x:Key="StatusPill" TargetType="Border">
+      <Setter Property="Background" Value="{StaticResource SuccessSoft}"/>
+      <Setter Property="CornerRadius" Value="16"/>
+      <Setter Property="Padding" Value="11,6"/>
+    </Style>
 
     <Style x:Key="NavItem" TargetType="RadioButton"><Setter Property="Foreground" Value="#FFD9D2CA"/><Setter Property="Background" Value="Transparent"/><Setter Property="Height" Value="48"/><Setter Property="Margin" Value="0,2"/><Setter Property="Cursor" Value="Hand"/><Setter Property="FontSize" Value="14"/><Setter Property="FontWeight" Value="SemiBold"/>
       <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="RadioButton"><Border x:Name="NavSurface" Background="{TemplateBinding Background}" BorderBrush="Transparent" BorderThickness="1" CornerRadius="9" Padding="12,0"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="30"/><ColumnDefinition Width="*"/><ColumnDefinition Width="3"/></Grid.ColumnDefinitions><TextBlock Text="{TemplateBinding Tag}" FontFamily="Segoe MDL2 Assets" FontSize="17" Foreground="{TemplateBinding Foreground}" VerticalAlignment="Center"/><ContentPresenter Grid.Column="1" VerticalAlignment="Center"/><Border x:Name="Marker" Grid.Column="2" Width="3" Height="22" CornerRadius="2" Background="Transparent"/></Grid></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="NavSurface" Property="Background" Value="{StaticResource NavHover}"/></Trigger><Trigger Property="IsChecked" Value="True"><Setter TargetName="NavSurface" Property="Background" Value="{StaticResource NavActive}"/><Setter Property="Foreground" Value="White"/><Setter TargetName="Marker" Property="Background" Value="{StaticResource Gold}"/></Trigger><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="NavSurface" Property="BorderBrush" Value="{StaticResource Gold}"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>

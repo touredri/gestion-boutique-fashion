@@ -1,17 +1,19 @@
-﻿#define MyAppName "Boutique Fashion POS"
-#define MyAppVersion "1.1.0"
-#define MyAppPublisher "Boutique Fashion"
-#define MyAppExeName "BoutiqueFashion.exe"
+﻿#define MyAppName "Bana Shop"
+#ifndef MyAppVersion
+  #define MyAppVersion "1.1.0"
+#endif
+#define MyAppPublisher "Bana Shop"
+#define MyAppExeName "BanaShop.exe"
 
 [Setup]
 AppId={{0BC74935-4917-4A78-A54A-2788CBA55EC4}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
-DefaultDirName={autopf}\Boutique Fashion POS
+DefaultDirName={autopf}\Bana Shop
 DefaultGroupName={#MyAppName}
 OutputDir=output
-OutputBaseFilename=BoutiqueFashionPOS-Setup-{#MyAppVersion}
+OutputBaseFilename=BanaShop-Setup-{#MyAppVersion}
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern

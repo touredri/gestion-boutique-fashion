@@ -2,19 +2,53 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              Visibility="Collapsed" Focusable="False">
-  <Grid Background="#80000000" MouseLeftButtonUp="OnCancel">
-    <Border HorizontalAlignment="Center" VerticalAlignment="Center" Background="{StaticResource Paper}" CornerRadius="16" Padding="14" MinWidth="680" Effect="{StaticResource CardShadow}" MouseLeftButtonUp="OnCardTap">
+  <Grid Background="#40000000" MouseLeftButtonUp="OnCancel">
+    <Border HorizontalAlignment="Center" VerticalAlignment="Bottom"
+            Background="{StaticResource Paper}" CornerRadius="16"
+            Padding="18,12,18,14" MinWidth="740" MaxWidth="880"
+            Margin="16,0,16,14" Effect="{StaticResource CardShadow}"
+            MouseLeftButtonUp="OnCardTap">
       <StackPanel>
+        <!-- Titre du champ et bouton de fermeture -->
+        <Grid Margin="2,0,2,6">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
+          </Grid.ColumnDefinitions>
+          <TextBlock x:Name="KeyboardTitle" Text="Saisie de texte" Style="{StaticResource SectionTitle}" FontSize="15" Margin="0" VerticalAlignment="Center"/>
+          <Button Grid.Column="1" Content="✕" Style="{StaticResource QuietButton}" MinWidth="34" MinHeight="30" Padding="4,2" FontSize="13" ToolTip="Fermer le clavier" Click="OnCancelClick"/>
+        </Grid>
+
+        <!-- Zone d'affichage et de prévisualisation en direct -->
+        <Border Background="{StaticResource Ivory}" BorderBrush="{StaticResource LineStrong}" BorderThickness="1" CornerRadius="10" Padding="14,8" Margin="0,0,0,8" MinHeight="44">
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*"/>
+              <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock x:Name="PreviewPlaceholder" Text="Toucher les touches ci-dessous pour écrire…" Foreground="{StaticResource MutedLight}" FontSize="14" VerticalAlignment="Center" Visibility="Collapsed"/>
+            <TextBlock x:Name="PreviewText" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource Ink}" VerticalAlignment="Center" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/>
+            <Button Grid.Column="1" Content="Effacer" Style="{StaticResource QuietButton}" MinWidth="58" MinHeight="28" Padding="6,2" FontSize="12" Foreground="{StaticResource Muted}" Click="OnClearText" ToolTip="Effacer tout le texte"/>
+          </Grid>
+        </Border>
+
+        <!-- Touches du clavier virtuel -->
         <UniformGrid x:Name="Row1" Columns="10"/>
         <UniformGrid x:Name="Row2" Columns="10"/>
         <UniformGrid x:Name="Row3" Columns="10"/>
         <Grid Margin="0,4,0,0">
-          <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-          <Button x:Name="ModeButton" Content="123" Style="{StaticResource KeyboardButton}" MinWidth="64" Click="OnMode" AutomationProperties.Name="Basculer chiffres et symboles"/>
-          <Button x:Name="ShiftButton" Grid.Column="1" Content="Maj" Style="{StaticResource KeyboardButton}" MinWidth="64" Click="OnShift" AutomationProperties.Name="Majuscules"/>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="Auto"/>
+          </Grid.ColumnDefinitions>
+          <Button x:Name="ModeButton" Content="123" Style="{StaticResource KeyboardButton}" MinWidth="70" Click="OnMode" AutomationProperties.Name="Basculer chiffres et symboles"/>
+          <Button x:Name="ShiftButton" Grid.Column="1" Content="Maj" Style="{StaticResource KeyboardButton}" MinWidth="70" Click="OnShift" AutomationProperties.Name="Majuscules"/>
           <Button Grid.Column="2" Content="Espace" Style="{StaticResource KeyboardButton}" Click="OnSpace" AutomationProperties.Name="Espace"/>
-          <Button Grid.Column="3" Content="⌫" Style="{StaticResource KeyboardButton}" MinWidth="64" Click="OnBack" AutomationProperties.Name="Effacer"/>
-          <Button Grid.Column="4" Content="✓" Style="{StaticResource KeyboardButton}" MinWidth="64" Background="{StaticResource Terracotta}" Foreground="White" BorderBrush="{StaticResource Terracotta}" Click="OnOk" AutomationProperties.Name="Fermer la saisie"/>
+          <Button Grid.Column="3" Content="⌫" Style="{StaticResource KeyboardButton}" MinWidth="70" Click="OnBack" AutomationProperties.Name="Effacer"/>
+          <Button Grid.Column="4" Content="✓ Valider" Style="{StaticResource KeyboardButton}" MinWidth="105" Background="{StaticResource Terracotta}" Foreground="White" BorderBrush="{StaticResource Terracotta}" Click="OnOk" AutomationProperties.Name="Valider et fermer la saisie"/>
         </Grid>
       </StackPanel>
     </Border>

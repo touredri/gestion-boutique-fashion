@@ -35,6 +35,7 @@ internal static class UiConfirm
 internal static class UiFeedback
 {
     public static void Success(string message) => MessageBox.Show(message, "Succès", MessageBoxButton.OK, MessageBoxImage.Information);
+    public static void Error(string message) => MessageBox.Show(message, "Erreur", MessageBoxButton.OK, MessageBoxImage.Error);
 }
 
 internal static class AppNavigator
@@ -42,10 +43,18 @@ internal static class AppNavigator
     public static Func<string, Task>? Go { get; set; }
 }
 
-public partial class DashboardViewModel(IReportService reports) : ObservableObject, ILoadable
+public partial class DashboardViewModel(IReportService reports, ICashSessionService cash) : ObservableObject, ILoadable
 {
     public ObservableCollection<RecentSaleRow> RecentSales { get; } = [];
     [ObservableProperty] private DashboardSummary summary = new(0, 0, 0, 0, 0, 0);
+    [ObservableProperty] private string cashSessionState = "Caisse fermée";
+    [ObservableProperty] private bool isCashOpen;
+    [ObservableProperty] private string openingFloat = "0";
+    [ObservableProperty] private string countedCash = "";
+    [ObservableProperty] private string cashDifferenceReason = "";
+    [ObservableProperty] private string managerPin = "";
+    [ObservableProperty] private string cashStatus = "";
+
     public async Task LoadAsync()
     {
         var now = DateTimeOffset.Now;
@@ -54,7 +63,64 @@ public partial class DashboardViewModel(IReportService reports) : ObservableObje
         Summary = await reports.DashboardAsync(from, to);
         RecentSales.Clear();
         foreach (var sale in await reports.RecentSalesAsync(from, to)) RecentSales.Add(sale);
+
+        var openSession = await cash.GetOpenAsync();
+        IsCashOpen = openSession is not null;
+        CashSessionState = openSession is null ? "Caisse fermée" : $"Caisse ouverte · {openSession.Number}";
+        CashStatus = string.Empty;
     }
+
+    [RelayCommand]
+    private async Task OpenCash()
+    {
+        try
+        {
+            if (!long.TryParse(OpeningFloat, out var val) || val < 0)
+            {
+                CashStatus = "Veuillez indiquer un fond de caisse valide.";
+                return;
+            }
+            var session = await cash.OpenAsync(val);
+            CashStatus = $"Caisse ouverte avec succès ({session.Number}).";
+            CashSessionState = $"Caisse ouverte · {session.Number}";
+            IsCashOpen = true;
+            OpeningFloat = "0";
+            UiFeedback.Success($"Caisse {session.Number} ouverte.");
+        }
+        catch (Exception e)
+        {
+            CashStatus = e.Message;
+            UiFeedback.Error($"Erreur ouverture : {e.Message}");
+        }
+    }
+
+    [RelayCommand]
+    private async Task CloseCash()
+    {
+        try
+        {
+            if (!long.TryParse(CountedCash, out var val) || val < 0)
+            {
+                CashStatus = "Veuillez saisir le montant réel des espèces comptées.";
+                return;
+            }
+            var result = await cash.CloseAsync(val, CashDifferenceReason, ManagerPin);
+            CashStatus = $"Caisse clôturée avec succès. Écart : {result.DifferenceXof:N0} FCFA";
+            CashSessionState = "Caisse fermée";
+            IsCashOpen = false;
+            CountedCash = "";
+            CashDifferenceReason = "";
+            ManagerPin = "";
+            UiFeedback.Success($"Caisse clôturée. Écart : {result.DifferenceXof:N0} FCFA");
+            await LoadAsync();
+        }
+        catch (Exception e)
+        {
+            CashStatus = e.Message;
+            UiFeedback.Error($"Erreur clôture : {e.Message}");
+        }
+    }
+
     [RelayCommand] private async Task QuickSell() { if (AppNavigator.Go is not null) await AppNavigator.Go("Sale"); }
     [RelayCommand] private async Task QuickProducts() { if (AppNavigator.Go is not null) await AppNavigator.Go("Catalog"); }
 }
