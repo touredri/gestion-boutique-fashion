@@ -20,7 +20,9 @@
   <Grid>
     <Grid.ColumnDefinitions><ColumnDefinition Width="244"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
     <Border Background="{StaticResource Nav}" Padding="18,16">
-      <DockPanel LastChildFill="True">
+      <!-- LastChildFill=False : sinon la carte utilisateur, dernier enfant, s'étire sur tout
+           l'espace restant au lieu de se fixer en bas, et son avatar se décale du texte. -->
+      <DockPanel LastChildFill="False">
         <StackPanel DockPanel.Dock="Top">
           <Grid Margin="4,4,4,22">
             <Grid.ColumnDefinitions><ColumnDefinition Width="46"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
@@ -32,7 +34,7 @@
               <TextBlock Text="POINT DE VENTE" Foreground="{StaticResource Gold}" FontSize="10" FontWeight="SemiBold"/>
             </StackPanel>
           </Grid>
-          <TextBlock Text="Espace de travail" Foreground="{StaticResource MutedLight}" FontSize="11" FontWeight="SemiBold" Margin="10,0,0,7"/>
+          <TextBlock Text="Espace de travail" Foreground="{StaticResource NavMuted}" FontSize="11" FontWeight="SemiBold" Margin="10,0,0,7"/>
           <RadioButton Content="Tableau de bord" Tag="&#xE80F;" GroupName="Navigation" AutomationProperties.Name="Tableau de bord" IsChecked="True" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Dashboard"/>
           <RadioButton Content="Vente / Caisse" Tag="&#xE719;" GroupName="Navigation" AutomationProperties.Name="Vente / Caisse" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Sale"/>
           <RadioButton Content="Produits" Tag="&#xE7BF;" GroupName="Navigation" AutomationProperties.Name="Produits" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Catalog"/>
@@ -43,10 +45,10 @@
           <RadioButton Content="Rapports" Tag="&#xE9D2;" GroupName="Navigation" AutomationProperties.Name="Rapports" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Reports"/>
           <RadioButton Content="Paramètres" Tag="&#xE713;" GroupName="Navigation" AutomationProperties.Name="Paramètres" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Settings" Visibility="{Binding Session.IsManager, Converter={StaticResource BoolToVis}}"/>
         </StackPanel>
-        <Border DockPanel.Dock="Bottom" Background="{StaticResource NavHover}" CornerRadius="8" Padding="12" Margin="0,14,0,0">
+        <Border DockPanel.Dock="Bottom" VerticalAlignment="Bottom" Background="{StaticResource NavHover}" CornerRadius="8" Padding="12" Margin="0,14,0,0">
           <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="34"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-            <Border Width="30" Height="30" Background="{StaticResource GoldSoft}" CornerRadius="15"><TextBlock Text="V" Foreground="{StaticResource TerracottaDark}" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
-            <StackPanel Grid.Column="1" Margin="8,0,0,0"><TextBlock Text="Vendeur boutique" Foreground="White" FontWeight="SemiBold" FontSize="12"/><TextBlock Text="Session active" Foreground="#FF9B948C" FontSize="11"/></StackPanel>
+            <Border Width="30" Height="30" VerticalAlignment="Center" Background="{StaticResource GoldSoft}" CornerRadius="15"><TextBlock Text="V" Foreground="{StaticResource TerracottaDark}" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="8,0,0,0"><TextBlock Text="Vendeur boutique" Foreground="White" FontWeight="SemiBold" FontSize="12"/><TextBlock Text="Session active" Foreground="{StaticResource NavMuted}" FontSize="11"/></StackPanel>
           </Grid>
         </Border>
       </DockPanel>
