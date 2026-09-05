@@ -105,7 +105,7 @@ public sealed class Device : ServerEntity
 
     /// <summary>Version en service sur ce terminal, telle qu'il la déclare à chaque cycle de
     /// synchronisation. Sans elle, « est-ce que la mise à jour s'est installée ? » est une
-    /// question sans réponse depuis Abidjan.</summary>
+    /// question sans réponse depuis Bamako.</summary>
     [MaxLength(40)] public string? AppVersion { get; set; }
     public DateTimeOffset? AppVersionSince { get; set; }
 
@@ -151,8 +151,8 @@ public sealed class Product : SyncedDownEntity
 {
     public Guid CategoryId { get; set; }
     /// <summary>Portée de l'article. <c>null</c> : catalogue global, présent dans toutes les
-    /// boutiques. Renseigné : exclusif à cette boutique — une pièce qu'on ne vend qu'à Marcory
-    /// n'a rien à faire sur la caisse de Yopougon.</summary>
+    /// boutiques. Renseigné : exclusif à cette boutique — une pièce qu'on ne vend qu'à Banankabougou
+    /// n'a rien à faire sur la caisse d'ACI 2000.</summary>
     public Guid? ShopId { get; set; }
     [MaxLength(180)] public string Name { get; set; } = string.Empty;
     [MaxLength(120)] public string? Brand { get; set; }

@@ -96,8 +96,8 @@ ReleaseTarget ReleaseId, ShopId?      -- ShopId null = toutes les boutiques
 **Déroulé type**
 ```
 git tag v1.4.2 && git push --tags
-  → CI empaquette et dépose, ciblage « Cocody » seulement
-  → Cocody se met à jour le soir même
+  → CI empaquette et dépose, ciblage « Banankabougou » seulement
+  → Banankabougou se met à jour le soir même
   → deux jours d'observation
   → workflow_dispatch « promouvoir 1.4.2 » → toutes les boutiques
 ```

@@ -2,12 +2,12 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Bana Shop · Mode femme, homme et accessoires à Abidjan",
+  title: "Bana Shop · Mode femme, homme et accessoires à Bamako",
   description:
-    "Vêtements, chaussures et accessoires sélectionnés à Abidjan. Découvrez les pièces disponibles dans nos boutiques de Marcory et Yopougon, et réservez la vôtre en un message.",
+    "Vêtements, chaussures et accessoires sélectionnés à Bamako. Découvrez les pièces disponibles dans nos boutiques de Banankabougou et ACI 2000, et réservez la vôtre en un message.",
   openGraph: {
     title: "Bana Shop",
-    description: "Mode femme, homme et accessoires à Abidjan.",
+    description: "Mode femme, homme et accessoires à Bamako.",
     locale: "fr_CI",
     type: "website",
   },

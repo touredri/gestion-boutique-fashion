@@ -269,7 +269,7 @@ admin.MapGet("/shops", async (ServerDbContext db, CancellationToken ct) =>
     Results.Ok(await db.Shops.OrderBy(x => x.Name)
         .Select(x => new
         {
-            x.Id, x.Name, x.City, x.IsActive,
+            x.Id, x.Name, x.City, x.Address, x.Phone, x.Hours, x.IsActive,
             Devices = db.Devices.Count(d => d.ShopId == x.Id && d.RevokedAt == null),
             LastSeenAt = db.Devices.Where(d => d.ShopId == x.Id).Max(d => (DateTimeOffset?)d.LastSeenAt),
         })

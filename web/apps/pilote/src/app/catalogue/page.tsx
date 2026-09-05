@@ -13,8 +13,8 @@ import type { Catalog, Product, Shop, Variant } from "@/lib/types";
  * Catalogue. Le serveur en est la seule source : les terminaux le reçoivent et ne l'écrivent
  * plus. C'est donc ici, et nulle part ailleurs, qu'on change un prix.
  *
- * Un article est global ou exclusif à une boutique — une pièce qu'on ne vend qu'à Marcory n'a
- * rien à faire sur la caisse de Yopougon.
+ * Un article est global ou exclusif à une boutique — une pièce qu'on ne vend qu'à Banankabougou n'a
+ * rien à faire sur la caisse d'ACI 2000.
  */
 export default function CataloguePage() {
   const catalog = useResource<Catalog>("/api/catalog", "cache.catalog");

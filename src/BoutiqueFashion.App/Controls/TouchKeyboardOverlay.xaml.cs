@@ -13,7 +13,7 @@ public partial class TouchKeyboardOverlay : UserControl
         ["a", "z", "e", "r", "t", "y", "u", "i", "o", "p"],
         ["q", "s", "d", "f", "g", "h", "j", "k", "l", "m"],
         ["w", "x", "c", "v", "b", "n", ",", ";", ":", "!"],
-        // Sans cette rangée, aucun nom français ou ivoirien ne pouvait être saisi correctement,
+        // Sans cette rangée, aucun nom français ou malien ne pouvait être saisi correctement,
         // et la recherche client par nom ne retrouvait donc rien.
         ["é", "è", "ê", "à", "â", "ç", "ù", "î", "ô", "'"]
     ];

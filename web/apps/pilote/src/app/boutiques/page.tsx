@@ -39,13 +39,14 @@ export default function BoutiquesPage() {
         <ResourceState loading={shops.loading && !shops.data} error={shops.error} empty={(shops.data ?? []).length === 0} skeleton={2}>
           <div className="space-y-3">
             {(shops.data ?? []).map((shop) => (
-              <ShopPanel key={shop.id} shop={shop} expanded={open === shop.id} onToggle={() => setOpen(open === shop.id ? null : shop.id)} />
+              <ShopPanel key={shop.id} shop={shop} expanded={open === shop.id} onToggle={() => setOpen(open === shop.id ? null : shop.id)} onSaved={() => void shops.reload()} />
             ))}
           </div>
         </ResourceState>
 
         {creating && <CreateShop onClose={() => setCreating(false)} onCreated={() => { setCreating(false); void shops.reload(); }} />}
 
+        <VitrineCard />
         <AccountCard />
       </Screen>
       <BottomNav />
@@ -53,7 +54,7 @@ export default function BoutiquesPage() {
   );
 }
 
-function ShopPanel({ shop, expanded, onToggle }: { shop: Shop; expanded: boolean; onToggle: () => void }) {
+function ShopPanel({ shop, expanded, onToggle, onSaved }: { shop: Shop; expanded: boolean; onToggle: () => void; onSaved: () => void }) {
   const stale = isStale(shop.lastSeenAt);
   return (
     <Card>
@@ -68,14 +69,14 @@ function ShopPanel({ shop, expanded, onToggle }: { shop: Shop; expanded: boolean
         {shop.devices === 0 ? <Badge tone="warning">À appairer</Badge> : stale ? <Badge tone="danger">Silencieux</Badge> : <Badge tone="success">En ligne</Badge>}
       </button>
 
-      {expanded && <ShopDetail shopId={shop.id} />}
+      {expanded && <ShopDetail shopId={shop.id} onSaved={onSaved} />}
     </Card>
   );
 }
 
-type Panel = "terminaux" | "stock" | "reglages";
+type Panel = "terminaux" | "stock" | "adresse" | "reglages";
 
-function ShopDetail({ shopId }: { shopId: string }) {
+function ShopDetail({ shopId, onSaved }: { shopId: string; onSaved: () => void }) {
   const devices = useResource<Device[]>(`/api/shops/${shopId}/devices`, `cache.devices.${shopId}`);
   const stock = useResource<StockRow[]>(`/api/shops/${shopId}/stock-detail?lowOnly=true`, `cache.lowstock.${shopId}`);
   const [code, setCode] = useState<{ code: string; expiresAt: string } | null>(null);
@@ -102,7 +103,7 @@ function ShopDetail({ shopId }: { shopId: string }) {
       {/* Trois volets plutôt qu'une longue page : les réglages d'une boutique sont nombreux et
           ne se consultent pas en même temps que son stock. */}
       <div className="mb-3 flex rounded-xl border border-line bg-ivory p-0.5">
-        {(["terminaux", "stock", "reglages"] as const).map((key) => (
+        {(["terminaux", "stock", "adresse", "reglages"] as const).map((key) => (
           <button
             key={key}
             onClick={() => setPanel(key)}
@@ -115,6 +116,7 @@ function ShopDetail({ shopId }: { shopId: string }) {
         ))}
       </div>
 
+      {panel === "adresse" && <ShopIdentity shopId={shopId} onSaved={onSaved} />}
       {panel === "reglages" && <ShopSettings shopId={shopId} />}
 
       {panel === "terminaux" && (<>
@@ -202,6 +204,88 @@ function VersionLine({ device }: { device: Device }) {
   );
 }
 
+/**
+ * Coordonnées de la boutique : ce que le site public affiche, et ce que la caisse imprime sur
+ * ses tickets. Un seul endroit pour les deux — elles vivaient auparavant à deux endroits
+ * différents, si bien qu'en corriger une ne corrigeait pas l'autre.
+ */
+function ShopIdentity({ shopId, onSaved }: { shopId: string; onSaved: () => void }) {
+  const shops = useResource<Shop[]>("/api/shops", "cache.shops");
+  const shop = (shops.data ?? []).find((x) => x.id === shopId);
+
+  const [form, setForm] = useState<{ name: string; city: string; address: string; phone: string; hours: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const valeurs = form ?? {
+    name: shop?.name ?? "",
+    city: shop?.city ?? "",
+    address: shop?.address ?? "",
+    phone: shop?.phone ?? "",
+    hours: shop?.hours ?? "",
+  };
+
+  function set(champ: keyof typeof valeurs, valeur: string) {
+    setSaved(false);
+    setForm({ ...valeurs, [champ]: valeur });
+  }
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      await api.put(`/api/shops/${shopId}`, {
+        name: valeurs.name.trim(),
+        city: valeurs.city.trim() || null,
+        address: valeurs.address.trim() || null,
+        phone: valeurs.phone.trim() || null,
+        hours: valeurs.hours.trim() || null,
+      });
+      setSaved(true);
+      setForm(null);
+      onSaved();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Enregistrement impossible.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="space-y-4">
+      <SectionLabel>Coordonnées</SectionLabel>
+      <p className="-mt-2 text-xs text-muted">
+        Affichées sur le site et imprimées sur les tickets de cette boutique.
+      </p>
+
+      <Field label="Nom">
+        <input className={inputClass} value={valeurs.name} onChange={(e) => set("name", e.target.value)} required />
+      </Field>
+      <Field label="Quartier ou ville" hint="Sert à composer le titre du site : « Deux adresses à Bamako ».">
+        <input className={inputClass} value={valeurs.city} onChange={(e) => set("city", e.target.value)} />
+      </Field>
+      <Field label="Adresse">
+        <input className={inputClass} value={valeurs.address} onChange={(e) => set("address", e.target.value)} />
+      </Field>
+      <Field label="Téléphone" hint="Avec l’indicatif. Exemple : +223 70 00 00 11">
+        <input className={inputClass} inputMode="tel" value={valeurs.phone} onChange={(e) => set("phone", e.target.value)} />
+      </Field>
+      <Field label="Horaires" hint="Texte libre. Exemple : Lun–Sam 9h–19h">
+        <input className={inputClass} value={valeurs.hours} onChange={(e) => set("hours", e.target.value)} />
+      </Field>
+
+      {error && <ErrorNote>{error}</ErrorNote>}
+      {saved && <p className="text-xs font-semibold text-success">Enregistré. Le site et la caisse suivront.</p>}
+
+      <Button type="submit" variant="primary" disabled={busy} className="w-full">
+        {busy ? "Enregistrement…" : "Enregistrer"}
+      </Button>
+    </form>
+  );
+}
+
 function CreateShop({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const [name, setName] = useState("");
   const [city, setCity] = useState("");
@@ -254,6 +338,80 @@ function CreateShop({ onClose, onCreated }: { onClose: () => void; onCreated: ()
         </div>
       </form>
     </div>
+  );
+}
+
+/**
+ * Textes du site public. Ils n'appartiennent à aucune boutique en particulier, d'où leur place
+ * ici plutôt que dans le détail de l'une d'elles — et un sixième onglet pour deux champs aurait
+ * été disproportionné.
+ */
+function VitrineCard() {
+  const settings = useResource<{ key: string; value: string }[]>("/api/site-settings", "cache.sitesettings");
+  const [form, setForm] = useState<Record<string, string> | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const stored = Object.fromEntries((settings.data ?? []).map((x) => [x.key, x.value]));
+  const valeurs = form ?? {
+    "Vitrine.Depuis": stored["Vitrine.Depuis"] ?? "2019",
+    "Vitrine.Accroche": stored["Vitrine.Accroche"] ?? "",
+  };
+
+  function set(cle: string, valeur: string) {
+    setSaved(false);
+    setForm({ ...valeurs, [cle]: valeur });
+  }
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      await api.put("/api/site-settings", Object.entries(valeurs).map(([key, value]) => ({ key, value })));
+      setSaved(true);
+      setForm(null);
+      void settings.reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Enregistrement impossible.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card className="mt-3">
+      <form onSubmit={submit} className="space-y-4">
+        <div>
+          <SectionLabel>Site public</SectionLabel>
+          <p className="text-xs text-muted">Ce que voient les clientes en arrivant sur le site.</p>
+        </div>
+
+        <Field label="Ouvert depuis" hint="Année affichée en haut du site.">
+          <input
+            className={inputClass}
+            inputMode="numeric"
+            value={valeurs["Vitrine.Depuis"]}
+            onChange={(e) => set("Vitrine.Depuis", e.target.value)}
+          />
+        </Field>
+        <Field label="Accroche" hint="Laissée vide, le texte par défaut s’affiche.">
+          <textarea
+            className={`${inputClass} min-h-24`}
+            value={valeurs["Vitrine.Accroche"]}
+            onChange={(e) => set("Vitrine.Accroche", e.target.value)}
+          />
+        </Field>
+
+        {error && <ErrorNote>{error}</ErrorNote>}
+        {saved && <p className="text-xs font-semibold text-success">Enregistré. Le site se met à jour aussitôt.</p>}
+
+        <Button type="submit" variant="primary" disabled={busy} className="w-full">
+          {busy ? "Enregistrement…" : "Enregistrer"}
+        </Button>
+      </form>
+    </Card>
   );
 }
 
