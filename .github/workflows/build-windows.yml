@@ -38,7 +38,13 @@ jobs:
         run: dotnet restore .\BoutiqueFashion.slnx
 
       - name: Run tests
-        run: dotnet test .\BoutiqueFashion.slnx --configuration Release --no-restore
+        # Seulement ce qu'un runner Windows peut réellement tester. La solution contient aussi
+        # les tests serveur, qui exigent un PostgreSQL : ils tournent dans ci.yml, qui en fournit
+        # un en conteneur de service. Les inclure ici faisait échouer chaque tag depuis le lot 2,
+        # donc aucune release ne pouvait plus sortir.
+        run: |
+          dotnet test .\tests\BoutiqueFashion.Domain.Tests\BoutiqueFashion.Domain.Tests.csproj --configuration Release --no-restore
+          dotnet test .\tests\BoutiqueFashion.Tests\BoutiqueFashion.Tests.csproj --configuration Release --no-restore
 
       - name: Publish Windows x64
         run: >
