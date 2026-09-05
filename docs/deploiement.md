@@ -100,10 +100,33 @@ paquets :
 |---|---|
 | `UPDATE_SERVER_URL` | `https://votre-domaine` |
 | `UPDATE_ADMIN_KEY` | `ADMIN_API_KEY` relevé dans `~/bana/docker/.env` |
-| `UPDATE_FIRST_SHOP_ID` | identifiant de la boutique pilote, visible dans l'application |
+| `UPDATE_FIRST_SHOP_ID` | identifiant de la boutique pilote — voir ci-dessous |
 
 Sans le troisième, une version se dépose mais n'est distribuée à aucune boutique — et la CI le
 signale en avertissement, plutôt que de tout envoyer partout par défaut.
+
+### Retrouver l'identifiant d'une boutique
+
+Créez d'abord la boutique depuis l'application : *Boutiques* → **Ajouter**. Son identifiant n'y
+est pas montré — c'est une donnée de plomberie, sans intérêt pour la propriétaire. Depuis le VPS :
+
+```sh
+cd ~/bana/docker
+U=$(grep "^BOOTSTRAP_USERNAME=" .env | cut -d= -f2-)
+P=$(grep "^BOOTSTRAP_PASSWORD=" .env | cut -d= -f2-)
+T=$(curl -s "https://$(grep '^DOMAIN=' .env | cut -d= -f2-)/api/auth/login" \
+     -H "Content-Type: application/json" \
+     -d "{\"username\":\"$U\",\"password\":\"$P\"}" \
+     | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')
+
+curl -s "https://$(grep '^DOMAIN=' .env | cut -d= -f2-)/api/shops" -H "Authorization: Bearer $T" \
+  | python3 -m json.tool
+```
+
+Le champ `id` de la boutique choisie est la valeur de `UPDATE_FIRST_SHOP_ID`.
+
+*Si le mot de passe a déjà été changé depuis l'application — ce qui est recommandé — remplacez
+`$P` par le nouveau.*
 
 ## En cas de problème
 
