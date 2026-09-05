@@ -250,7 +250,11 @@ admin.MapGet("/catalog", async (ServerDbContext db, CancellationToken ct) => Res
 admin.MapGet("/shops/{shopId:guid}/devices", async (Guid shopId, ServerDbContext db, CancellationToken ct) =>
     Results.Ok(await db.Devices.AsNoTracking().Where(x => x.ShopId == shopId)
         .OrderByDescending(x => x.LastSeenAt)
-        .Select(x => new { x.Id, x.Name, x.CreatedAt, x.LastSeenAt, Revoked = x.RevokedAt != null })
+        .Select(x => new
+        {
+            x.Id, x.Name, x.CreatedAt, x.LastSeenAt, Revoked = x.RevokedAt != null,
+            x.AppVersion, x.AppVersionSince, x.PendingVersion, x.UpdateError,
+        })
         .ToListAsync(ct)));
 
 admin.MapGet("/shops/{shopId:guid}/settings", async (Guid shopId, ServerDbContext db, CancellationToken ct) =>

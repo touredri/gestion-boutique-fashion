@@ -21,6 +21,9 @@ public sealed class ServerFixture : WebApplicationFactory<Program>, IAsyncLifeti
 {
     public const string OwnerUsername = "proprietaire";
     public const string OwnerPassword = "motdepasse-de-test";
+    /// <summary>Clé de publication du lot 5. Sans valeur configurée, les routes de publication
+    /// répondent 404 — c'est voulu, et c'est ce que vérifie l'un des tests.</summary>
+    public const string AdminApiKey = "cle-de-publication-de-test";
     private readonly string database = $"boutique_test_{Guid.NewGuid():N}";
 
     // Pas de repli codé en dur : un identifiant de secours dans un fichier versionné finit
@@ -43,7 +46,13 @@ public sealed class ServerFixture : WebApplicationFactory<Program>, IAsyncLifeti
         builder.UseSetting("ConnectionStrings:Postgres", ConnectionString);
         builder.UseSetting("Bootstrap:Username", OwnerUsername);
         builder.UseSetting("Bootstrap:Password", OwnerPassword);
+        builder.UseSetting("Admin:ApiKey", AdminApiKey);
+        // Dossier propre à chaque classe de test : les paquets déposés par l'une ne doivent pas
+        // se retrouver dans le flux d'une autre.
+        builder.UseSetting("Updates:Path", updatesPath);
     }
+
+    private readonly string updatesPath = Path.Combine(Path.GetTempPath(), $"banashop-updates-{Guid.NewGuid():N}");
 
     public async Task InitializeAsync()
     {

@@ -120,20 +120,22 @@ function ShopDetail({ shopId }: { shopId: string }) {
       {panel === "terminaux" && (<>
       <SectionLabel>Terminaux</SectionLabel>
       {(devices.data ?? []).map((device) => (
-        <Row
-          key={device.id}
-          label={device.name}
-          hint={device.revoked ? "détaché" : `vu ${sinceNow(device.lastSeenAt)}`}
-          value={
-            device.revoked ? (
-              <span className="text-faint">—</span>
-            ) : (
-              <button onClick={() => void revoke(device.id)} className="text-xs font-semibold text-danger underline underline-offset-2">
-                Détacher
-              </button>
-            )
-          }
-        />
+        <div key={device.id}>
+          <Row
+            label={device.name}
+            hint={device.revoked ? "détaché" : `vu ${sinceNow(device.lastSeenAt)}`}
+            value={
+              device.revoked ? (
+                <span className="text-faint">—</span>
+              ) : (
+                <button onClick={() => void revoke(device.id)} className="text-xs font-semibold text-danger underline underline-offset-2">
+                  Détacher
+                </button>
+              )
+            }
+          />
+          {!device.revoked && <VersionLine device={device} />}
+        </div>
       ))}
       {(devices.data ?? []).length === 0 && <p className="py-2 text-sm text-muted">Aucun terminal rattaché.</p>}
 
@@ -167,6 +169,35 @@ function ShopDetail({ shopId }: { shopId: string }) {
       ))}
       {(stock.data ?? []).length === 0 && <p className="py-2 text-sm text-muted">Aucune alerte de stock.</p>}
       </>)}
+    </div>
+  );
+}
+
+/**
+ * Version du logiciel en service sur un terminal. Purement informatif : la propriétaire n'a
+ * rien à décider ici. Juger si un build est sûr n'est pas de son ressort — c'est la même
+ * logique que le catalogue, dont elle n'a pas la main sur la structure.
+ *
+ * Ce qu'elle doit pouvoir constater, en revanche : que les deux boutiques ne tournent pas sur
+ * deux versions différentes depuis trois semaines, et qu'aucune mise à jour n'échoue en boucle.
+ */
+function VersionLine({ device }: { device: Device }) {
+  if (!device.appVersion && !device.updateError) return null;
+
+  return (
+    <div className="-mt-1 mb-2 pl-1 text-[11px] leading-relaxed">
+      <span className="tabular text-muted">
+        Version {device.appVersion ?? "inconnue"}
+        {device.appVersionSince ? ` · depuis ${sinceNow(device.appVersionSince)}` : ""}
+      </span>
+      {device.pendingVersion && (
+        <span className="ml-2 text-terracotta-dark">
+          {device.pendingVersion} prête, s’installera à la fermeture
+        </span>
+      )}
+      {device.updateError && (
+        <p className="mt-0.5 text-danger">Dernière mise à jour en échec : {device.updateError}</p>
+      )}
     </div>
   );
 }

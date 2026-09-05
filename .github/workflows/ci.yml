@@ -26,7 +26,7 @@ permissions:
 
 env:
   # Renseigner pour produire une migration, puis revider une fois qu'elle est commitée.
-  MIGRATION_NAME: ""
+  MIGRATION_NAME: "UpdateStatus"
   SERVER_MIGRATION_NAME: "Releases"
 
 jobs:

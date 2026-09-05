@@ -13,13 +13,40 @@ on:
       - main
 
   workflow_dispatch:
+    inputs:
+      promouvoir:
+        description: "Promouvoir une version déjà publiée vers toutes les boutiques (ex. 1.4.2)"
+        required: false
+        type: string
 
 permissions:
   contents: write
 
 jobs:
+  # Élargit le ciblage d'une version déjà déposée. Aucune compilation : la version en question
+  # tourne déjà dans une boutique depuis deux jours, c'est bien pour cela qu'on la promeut.
+  promote:
+    name: Promouvoir vers toutes les boutiques
+    if: github.event_name == 'workflow_dispatch' && inputs.promouvoir != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Promouvoir
+        env:
+          UPDATE_SERVER: ${{ secrets.UPDATE_SERVER_URL }}
+          ADMIN_KEY: ${{ secrets.UPDATE_ADMIN_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${UPDATE_SERVER:-}" ]; then
+            echo "::error::UPDATE_SERVER_URL n'est pas configuré." && exit 1
+          fi
+          curl --fail-with-body -sS -X POST \
+            -H "X-Admin-Key: $ADMIN_KEY" -H "Content-Type: application/json" \
+            -d '{"channel":"win","shopIds":null}' \
+            "$UPDATE_SERVER/api/releases/${{ inputs.promouvoir }}/promote"
+
   build:
     name: Build & Test Windows x64
+    if: github.event_name != 'workflow_dispatch' || inputs.promouvoir == ''
     runs-on: windows-latest
 
     steps:
@@ -40,6 +67,22 @@ jobs:
       - name: Run tests
         run: dotnet test .\BoutiqueFashion.slnx --configuration Release --no-restore
 
+      # Le tag porte la version. Hors tag, on garde 0.0.0-local : un binaire qui n'a pas été
+      # publié ne doit jamais ressembler à une version publiée, sans quoi un terminal pourrait
+      # « se mettre à jour » vers un artefact de branche.
+      - name: Déterminer la version
+        id: version
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF -match '^refs/tags/v(.+)$') {
+            $version = $Matches[1]
+          } else {
+            $version = "0.0.0-local"
+          }
+          Write-Host "Version : $version"
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "publiable=$($env:GITHUB_REF -match '^refs/tags/v')" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
       - name: Publish Windows x64
         run: >
           dotnet publish
@@ -48,49 +91,92 @@ jobs:
           --runtime win-x64
           --self-contained true
           -p:PublishSingleFile=false
+          -p:Version=${{ steps.version.outputs.version }}
           -o .\artifacts\win-x64
 
-      - name: Install Inno Setup
-        shell: pwsh
-        run: |
-          choco install innosetup --yes --no-progress
+      # ---------------------------------------------------------------------
+      # Empaquetage Velopack. Remplace l'installeur Inno Setup : une application
+      # installée par Inno n'a ni Update.exe ni la structure current/ + packages/,
+      # et ne peut donc pas se mettre à jour toute seule.
+      # ---------------------------------------------------------------------
 
-      - name: Build installer
+      - name: Installer vpk
+        if: steps.version.outputs.publiable == 'True'
+        run: dotnet tool install -g vpk --version 1.2.*
+
+      # Sans le paquet complet précédent, vpk ne peut calculer aucun delta et produit un paquet
+      # entier à chaque version — ce qui, sur une connexion abidjanaise, fait la différence entre
+      # une mise à jour de quelques secondes et une de plusieurs minutes.
+      - name: Récupérer le paquet précédent
+        if: steps.version.outputs.publiable == 'True'
         shell: pwsh
+        continue-on-error: true
+        env:
+          UPDATE_SERVER: ${{ secrets.UPDATE_SERVER_URL }}
+          ADMIN_KEY: ${{ secrets.UPDATE_ADMIN_KEY }}
         run: |
-          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
-          if (-not (Test-Path $iscc)) {
-            Write-Error "ISCC.exe introuvable."
-            exit 1
+          New-Item -ItemType Directory -Force -Path .\releases | Out-Null
+          if (-not $env:UPDATE_SERVER) { Write-Host "Pas de serveur configuré, premier paquet."; exit 0 }
+          $liste = curl.exe -sS -H "X-Admin-Key: $env:ADMIN_KEY" "$env:UPDATE_SERVER/api/releases" | ConvertFrom-Json
+          $precedent = $liste | Where-Object { -not $_.withdrawn } | Select-Object -First 1
+          if (-not $precedent) { Write-Host "Aucune version antérieure."; exit 0 }
+          foreach ($fichier in $precedent.files | Where-Object { $_.type -eq 'Full' }) {
+            Write-Host "Base delta : $($fichier.fileName)"
+            curl.exe -sS -f -o ".\releases\$($fichier.fileName)" -H "X-Admin-Key: $env:ADMIN_KEY" `
+              "$env:UPDATE_SERVER/api/releases/files/$($fichier.fileName)"
           }
-          if ($env:GITHUB_REF -match '^refs/tags/v(.+)$') {
-            $version = $Matches[1]
+
+      - name: Empaqueter
+        if: steps.version.outputs.publiable == 'True'
+        run: >
+          vpk pack
+          --packId BanaShop
+          --packTitle "Bana Shop"
+          --packVersion ${{ steps.version.outputs.version }}
+          --packDir .\artifacts\win-x64
+          --mainExe BanaShop.exe
+          --icon .\src\BoutiqueFashion.App\Assets\logo.ico
+          --outputDir .\releases
+          --channel win
+
+      # Le flux produit par vpk est la source de vérité du contenu ; le serveur n'en refiltre
+      # que la visibilité. On le relaie tel quel plutôt que de reconstruire les empreintes.
+      - name: Déposer sur le serveur
+        if: steps.version.outputs.publiable == 'True'
+        shell: pwsh
+        env:
+          UPDATE_SERVER: ${{ secrets.UPDATE_SERVER_URL }}
+          ADMIN_KEY: ${{ secrets.UPDATE_ADMIN_KEY }}
+          BOUTIQUE_PILOTE: ${{ secrets.UPDATE_FIRST_SHOP_ID }}
+        run: |
+          if (-not $env:UPDATE_SERVER) { Write-Host "::warning::Pas de serveur de mise à jour configuré, dépôt ignoré."; exit 0 }
+          $ErrorActionPreference = "Stop"
+
+          foreach ($paquet in Get-ChildItem .\releases -Filter *.nupkg) {
+            Write-Host "Téléversement : $($paquet.Name)"
+            curl.exe -sS -f --data-binary "@$($paquet.FullName)" -X PUT `
+              -H "X-Admin-Key: $env:ADMIN_KEY" `
+              "$env:UPDATE_SERVER/api/releases/files/$($paquet.Name)"
+          }
+
+          $flux = Get-Content .\releases\releases.win.json -Raw | ConvertFrom-Json
+          $aDeposer = $flux.Assets | Where-Object { $_.Version -eq "${{ steps.version.outputs.version }}" }
+
+          # Ciblage initial : une seule boutique. C'est la seule protection réelle contre une
+          # version qui démarre mais qui est fonctionnellement cassée — Velopack ne détecte que
+          # l'échec au démarrage. Sans boutique pilote désignée, on ne distribue à personne.
+          $cibles = if ($env:BOUTIQUE_PILOTE) { @($env:BOUTIQUE_PILOTE) } else { @() }
+          $corps = @{ channel = "win"; assets = $aDeposer; shopIds = $cibles } | ConvertTo-Json -Depth 6
+
+          $corps | Out-File -Encoding utf8 corps.json
+          curl.exe -sS -f -X POST -H "X-Admin-Key: $env:ADMIN_KEY" -H "Content-Type: application/json" `
+            --data "@corps.json" "$env:UPDATE_SERVER/api/releases"
+
+          if ($cibles.Count -eq 0) {
+            Write-Host "::warning::UPDATE_FIRST_SHOP_ID n'est pas configuré : la version est déposée mais distribuée à aucune boutique."
           } else {
-            $version = "1.1.0"
+            Write-Host "Version distribuée à la boutique pilote uniquement. Promouvoir ensuite via workflow_dispatch."
           }
-          Write-Host "Version de l'application : $version"
-          & $iscc "/DMyAppVersion=$version" ".\installer\BoutiqueFashion.iss"
-          if ($LASTEXITCODE -ne 0) {
-            Write-Error "La compilation Inno Setup a échoué."
-            exit $LASTEXITCODE
-          }
-
-      - name: Check installer
-        shell: pwsh
-        run: |
-          if (-not (Test-Path ".\installer\output")) {
-              Write-Error "Le dossier installer\output n'existe pas."
-              exit 1
-          }
-
-          $files = Get-ChildItem ".\installer\output" -Filter "*.exe"
-
-          if ($files.Count -eq 0) {
-              Write-Error "Aucun installateur .exe n'a été produit."
-              exit 1
-          }
-
-          $files | Select-Object FullName, Length
 
       - name: Upload application artifact
         uses: actions/upload-artifact@v4
@@ -99,16 +185,19 @@ jobs:
           path: .\artifacts\win-x64
 
       - name: Upload installer artifact
+        if: steps.version.outputs.publiable == 'True'
         uses: actions/upload-artifact@v4
         with:
           name: BanaShop-Setup
-          path: .\installer\output\*.exe
+          path: .\releases\*Setup.exe
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: .\installer\output\*.exe
+          files: |
+            .\releases\*Setup.exe
+            .\releases\*.nupkg
           generate_release_notes: true
           draft: false
           prerelease: false

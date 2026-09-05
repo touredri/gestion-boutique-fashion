@@ -113,6 +113,17 @@ public static class UpdateEndpoints
             return Results.Ok(new { fileName, size = info.Length, sha1 = await Sha1Async(destination, ct) });
         });
 
+        // Relecture d'un paquet déjà déposé. Sert à la CI : sans le paquet complet précédent,
+        // « vpk pack » ne peut calculer aucun delta et produit un paquet entier à chaque version.
+        releases.MapGet("/files/{fileName}", (string fileName, IConfiguration config) =>
+        {
+            if (!IsSafeFileName(fileName)) return Results.BadRequest(new { error = "Nom de fichier invalide." });
+            var path = Path.Combine(StoragePath(config), fileName);
+            return File.Exists(path)
+                ? Results.File(path, "application/octet-stream", fileName)
+                : Results.NotFound();
+        });
+
         releases.MapPost("", async (PublishInput input, ServerDbContext db, IConfiguration config, CancellationToken ct) =>
         {
             var channel = Normalize(input.Channel);
