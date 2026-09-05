@@ -174,14 +174,18 @@ internal static class Reporting
             var sessions = db.CashSessions.AsNoTracking().Where(x => x.IsClosed && x.ClosedAt >= start && x.ClosedAt < end);
             if (shopId is { } only) sessions = sessions.Where(x => x.ShopId == only);
 
+            // Tri et découpe sur les colonnes, projection en dernier : EF ne sait pas trier
+            // sur les propriétés d'un record déjà projeté.
             var rows = await sessions
-                .Join(db.Shops, s => s.ShopId, shop => shop.Id, (s, shop) => new CashClosingRow(
-                    s.Id, s.ShopId, shop.Name, s.Number, s.OperatorName, s.ClosedBy,
-                    s.OpenedAt, s.ClosedAt, s.OpeningFloatXof,
-                    s.ExpectedCashXof ?? 0, s.CountedCashXof ?? 0, s.DifferenceXof ?? 0, s.DifferenceReason))
-                .OrderByDescending(x => x.ClosedAt)
+                .Join(db.Shops, s => s.ShopId, shop => shop.Id, (s, shop) => new { Session = s, Shop = shop })
+                .OrderByDescending(x => x.Session.ClosedAt)
                 .Take(200)
+                .Select(x => new CashClosingRow(
+                    x.Session.Id, x.Session.ShopId, x.Shop.Name, x.Session.Number, x.Session.OperatorName, x.Session.ClosedBy,
+                    x.Session.OpenedAt, x.Session.ClosedAt, x.Session.OpeningFloatXof,
+                    x.Session.ExpectedCashXof ?? 0, x.Session.CountedCashXof ?? 0, x.Session.DifferenceXof ?? 0, x.Session.DifferenceReason))
                 .ToListAsync(ct);
+
             return Results.Ok(rows);
         });
 
@@ -194,13 +198,15 @@ internal static class Reporting
             var rows = await credits
                 .Join(db.Shops, c => c.ShopId, s => s.Id, (c, s) => new { Credit = c, Shop = s })
                 .Join(db.Customers, x => x.Credit.CustomerId, c => c.Id, (x, c) => new { x.Credit, x.Shop, Customer = c })
-                .Join(db.Sales, x => x.Credit.SaleId, s => s.Id, (x, s) => new AdvanceRow(
-                    x.Credit.Id, x.Credit.ShopId, x.Shop.Name, x.Customer.Name, x.Customer.Phone,
-                    s.Number, s.Status == SaleStatus.Reserved,
-                    x.Credit.OriginalAmountXof, x.Credit.BalanceXof, x.Credit.DueAt, x.Credit.Status))
-                .OrderBy(x => x.DueAt)
+                .Join(db.Sales, x => x.Credit.SaleId, s => s.Id, (x, s) => new { x.Credit, x.Shop, x.Customer, Sale = s })
+                .OrderBy(x => x.Credit.DueAt)
                 .Take(500)
+                .Select(x => new AdvanceRow(
+                    x.Credit.Id, x.Credit.ShopId, x.Shop.Name, x.Customer.Name, x.Customer.Phone,
+                    x.Sale.Number, x.Sale.Status == SaleStatus.Reserved,
+                    x.Credit.OriginalAmountXof, x.Credit.BalanceXof, x.Credit.DueAt, x.Credit.Status))
                 .ToListAsync(ct);
+
             return Results.Ok(rows);
         });
 
