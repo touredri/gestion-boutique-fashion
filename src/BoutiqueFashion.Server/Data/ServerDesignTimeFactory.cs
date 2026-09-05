@@ -11,6 +11,9 @@ public sealed class ServerDesignTimeFactory : IDesignTimeDbContextFactory<Server
 {
     public ServerDbContext CreateDbContext(string[] args) =>
         new(new DbContextOptionsBuilder<ServerDbContext>()
-            .UseNpgsql("Host=localhost;Database=design-time-only;Username=postgres;Password=postgres")
+            // Ni identifiant ni mot de passe : aucune connexion n'est ouverte ici, seul le
+            // fournisseur compte pour produire du SQL PostgreSQL. Écrire des identifiants
+            // factices reviendrait à laisser traîner quelque chose qui ressemble à un secret.
+            .UseNpgsql("Host=localhost;Database=design-time-only")
             .Options);
 }

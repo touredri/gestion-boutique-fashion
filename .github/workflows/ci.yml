@@ -176,7 +176,9 @@ jobs:
         env:
           POSTGRES_DB: boutique
           POSTGRES_USER: boutique
-          POSTGRES_PASSWORD: boutique
+          # Conteneur jetable, détruit avec le runner et joignable de lui seul : il n'y a
+          # aucun mot de passe à protéger, donc aucun à écrire.
+          POSTGRES_HOST_AUTH_METHOD: trust
         ports:
           - 5432:5432
         options: >-
@@ -232,7 +234,7 @@ jobs:
         if: steps.build.outcome == 'success'
         continue-on-error: true
         env:
-          BOUTIQUE_TEST_POSTGRES: "Host=localhost;Port=5432;Username=boutique;Password=boutique"
+          BOUTIQUE_TEST_POSTGRES: "Host=localhost;Port=5432;Username=boutique"
         run: |
           set -o pipefail
           dotnet test tests/BoutiqueFashion.Server.Tests/BoutiqueFashion.Server.Tests.csproj -c Release 2>&1 | tee -a ci.log

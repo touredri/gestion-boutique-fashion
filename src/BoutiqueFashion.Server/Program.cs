@@ -17,9 +17,14 @@ if (args is ["vapid", ..])
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Une seule source pour la chaîne de connexion : la configuration. Le repli codé en dur
+// qui vivait ici était mort — appsettings.json en fournit toujours une — et il aurait
+// silencieusement branché la production sur une base locale le jour où la variable
+// d'environnement aurait manqué.
 builder.Services.AddDbContext<ServerDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("Postgres")
-        ?? "Host=localhost;Port=5432;Database=boutique;Username=boutique;Password=boutique"));
+        ?? throw new InvalidOperationException(
+            "ConnectionStrings__Postgres n'est pas configurée.")));
 builder.Services.AddScoped<SyncApplier>();
 builder.Services.AddScoped<Notifier>();
 builder.Services.AddHttpClient("openwa");
