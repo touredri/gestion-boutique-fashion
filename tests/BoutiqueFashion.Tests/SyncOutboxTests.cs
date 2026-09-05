@@ -158,6 +158,62 @@ public sealed class SyncOutboxTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Every_stock_movement_is_queued_whatever_its_origin()
+    {
+        // Interception au SaveChanges plutôt qu'appel explicite : les mouvements naissent en six
+        // endroits, et il suffirait d'en oublier un pour que le stock affiché à distance dérive.
+        var catalog = provider.GetRequiredService<ICatalogService>();
+        var article = await catalog.CreateVariantAsync("Botte", "Chaussures", "SYNC-06", null, "40", "Noir", 10_000, 25_000, 5, 0);
+        await provider.GetRequiredService<IStockService>().AdjustAsync(
+            new StockAdjustment(article.Id, -1, StockMovementType.Damaged, 10_000, "Abîmée", "Awa"), ManagerPin);
+        await provider.GetRequiredService<IInventoryService>().ApplyCountAsync(
+            [new InventoryCount(article.Id, 3)], "Comptage", ManagerPin);
+
+        var types = (await OutboxAsync())
+            .Where(x => x.EntityType == SyncEntityTypes.StockMovement)
+            .Select(x => JsonSerializer.Deserialize<StockMovementPayload>(x.PayloadJson, new JsonSerializerOptions(JsonSerializerDefaults.Web))!.Type)
+            .ToList();
+        Assert.Contains(StockMovementType.Damaged, types);
+        Assert.Contains(StockMovementType.Inventory, types);
+    }
+
+    [Fact]
+    public async Task Handing_over_a_reserved_advance_reannounces_the_sale()
+    {
+        var article = await provider.GetRequiredService<ICatalogService>()
+            .CreateVariantAsync("Boubou", "Vêtements", "SYNC-07", null, "L", "Or", 10_000, 30_000, 3, 0);
+        var customer = await provider.GetRequiredService<ICustomerService>().CreateAsync("Aïcha", "0700000003", 0);
+        var sale = await Sales.CreateAsync(new SaleDraft(
+            "sync-remise", [new SaleLineDraft(article.Id, 1)],
+            [new PaymentDraft(PaymentMode.Cash, 10_000), new PaymentDraft(PaymentMode.Credit, 20_000)],
+            customer.Id, CreditDueAt: DateTimeOffset.Now.AddDays(30), ReserveStock: true));
+
+        var credit = (await provider.GetRequiredService<ICreditService>().ListAsync()).Single(x => x.SaleNumber == sale.Number);
+        await provider.GetRequiredService<ICreditService>().PayAsync(credit.Id, 20_000, PaymentMode.Cash, null);
+
+        // Sans ce second événement, l'avance resterait éternellement « réservée » côté serveur
+        // et son chiffre d'affaires manquerait sur le téléphone.
+        var announcements = (await OutboxAsync()).Where(x => x.EntityType == SyncEntityTypes.Sale && x.EntityId == sale.SaleId).ToList();
+        Assert.Equal(2, announcements.Count);
+        Assert.Equal(SaleStatus.Completed, Payload<SalePayload>(announcements[^1]).Status);
+    }
+
+    [Fact]
+    public async Task Cancelling_a_sale_reannounces_it_as_cancelled()
+    {
+        var article = await provider.GetRequiredService<ICatalogService>()
+            .CreateVariantAsync("Écharpe", "Accessoires", "SYNC-08", null, null, "Rouge", 3_000, 8_000, 4, 0);
+        var sale = await Sales.CreateAsync(new SaleDraft(
+            "sync-annulation", [new SaleLineDraft(article.Id, 1)], [new PaymentDraft(PaymentMode.Cash, 8_000)]));
+
+        await provider.GetRequiredService<IReturnService>().CancelSaleAsync(sale.Number, "Erreur de saisie", ManagerPin);
+
+        // Une vente annulée restée « validée » à distance gonflerait le chiffre d'affaires.
+        var announcements = (await OutboxAsync()).Where(x => x.EntityType == SyncEntityTypes.Sale && x.EntityId == sale.SaleId).ToList();
+        Assert.Equal(SaleStatus.Cancelled, Payload<SalePayload>(announcements[^1]).Status);
+    }
+
+    [Fact]
     public async Task Closing_the_till_queues_the_counted_figures()
     {
         await provider.GetRequiredService<ICashSessionService>().CloseAsync(10_000, null, "4321");

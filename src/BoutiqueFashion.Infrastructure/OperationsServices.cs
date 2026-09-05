@@ -37,7 +37,7 @@ public sealed class CreditService(IDbContextFactory<BoutiqueDbContext> factory, 
             // Avance réservée : c'est ce versement qui déclenche la remise. La réservation est levée
             // et le stock sort enfin — jusqu'ici la marchandise était comptée présente mais indisponible.
             var handedOver = sale.Status == SaleStatus.Reserved;
-            if (handedOver) await HandOverReservationAsync(db, sale, cancellationToken);
+            if (handedOver) await HandOverReservationAsync(db, sale, credit, cancellationToken);
 
             var balanceNumber = await DocumentReceiptFactory.NextNumberAsync(db, DocumentType.BalanceReceipt, cancellationToken);
             var footer = handedOver
@@ -61,6 +61,7 @@ public sealed class CreditService(IDbContextFactory<BoutiqueDbContext> factory, 
         var number = await DocumentReceiptFactory.NextNumberAsync(db, DocumentType.CreditNote, cancellationToken);
         var reversal = new CreditPayment { CustomerCreditId = credit.Id, Number = number, AmountXof = -original.AmountXof, Mode = original.Mode, IsReversal = true, ReversesPaymentId = original.Id, Actor = "Responsable" };
         credit.BalanceXof += original.AmountXof; credit.Status = credit.BalanceXof >= credit.OriginalAmountXof ? CreditStatus.Due : CreditStatus.PartiallyPaid; db.CreditPayments.Add(reversal);
+        Outbox.Enqueue(db, SyncEntityTypes.CreditPayment, reversal.Id, Outbox.From(reversal));
         var customer = await db.Customers.SingleAsync(x => x.Id == credit.CustomerId, cancellationToken);
         var receipt = await DocumentReceiptFactory.CreateAsync(db, number, customer.Name, [new ReceiptItem("Contre-écriture de versement", 1, -original.AmountXof, 0, -original.AmountXof)], -original.AmountXof, 0, -original.AmountXof, [new PaymentDraft(original.Mode, -original.AmountXof)], $"Motif : {reason}", cancellationToken, DocumentType.CreditNote);
         var doc = new DocumentSnapshot { Type = DocumentType.CreditNote, Number = number, JsonPayload = JsonSerializer.Serialize(receipt) }; db.DocumentSnapshots.Add(doc);
@@ -74,7 +75,7 @@ public sealed class CreditService(IDbContextFactory<BoutiqueDbContext> factory, 
     /// l'article, les mouvements retombent ainsi exactement sur la quantité vendue — un mouvement
     /// unique laisserait l'historique en déséquilibre.
     /// </summary>
-    private static async Task HandOverReservationAsync(BoutiqueDbContext db, Sale sale, CancellationToken cancellationToken)
+    private static async Task HandOverReservationAsync(BoutiqueDbContext db, Sale sale, CustomerCredit credit, CancellationToken cancellationToken)
     {
         foreach (var line in sale.Lines)
         {
@@ -86,6 +87,9 @@ public sealed class CreditService(IDbContextFactory<BoutiqueDbContext> factory, 
         }
         sale.Status = SaleStatus.Completed;
         sale.UpdatedAt = DateTimeOffset.UtcNow;
+        // Le serveur doit apprendre le changement d'état, sinon l'avance y resterait
+        // éternellement réservée et le chiffre d'affaires manquerait à distance.
+        Outbox.Enqueue(db, SyncEntityTypes.Sale, sale.Id, Outbox.From(sale, credit));
         db.AuditEntries.Add(new AuditEntry { Actor = sale.SellerName, Action = "Remettre marchandise réservée", EntityType = nameof(Sale), EntityId = sale.Id.ToString(), AfterJson = JsonSerializer.Serialize(new { sale.Number }) });
     }
 }
@@ -222,6 +226,9 @@ public sealed class ReturnService(IDbContextFactory<BoutiqueDbContext> factory, 
         foreach (var p in originalPayments) db.Payments.Add(new Payment { SaleId = sale.Id, Mode = p.Mode, AmountXof = -p.AmountXof, IsReversal = true, ReversesPaymentId = p.Id, Actor = "Responsable" });
         sale.Status = SaleStatus.Cancelled;
         var credit = await db.CustomerCredits.SingleOrDefaultAsync(x => x.SaleId == sale.Id, cancellationToken); if (credit != null) { credit.Status = CreditStatus.Cancelled; credit.BalanceXof = 0; }
+        // Une vente annulée qui resterait « validée » côté serveur gonflerait le chiffre
+        // d'affaires consulté depuis le téléphone.
+        Outbox.Enqueue(db, SyncEntityTypes.Sale, sale.Id, Outbox.From(sale, credit));
         var number = await DocumentReceiptFactory.NextNumberAsync(db, DocumentType.CreditNote, cancellationToken);
         var receipt = await DocumentReceiptFactory.CreateAsync(db, number, sale.Customer?.Name, sale.Lines.Select(x => new ReceiptItem($"Annulation {x.Description}", -x.Quantity, x.UnitPriceXof, 0, -x.LineTotalXof)).ToArray(), -sale.TotalXof, 0, -sale.TotalXof, originalPayments.Select(x => new PaymentDraft(x.Mode, -x.AmountXof, x.ExternalReference)).ToArray(), $"Annulation de {sale.Number} · {reason}", cancellationToken, DocumentType.CreditNote);
         var doc = new DocumentSnapshot { SaleId = sale.Id, Type = DocumentType.CreditNote, Number = number, JsonPayload = JsonSerializer.Serialize(receipt) }; db.DocumentSnapshots.Add(doc);
