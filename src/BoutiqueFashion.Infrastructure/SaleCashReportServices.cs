@@ -1,5 +1,6 @@
 using System.Text.Json;
 using BoutiqueFashion.Application;
+using BoutiqueFashion.Contracts;
 using BoutiqueFashion.Domain;
 using Microsoft.EntityFrameworkCore;
 
@@ -85,10 +86,13 @@ public sealed class SaleService(IDbContextFactory<BoutiqueDbContext> factory, IA
             {
                 customer = new Customer { Name = string.IsNullOrWhiteSpace(draft.NewCustomerName) ? $"Client {phone}" : draft.NewCustomerName.Trim(), Phone = phone };
                 db.Customers.Add(customer);
+                // Le client créé au vol doit remonter avant la vente qui le référence.
+                Outbox.Enqueue(db, SyncEntityTypes.Customer, customer.Id, Outbox.From(customer));
             }
             sale.CustomerId = customer.Id;
         }
         var creditAmount = draft.Payments.Where(x => x.Mode == PaymentMode.Credit).Sum(x => x.AmountXof);
+        CustomerCredit? credit = null;
         if (hasCredit)
         {
             if (customer is null || draft.CreditDueAt is null) throw new InvalidOperationException("Un client et une échéance sont obligatoires pour le crédit.");
@@ -100,7 +104,8 @@ public sealed class SaleService(IDbContextFactory<BoutiqueDbContext> factory, IA
                 var outstanding = await db.CustomerCredits.Where(x => x.CustomerId == customer.Id && x.Status != CreditStatus.Paid && x.Status != CreditStatus.Cancelled).SumAsync(x => x.BalanceXof, cancellationToken);
                 if (customer.CreditLimitXof <= 0 || outstanding + creditAmount > customer.CreditLimitXof) throw new InvalidOperationException("Le plafond de crédit du client est dépassé.");
             }
-            db.CustomerCredits.Add(new CustomerCredit { SaleId = sale.Id, CustomerId = customer.Id, OriginalAmountXof = creditAmount, BalanceXof = creditAmount, DueAt = draft.CreditDueAt.Value });
+            credit = new CustomerCredit { SaleId = sale.Id, CustomerId = customer.Id, OriginalAmountXof = creditAmount, BalanceXof = creditAmount, DueAt = draft.CreditDueAt.Value };
+            db.CustomerCredits.Add(credit);
         }
 
         sale.Number = await DocumentReceiptFactory.NextNumberAsync(db, DocumentType.Receipt, cancellationToken);
@@ -159,6 +164,9 @@ public sealed class SaleService(IDbContextFactory<BoutiqueDbContext> factory, IA
         }
 
         db.AuditEntries.Add(new AuditEntry { Actor = sale.SellerName, Action = draft.ReserveStock ? "Créer avance réservée" : "Créer vente", EntityType = nameof(Sale), EntityId = sale.Id.ToString(), AfterJson = JsonSerializer.Serialize(new { sale.Number, sale.TotalXof, change, customer = customer?.Name, reserved = draft.ReserveStock }) });
+        // La vente part en un seul événement, lignes et paiements compris : le serveur ne doit
+        // jamais voir une vente sans son détail, ni l'inverse.
+        Outbox.Enqueue(db, SyncEntityTypes.Sale, sale.Id, Outbox.From(sale, credit));
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return new SaleResult(sale.Id, sale.Number, sale.TotalXof, snapshot.Id, false, negativeStock, change, invoiceSnapshot.Id);
@@ -189,6 +197,7 @@ public sealed class CashSessionService(IDbContextFactory<BoutiqueDbContext> fact
             OperatorPinHash = string.IsNullOrEmpty(operatorPin) ? null : PinHasher.Hash(operatorPin),
         };
         db.CashSessions.Add(session);
+        Outbox.Enqueue(db, SyncEntityTypes.CashSessionOpened, session.Id, Outbox.Opened(session));
         db.AuditEntries.Add(new AuditEntry { Actor = name, Action = "Ouvrir caisse", EntityType = nameof(CashSession), EntityId = session.Id.ToString(), AfterJson = JsonSerializer.Serialize(new { session.Number, openingFloatXof, hasPin = session.OperatorPinHash is not null }) });
         await db.SaveChangesAsync(cancellationToken);
         return session;
@@ -267,6 +276,7 @@ public sealed class CashSessionService(IDbContextFactory<BoutiqueDbContext> fact
         session.ExpectedCashXof = totals.Expected; session.CountedCashXof = countedCashXof; session.DifferenceXof = difference;
         session.DifferenceReason = differenceReason; session.ClosedAt = DateTimeOffset.UtcNow; session.Status = CashSessionStatus.Closed;
         session.ClosedBy = closedBy;
+        Outbox.Enqueue(db, SyncEntityTypes.CashSessionClosed, session.Id, Outbox.Closed(session));
         db.AuditEntries.Add(new AuditEntry { Actor = closedBy, Action = "Clôturer caisse", EntityType = nameof(CashSession), EntityId = session.Id.ToString(), AfterJson = JsonSerializer.Serialize(new { expected = totals.Expected, countedCashXof, difference, operator_ = session.OperatorName }) });
         await db.SaveChangesAsync(cancellationToken);
         return session;
@@ -307,6 +317,7 @@ public sealed class CashSessionService(IDbContextFactory<BoutiqueDbContext> fact
         var actor = string.IsNullOrWhiteSpace(session.OperatorName) ? "Vendeur boutique" : session.OperatorName;
         var movement = new CashMovement { CashSessionId = session.Id, Direction = direction, AmountXof = amountXof, Reason = reason.Trim(), Actor = actor };
         db.CashMovements.Add(movement);
+        Outbox.Enqueue(db, SyncEntityTypes.CashMovement, movement.Id, Outbox.From(movement));
         db.AuditEntries.Add(new AuditEntry { Actor = actor, Action = direction == CashMovementDirection.In ? "Entrée d'espèces" : "Sortie d'espèces", EntityType = nameof(CashMovement), EntityId = movement.Id.ToString(), AfterJson = JsonSerializer.Serialize(new { amountXof, reason, session.Number }) });
         await db.SaveChangesAsync(cancellationToken);
         return movement;

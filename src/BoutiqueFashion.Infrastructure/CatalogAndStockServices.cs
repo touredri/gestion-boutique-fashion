@@ -1,5 +1,6 @@
 using System.Text.Json;
 using BoutiqueFashion.Application;
+using BoutiqueFashion.Contracts;
 using BoutiqueFashion.Domain;
 using Microsoft.EntityFrameworkCore;
 
@@ -217,6 +218,7 @@ public sealed class CustomerService(IDbContextFactory<BoutiqueDbContext> factory
         if (!string.IsNullOrWhiteSpace(phone) && await db.Customers.AnyAsync(x => x.Phone == phone, cancellationToken)) throw new InvalidOperationException("Ce téléphone est déjà utilisé.");
         var customer = new Customer { Name = name.Trim(), Phone = string.IsNullOrWhiteSpace(phone) ? null : phone.Trim(), CreditLimitXof = creditLimitXof, Gender = gender, Preferences = preferences, PreferredChannel = channel, MarketingConsent = marketingConsent, ConsentDate = marketingConsent ? DateTimeOffset.UtcNow : null };
         db.Customers.Add(customer);
+        Outbox.Enqueue(db, SyncEntityTypes.Customer, customer.Id, Outbox.From(customer));
         db.AuditEntries.Add(new AuditEntry { Actor = "Vendeur boutique", Action = "Créer client", EntityType = nameof(Customer), EntityId = customer.Id.ToString(), AfterJson = JsonSerializer.Serialize(new { name, phone }) });
         await db.SaveChangesAsync(cancellationToken);
         return customer;
@@ -307,6 +309,7 @@ public sealed class ExpenseService(IDbContextFactory<BoutiqueDbContext> factory,
         await using var db = await factory.CreateDbContextAsync(cancellationToken);
         var expense = new Expense { Category = category.Trim(), Description = description.Trim(), AmountXof = amountXof, Mode = mode };
         db.Expenses.Add(expense);
+        Outbox.Enqueue(db, SyncEntityTypes.Expense, expense.Id, Outbox.From(expense));
         db.AuditEntries.Add(new AuditEntry { Actor = "Vendeur boutique", Action = "Créer dépense", EntityType = nameof(Expense), EntityId = expense.Id.ToString() });
         await db.SaveChangesAsync(cancellationToken);
         return expense;

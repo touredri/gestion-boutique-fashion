@@ -29,18 +29,28 @@ public sealed class DatabaseMigrationTests : IDisposable
     }
 
     /// <summary>
-    /// Ramène le schéma à celui d'avant le lot 1. À appeler une fois les données en place :
-    /// le modèle EF connaît toujours ces colonnes, donc tout INSERT postérieur à leur suppression
-    /// échouerait.
+    /// Ramène le schéma à celui d'<c>InitialCreate</c>, c'est-à-dire à ce que produisait
+    /// <c>EnsureCreated</c> avant l'arrivée des migrations.
+    ///
+    /// À appeler une fois les données en place : le modèle EF connaît toujours ces colonnes, donc
+    /// tout INSERT postérieur à leur suppression échouerait.
+    ///
+    /// <b>À compléter à chaque migration qui ajoute une table ou une colonne</b> — sinon ce test
+    /// échoue en annonçant que la table existe déjà, ce qui est précisément son travail.
     /// </summary>
-    private static async Task StripLot1ColumnsAsync(BoutiqueDbContext db)
+    private static async Task RewindToInitialSchemaAsync(BoutiqueDbContext db)
     {
         foreach (var statement in new[]
         {
+            // CashShiftAndReservations
             """ALTER TABLE "CashSessions" DROP COLUMN "OperatorName";""",
             """ALTER TABLE "CashSessions" DROP COLUMN "OperatorPinHash";""",
             """ALTER TABLE "CashSessions" DROP COLUMN "ClosedBy";""",
             """ALTER TABLE "ProductVariants" DROP COLUMN "QuantityReserved";""",
+            // CashMovements
+            """DROP TABLE IF EXISTS "CashMovements";""",
+            // SyncOutbox
+            """DROP TABLE IF EXISTS "SyncOutbox";""",
         })
         {
             await db.Database.ExecuteSqlRawAsync(statement);
@@ -68,7 +78,7 @@ public sealed class DatabaseMigrationTests : IDisposable
             db.ProductVariants.Add(new ProductVariant { Id = variantId, ProductId = productId, Sku = "OLD-01", CostXof = 5_000, PriceXof = 12_000, QuantityOnHand = 7 });
             await db.SaveChangesAsync();
 
-            await StripLot1ColumnsAsync(db);
+            await RewindToInitialSchemaAsync(db);
         }
         SqliteConnection.ClearAllPools();
 

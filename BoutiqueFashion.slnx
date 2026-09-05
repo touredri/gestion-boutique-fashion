@@ -1,6 +1,7 @@
 <Solution>
   <Project Path="src/BoutiqueFashion.Domain/BoutiqueFashion.Domain.csproj" />
   <Project Path="src/BoutiqueFashion.Application/BoutiqueFashion.Application.csproj" />
+  <Project Path="src/BoutiqueFashion.Contracts/BoutiqueFashion.Contracts.csproj" />
   <Project Path="src/BoutiqueFashion.Infrastructure/BoutiqueFashion.Infrastructure.csproj" />
   <Project Path="src/BoutiqueFashion.App/BoutiqueFashion.App.csproj" />
   <Project Path="tests/BoutiqueFashion.Tests/BoutiqueFashion.Tests.csproj" />

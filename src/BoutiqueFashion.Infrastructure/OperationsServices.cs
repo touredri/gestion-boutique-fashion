@@ -1,5 +1,6 @@
 using System.Text.Json;
 using BoutiqueFashion.Application;
+using BoutiqueFashion.Contracts;
 using BoutiqueFashion.Domain;
 using Microsoft.EntityFrameworkCore;
 
@@ -27,6 +28,7 @@ public sealed class CreditService(IDbContextFactory<BoutiqueDbContext> factory, 
         var number = await DocumentReceiptFactory.NextNumberAsync(db, DocumentType.CreditPaymentReceipt, cancellationToken);
         var payment = new CreditPayment { CustomerCreditId = credit.Id, Number = number, AmountXof = amountXof, Mode = mode, Actor = "Vendeur boutique" };
         credit.BalanceXof -= amountXof; credit.Status = credit.BalanceXof == 0 ? CreditStatus.Paid : CreditStatus.PartiallyPaid; db.CreditPayments.Add(payment);
+        Outbox.Enqueue(db, SyncEntityTypes.CreditPayment, payment.Id, Outbox.From(payment));
         var paymentDraft = new PaymentDraft(mode, amountXof, reference);
         var receipt = await DocumentReceiptFactory.CreateAsync(db, number, customer.Name, [new ReceiptItem($"Versement crédit {sale.Number}", 1, amountXof, 0, amountXof)], amountXof, 0, amountXof, [paymentDraft], $"Solde restant : {credit.BalanceXof:N0} FCFA", cancellationToken, DocumentType.CreditPaymentReceipt);
         var doc = new DocumentSnapshot { Type = DocumentType.CreditPaymentReceipt, Number = number, JsonPayload = JsonSerializer.Serialize(receipt) }; db.DocumentSnapshots.Add(doc);

@@ -6,6 +6,7 @@
   <ItemGroup>
     <ProjectReference Include="../BoutiqueFashion.Domain/BoutiqueFashion.Domain.csproj" />
     <ProjectReference Include="../BoutiqueFashion.Application/BoutiqueFashion.Application.csproj" />
+    <ProjectReference Include="../BoutiqueFashion.Contracts/BoutiqueFashion.Contracts.csproj" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.11" />
     <!-- Outillage « dotnet ef » uniquement. PrivateAssets : ne doit pas remonter à l'App. -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.11">

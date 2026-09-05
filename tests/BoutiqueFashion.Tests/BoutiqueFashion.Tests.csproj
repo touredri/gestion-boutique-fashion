@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="../../src/BoutiqueFashion.Domain/BoutiqueFashion.Domain.csproj" />
     <ProjectReference Include="../../src/BoutiqueFashion.Application/BoutiqueFashion.Application.csproj" />
+    <ProjectReference Include="../../src/BoutiqueFashion.Contracts/BoutiqueFashion.Contracts.csproj" />
     <ProjectReference Include="../../src/BoutiqueFashion.Infrastructure/BoutiqueFashion.Infrastructure.csproj" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.1" />
     <PackageReference Include="xunit" Version="2.9.3" />

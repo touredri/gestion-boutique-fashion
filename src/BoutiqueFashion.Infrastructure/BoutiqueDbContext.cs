@@ -41,6 +41,7 @@ public sealed class BoutiqueDbContext(DbContextOptions<BoutiqueDbContext> option
     public DbSet<DocumentSnapshot> DocumentSnapshots => Set<DocumentSnapshot>();
     public DbSet<PrintJob> PrintJobs => Set<PrintJob>();
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
+    public DbSet<SyncOutboxEntry> SyncOutbox => Set<SyncOutboxEntry>();
     public DbSet<AppSetting> AppSettings => Set<AppSetting>();
     public DbSet<DocumentSequence> DocumentSequences => Set<DocumentSequence>();
 
@@ -58,6 +59,8 @@ public sealed class BoutiqueDbContext(DbContextOptions<BoutiqueDbContext> option
         modelBuilder.Entity<DocumentSequence>().HasIndex(x => new { x.Type, x.Year }).IsUnique();
         modelBuilder.Entity<CashSession>().HasIndex(x => x.Status);
         modelBuilder.Entity<CashMovement>().HasIndex(x => x.CashSessionId);
+        // L'agent de synchronisation ne lit que les lignes non envoyées, dans l'ordre d'écriture.
+        modelBuilder.Entity<SyncOutboxEntry>().HasIndex(x => new { x.SentAt, x.CreatedAt });
         modelBuilder.Entity<CustomerCredit>().HasIndex(x => new { x.Status, x.DueAt });
         modelBuilder.Entity<StockMovement>().HasIndex(x => new { x.VariantId, x.CreatedAt });
         modelBuilder.Entity<Sale>().HasMany(x => x.Lines).WithOne(x => x.Sale).HasForeignKey(x => x.SaleId).OnDelete(DeleteBehavior.Restrict);

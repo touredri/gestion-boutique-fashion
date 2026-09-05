@@ -259,6 +259,28 @@ public sealed class PrintJob : Entity
     public int Attempts { get; set; }
 }
 
+/// <summary>
+/// File d'attente de synchronisation vers le serveur.
+///
+/// Écrite dans la même transaction que la donnée qu'elle décrit. C'est la seule façon de garantir
+/// à la fois qu'une vente enregistrée finira par remonter, et qu'aucune ne remontera sans avoir
+/// été enregistrée : une file alimentée après coup perdrait tout ce qui se produit entre le
+/// commit et la panne.
+///
+/// La caisse n'attend jamais ces lignes : hors réseau la file grossit, et la boutique continue.
+/// </summary>
+public sealed class SyncOutboxEntry : Entity
+{
+    [MaxLength(60)] public string EntityType { get; set; } = string.Empty;
+    public Guid EntityId { get; set; }
+    public string PayloadJson { get; set; } = string.Empty;
+    public int AttemptCount { get; set; }
+    /// <summary>Renseigné une fois l'événement acquitté par le serveur. Les lignes envoyées sont
+    /// conservées : elles coûtent peu et racontent ce qui est réellement parti.</summary>
+    public DateTimeOffset? SentAt { get; set; }
+    [MaxLength(500)] public string? LastError { get; set; }
+}
+
 public sealed class AuditEntry : Entity
 {
     [MaxLength(80)] public string Actor { get; set; } = string.Empty;
