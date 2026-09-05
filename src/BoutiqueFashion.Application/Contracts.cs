@@ -241,6 +241,29 @@ public sealed record SyncState(
     bool IsEnrolled, string? ShopName, int PendingCount,
     DateTimeOffset? LastSuccessAt, string? LastError, bool IsRunning);
 
+/// <summary>
+/// Verdict sur la possibilité d'appliquer une mise à jour maintenant. <c>Reason</c> est destiné
+/// au journal et à la remontée vers le téléphone, pas au vendeur : il n'a rien à décider.
+/// </summary>
+public sealed record UpdateReadiness(bool CanApply, string Reason);
+
+/// <summary>État de mise à jour du terminal, tel qu'il remonte au serveur à chaque cycle.</summary>
+public sealed record UpdateStatus(string? CurrentVersion, string? PendingVersion, string? LastError);
+
+/// <summary>
+/// Règles métier de la mise à jour, séparées de la mécanique Velopack pour être testables : la
+/// question « a-t-on le droit d'installer maintenant ? » n'a rien à voir avec WPF.
+/// </summary>
+public interface IUpdateService
+{
+    /// <summary>Une vacation ouverte ou une file de synchronisation non vide interdisent
+    /// d'installer. Prend une sauvegarde quand le verdict est positif — c'est le seul retour
+    /// arrière possible sur les données.</summary>
+    Task<UpdateReadiness> PrepareAsync(CancellationToken cancellationToken = default);
+    Task<UpdateStatus> GetStatusAsync(CancellationToken cancellationToken = default);
+    Task RecordAsync(string? currentVersion, string? pendingVersion, string? lastError, CancellationToken cancellationToken = default);
+}
+
 public interface ISyncService
 {
     Task<SyncState> GetStateAsync(CancellationToken cancellationToken = default);

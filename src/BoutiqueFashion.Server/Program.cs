@@ -430,6 +430,35 @@ app.MapGet("/api/sync/pull", async (long since, HttpContext http, ServerDbContex
     }
 });
 
+// ---------------------------------------------------------------------------
+// Publication logicielle (lot 5) : flux Velopack pour les terminaux, dépôt et
+// ciblage pour le développeur.
+// ---------------------------------------------------------------------------
+
+app.MapUpdates();
+
+// Battement de cœur du terminal, envoyé à chaque cycle de synchronisation. C'est la seule
+// source d'information sur ce qui tourne réellement dans une boutique : sans elle, « est-ce que
+// la mise à jour est passée ? » se répond en téléphonant.
+app.MapPost("/api/devices/status", async (DeviceStatusRequest input, HttpContext http, ServerDbContext db, CancellationToken ct) =>
+{
+    var context = await DeviceAuthentication.ResolveAsync(http, db, ct);
+    if (context is null) return Results.Unauthorized();
+
+    var device = await db.Devices.SingleAsync(x => x.Id == context.DeviceId, ct);
+    // La date ne bouge qu'au changement de version : c'est « depuis quand cette boutique tourne
+    // en 1.4.2 », pas « quand a-t-elle parlé pour la dernière fois » — LastSeenAt le dit déjà.
+    if (device.AppVersion != input.AppVersion)
+    {
+        device.AppVersion = input.AppVersion;
+        device.AppVersionSince = DateTimeOffset.UtcNow;
+    }
+    device.PendingVersion = input.PendingVersion;
+    device.UpdateError = input.UpdateError;
+    await db.SaveChangesAsync(ct);
+    return Results.NoContent();
+});
+
 app.Run();
 
 internal sealed record ShopInput(string Name, string? City, string? Address, string? Phone);

@@ -34,6 +34,9 @@ public sealed class ServerDbContext(DbContextOptions<ServerDbContext> options) :
     public DbSet<CashMovement> CashMovements => Set<CashMovement>();
     public DbSet<Expense> Expenses => Set<Expense>();
     public DbSet<StockMovement> StockMovements => Set<StockMovement>();
+    public DbSet<ReleaseAsset> ReleaseAssets => Set<ReleaseAsset>();
+    public DbSet<ReleaseTarget> ReleaseTargets => Set<ReleaseTarget>();
+
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<OrderLine> OrderLines => Set<OrderLine>();
 
@@ -78,6 +81,19 @@ public sealed class ServerDbContext(DbContextOptions<ServerDbContext> options) :
         modelBuilder.Entity<Order>().HasIndex(x => x.Number).IsUnique();
         modelBuilder.Entity<Order>().HasMany(x => x.Lines).WithOne().HasForeignKey(x => x.OrderId).OnDelete(DeleteBehavior.Cascade);
         modelBuilder.Entity<OrderLine>().Property(x => x.Quantity).HasPrecision(18, 3);
+
+        // Un même fichier ne peut être déclaré qu'une fois, et le couple (canal, version, type)
+        // désigne un paquet unique : sans cette contrainte, republier une version créerait un
+        // doublon dans le flux et Velopack choisirait au hasard.
+        modelBuilder.Entity<ReleaseAsset>().HasIndex(x => x.FileName).IsUnique();
+        modelBuilder.Entity<ReleaseAsset>().HasIndex(x => new { x.Channel, x.Version });
+        // Deux ciblages identiques n'auraient aucun sens. Deux index filtrés plutôt qu'un seul :
+        // en SQL, NULL n'égale pas NULL, donc une contrainte sur (canal, version, boutique)
+        // laisserait passer autant de lignes « toutes les boutiques » qu'on en insère.
+        modelBuilder.Entity<ReleaseTarget>().HasIndex(x => new { x.Channel, x.Version, x.ShopId })
+            .IsUnique().HasFilter("\"ShopId\" IS NOT NULL").HasDatabaseName("IX_ReleaseTargets_Shop");
+        modelBuilder.Entity<ReleaseTarget>().HasIndex(x => new { x.Channel, x.Version })
+            .IsUnique().HasFilter("\"ShopId\" IS NULL").HasDatabaseName("IX_ReleaseTargets_Toutes");
 
         modelBuilder.Entity<ShopStock>().Property(x => x.QuantityOnHand).HasPrecision(18, 3);
         modelBuilder.Entity<ShopStock>().Property(x => x.QuantityReserved).HasPrecision(18, 3);
