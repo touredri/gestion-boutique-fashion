@@ -75,6 +75,9 @@ jobs:
             Write-Host "Aucun changement de modèle : pas de migration produite."
           } else {
             git commit -m "chore(db): migration $env:MIGRATION_NAME"
+            # Rebase avant de pousser : sans lui, une poussée concurrente fait perdre la
+            # migration tout juste générée, et l'étape échoue sans qu'on sache pourquoi.
+            git pull --rebase origin $env:GITHUB_REF_NAME
             git push origin HEAD:$env:GITHUB_REF_NAME
           }
 

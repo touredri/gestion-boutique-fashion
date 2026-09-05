@@ -51,6 +51,9 @@ public sealed class DatabaseMigrationTests : IDisposable
             """DROP TABLE IF EXISTS "CashMovements";""",
             // SyncOutbox
             """DROP TABLE IF EXISTS "SyncOutbox";""",
+            // Orders
+            """DROP TABLE IF EXISTS "OrderLines";""",
+            """DROP TABLE IF EXISTS "Orders";""",
         })
         {
             await db.Database.ExecuteSqlRawAsync(statement);
