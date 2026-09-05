@@ -1,0 +1,135 @@
+name: CI
+
+# Boucle de validation des branches de travail. Le développement se fait sous macOS,
+# où la solution WPF ne peut ni se compiler ni s'exécuter : c'est donc ce workflow qui
+# tient lieu de compilateur et de lanceur de tests.
+#
+# Deux particularités, toutes deux nécessaires depuis un poste sans dotnet :
+#
+# 1. Le journal complet est republié sur la branche « ci-logs ». Sans cela, l'API
+#    publique renvoie 403 sur les logs et une compilation en échec ne dit que
+#    « l'étape Compiler a échoué », jamais pourquoi.
+# 2. MIGRATION_NAME génère une migration EF et la commite sur la branche courante.
+#    « dotnet ef » doit charger un assembly net10.0-windows : seul un runner Windows
+#    peut le faire.
+
+on:
+  push:
+    branches-ignore:
+      - main
+      - ci-logs
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  # Renseigner pour produire une migration, puis revider une fois qu'elle est commitée.
+  MIGRATION_NAME: "InitialCreate"
+
+jobs:
+  build:
+    name: Compiler & tester (Windows)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Le job peut commiter une migration : il lui faut un dépôt poussable.
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ github.ref_name }}
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restaurer
+        id: restore
+        continue-on-error: true
+        run: dotnet restore .\BoutiqueFashion.slnx 2>&1 | Tee-Object -FilePath ci.log -Append
+
+      - name: Compiler
+        id: build
+        continue-on-error: true
+        run: dotnet build .\BoutiqueFashion.slnx --configuration Release --no-restore 2>&1 | Tee-Object -FilePath ci.log -Append
+
+      - name: Générer la migration EF
+        id: migration
+        if: env.MIGRATION_NAME != '' && steps.build.outcome == 'success'
+        continue-on-error: true
+        run: |
+          dotnet tool install --global dotnet-ef --version 10.* 2>&1 | Tee-Object -FilePath ci.log -Append
+          dotnet ef migrations add $env:MIGRATION_NAME `
+            --project .\src\BoutiqueFashion.Infrastructure\BoutiqueFashion.Infrastructure.csproj `
+            --startup-project .\src\BoutiqueFashion.Infrastructure\BoutiqueFashion.Infrastructure.csproj `
+            --output-dir Migrations 2>&1 | Tee-Object -FilePath ci.log -Append
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add src/BoutiqueFashion.Infrastructure/Migrations
+          git diff --cached --quiet
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "Aucun changement de modèle : pas de migration produite."
+          } else {
+            git commit -m "chore(db): migration $env:MIGRATION_NAME"
+            git push origin HEAD:$env:GITHUB_REF_NAME
+          }
+
+      - name: Tester
+        id: test
+        if: steps.build.outcome == 'success'
+        continue-on-error: true
+        run: dotnet test .\BoutiqueFashion.slnx --configuration Release --no-build 2>&1 | Tee-Object -FilePath ci.log -Append
+
+      # Publié quoi qu'il arrive : c'est la seule façon de lire les erreurs depuis un
+      # poste non authentifié auprès de l'API GitHub.
+      - name: Publier le journal
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $work = Join-Path $env:RUNNER_TEMP "cilog"
+          Remove-Item -Recurse -Force $work -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $work | Out-Null
+
+          $header = @(
+            "run     : $env:GITHUB_RUN_ID"
+            "branche : $env:GITHUB_REF_NAME"
+            "commit  : $env:GITHUB_SHA"
+            "restore : ${{ steps.restore.outcome }}"
+            "build   : ${{ steps.build.outcome }}"
+            "migration: ${{ steps.migration.outcome }}"
+            "test    : ${{ steps.test.outcome }}"
+            ("-" * 72)
+          )
+          $body = if (Test-Path ci.log) { Get-Content ci.log } else { "(aucune sortie)" }
+          $header + $body | Set-Content (Join-Path $work "last.log") -Encoding utf8
+
+          Push-Location $work
+          git init -q
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -q -b ci-logs
+          git add -A
+          git commit -q -m "CI $env:GITHUB_RUN_ID ($env:GITHUB_REF_NAME)"
+          git push -q --force "https://x-access-token:$env:GH_TOKEN@github.com/$env:GITHUB_REPOSITORY.git" ci-logs
+          Pop-Location
+
+      # continue-on-error ci-dessus rend les étapes vertes : ce garde-fou redonne au job
+      # son vrai résultat, sans quoi une compilation cassée passerait pour un succès.
+      - name: Résultat
+        if: always()
+        run: |
+          $failed = @()
+          if ('${{ steps.restore.outcome }}'   -notin 'success','skipped') { $failed += 'restore' }
+          if ('${{ steps.build.outcome }}'     -notin 'success','skipped') { $failed += 'build' }
+          if ('${{ steps.migration.outcome }}' -notin 'success','skipped') { $failed += 'migration' }
+          if ('${{ steps.test.outcome }}'      -notin 'success','skipped') { $failed += 'test' }
+          if ('${{ steps.build.outcome }}' -eq 'skipped') { $failed += 'build (non exécuté)' }
+          if ($failed.Count -gt 0) {
+            Write-Host "::error::Étapes en échec : $($failed -join ', '). Journal sur la branche ci-logs."
+            exit 1
+          }
+          Write-Host "Tout est vert."
