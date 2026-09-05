@@ -169,9 +169,12 @@ internal static class Reporting
         group.MapGet("/cash-closings", async (ServerDbContext db, DateTimeOffset? from, DateTimeOffset? to, Guid? shopId, CancellationToken ct) =>
         {
             var (start, end) = Window(from, to);
-            var rows = await db.CashSessions.AsNoTracking()
-                .Where(x => x.IsClosed && x.ClosedAt >= start && x.ClosedAt < end)
-                .Where(x => shopId == null || x.ShopId == shopId)
+            // Filtre composé en C# et non inline : « shopId == null || ... » place une constante
+            // nulle dans l'arbre d'expression, qu'EF ne sait plus traduire une fois jointe.
+            var sessions = db.CashSessions.AsNoTracking().Where(x => x.IsClosed && x.ClosedAt >= start && x.ClosedAt < end);
+            if (shopId is { } only) sessions = sessions.Where(x => x.ShopId == only);
+
+            var rows = await sessions
                 .Join(db.Shops, s => s.ShopId, shop => shop.Id, (s, shop) => new CashClosingRow(
                     s.Id, s.ShopId, shop.Name, s.Number, s.OperatorName, s.ClosedBy,
                     s.OpenedAt, s.ClosedAt, s.OpeningFloatXof,
@@ -184,9 +187,11 @@ internal static class Reporting
 
         group.MapGet("/advances", async (ServerDbContext db, Guid? shopId, bool includeSettled, CancellationToken ct) =>
         {
-            var rows = await db.Credits.AsNoTracking()
-                .Where(x => shopId == null || x.ShopId == shopId)
-                .Where(x => includeSettled || (x.Status != CreditStatus.Paid && x.Status != CreditStatus.Cancelled))
+            var credits = db.Credits.AsNoTracking().AsQueryable();
+            if (shopId is { } only) credits = credits.Where(x => x.ShopId == only);
+            if (!includeSettled) credits = credits.Where(x => x.Status != CreditStatus.Paid && x.Status != CreditStatus.Cancelled);
+
+            var rows = await credits
                 .Join(db.Shops, c => c.ShopId, s => s.Id, (c, s) => new { Credit = c, Shop = s })
                 .Join(db.Customers, x => x.Credit.CustomerId, c => c.Id, (x, c) => new { x.Credit, x.Shop, Customer = c })
                 .Join(db.Sales, x => x.Credit.SaleId, s => s.Id, (x, s) => new AdvanceRow(
@@ -201,15 +206,21 @@ internal static class Reporting
 
         group.MapGet("/shops/{shopId:guid}/stock-detail", async (Guid shopId, ServerDbContext db, bool lowOnly, CancellationToken ct) =>
         {
-            var rows = await db.ShopStocks.AsNoTracking().Where(x => x.ShopId == shopId)
+            var joined = db.ShopStocks.AsNoTracking().Where(x => x.ShopId == shopId)
                 .Join(db.Variants.Where(v => v.IsActive), s => s.VariantId, v => v.Id, (s, v) => new { s, v })
-                .Join(db.Products, x => x.v.ProductId, p => p.Id, (x, p) => new StockRow(
-                    x.v.Id, x.v.Sku, p.Name, x.v.Size, x.v.Color,
+                .Join(db.Products, x => x.v.ProductId, p => p.Id, (x, p) => new { x.s, x.v, Product = p });
+
+            // Le filtre porte sur les colonnes, pas sur le record projeté : EF ne sait pas relire
+            // les propriétés d'une projection pour en refaire une clause SQL.
+            if (lowOnly) joined = joined.Where(x => x.s.QuantityOnHand - x.s.QuantityReserved <= x.v.LowStockThreshold);
+
+            var rows = await joined
+                .OrderBy(x => x.s.QuantityOnHand - x.s.QuantityReserved).ThenBy(x => x.Product.Name)
+                .Take(1000)
+                .Select(x => new StockRow(
+                    x.v.Id, x.v.Sku, x.Product.Name, x.v.Size, x.v.Color,
                     x.s.QuantityOnHand, x.s.QuantityReserved, x.s.QuantityOnHand - x.s.QuantityReserved,
                     x.v.LowStockThreshold))
-                .Where(x => !lowOnly || x.Available <= x.Threshold)
-                .OrderBy(x => x.Available).ThenBy(x => x.ProductName)
-                .Take(1000)
                 .ToListAsync(ct);
             return Results.Ok(rows);
         });

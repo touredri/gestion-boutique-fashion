@@ -91,7 +91,7 @@ public sealed class ReportingTests(ServerFixture server) : IClassFixture<ServerF
     [Fact]
     public async Task The_report_separates_margin_from_profit()
     {
-        var (_, device) = await EnrollAsync("Rapport Marge");
+        var (shopId, device) = await EnrollAsync("Rapport Marge");
         var variantId = await PublishArticleAsync("Sac marge", "MARG-1", 4_000, 10_000);
 
         (await device.PostAsJsonAsync("/api/sync/push", new SyncPushRequest([
@@ -99,7 +99,9 @@ public sealed class ReportingTests(ServerFixture server) : IClassFixture<ServerF
             Event(SyncEntityTypes.Expense, Guid.NewGuid(), new ExpensePayload(Guid.NewGuid(), "Transport", "Taxi", 5_000, PaymentMode.Cash, DateTimeOffset.UtcNow)),
         ]))).EnsureSuccessStatusCode();
 
-        var report = (await (await server.Admin.GetAsync("/api/reports")).Content.ReadFromJsonAsync<ReportSummary>())!;
+        // Borné à cette boutique : la classe partage une base, et un total global additionnerait
+        // les ventes des autres tests.
+        var report = (await (await server.Admin.GetAsync($"/api/reports?shopId={shopId}")).Content.ReadFromJsonAsync<ReportSummary>())!;
 
         Assert.Equal(30_000, report.SalesXof);
         Assert.Equal(12_000, report.CostXof);
@@ -150,14 +152,14 @@ public sealed class ReportingTests(ServerFixture server) : IClassFixture<ServerF
         var (_, deviceYopougon) = await EnrollAsync("Détail Yopougon");
         var variantId = await PublishArticleAsync("Chemise détail", "DET-1", 3_000, 9_000);
 
-        (await deviceMarcory.PostAsJsonAsync("/api/sync/push", new SyncPushRequest([Sale(variantId, "DET-M1", 9_000, 3_000, 2, "Awa")]))).EnsureSuccessStatusCode();
-        (await deviceYopougon.PostAsJsonAsync("/api/sync/push", new SyncPushRequest([Sale(variantId, "DET-Y1", 9_000, 3_000, 1, "Fanta")]))).EnsureSuccessStatusCode();
+        (await deviceMarcory.PostAsJsonAsync("/api/sync/push", new SyncPushRequest([Sale(variantId, "DET-M1", 9_000, 3_000, 2, "Awa Détail")]))).EnsureSuccessStatusCode();
+        (await deviceYopougon.PostAsJsonAsync("/api/sync/push", new SyncPushRequest([Sale(variantId, "DET-Y1", 9_000, 3_000, 1, "Fanta Détail")]))).EnsureSuccessStatusCode();
 
         var report = (await (await server.Admin.GetAsync("/api/reports")).Content.ReadFromJsonAsync<ReportSummary>())!;
         Assert.Equal(18_000, report.ByShop.Single(x => x.Label == "Détail Marcory").ValueXof);
         Assert.Equal(9_000, report.ByShop.Single(x => x.Label == "Détail Yopougon").ValueXof);
-        Assert.Equal(18_000, report.ByOperator.Single(x => x.Label == "Awa").ValueXof);
-        Assert.Equal("Espèces", report.ByPaymentMode[0].Label);
+        Assert.Equal(18_000, report.ByOperator.Single(x => x.Label == "Awa Détail").ValueXof);
+        Assert.Contains(report.ByPaymentMode, x => x.Label == "Espèces");
 
         // Filtré sur une boutique, le rapport ne doit plus voir que celle-là.
         var filtered = (await (await server.Admin.GetAsync($"/api/reports?shopId={marcory}")).Content.ReadFromJsonAsync<ReportSummary>())!;
