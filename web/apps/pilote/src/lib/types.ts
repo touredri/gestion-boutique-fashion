@@ -143,3 +143,31 @@ export type Variant = {
 };
 
 export type Catalog = { categories: Category[]; products: Product[]; variants: Variant[] };
+
+export type OrderLine = {
+  variantId: string;
+  sku: string;
+  description: string;
+  quantity: number;
+  unitPriceXof: number;
+};
+
+/** `status` : 0 en cours, 1 traitée (une vente existe), 2 livrée, 3 annulée. */
+export type Order = {
+  id: string;
+  shopId: string;
+  shopName: string;
+  number: string;
+  customerName: string;
+  phone: string;
+  note: string | null;
+  channel: number;
+  status: number;
+  totalXof: number;
+  saleId: string | null;
+  createdAt: string;
+  processedAt: string | null;
+  deliveredAt: string | null;
+  cancelReason: string | null;
+  lines: OrderLine[];
+};
