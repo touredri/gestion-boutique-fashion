@@ -1,0 +1,194 @@
+name: Déployer sur le VPS
+
+# Les images sont construites ici puis tirées par le serveur. Compiler sur le VPS demanderait
+# d'y installer le SDK .NET et Node, et surtout d'y trouver la mémoire pour bâtir deux
+# applications Next — pour un résultat identique à celui que ce runner produit gratuitement.
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'src/BoutiqueFashion.App/**'
+      - 'installer/**'
+  workflow_dispatch:
+    inputs:
+      domaine:
+        description: "Nom de domaine pointant vers le VPS (requis au premier déploiement)"
+        required: false
+        type: string
+
+concurrency:
+  # Deux déploiements simultanés se marcheraient dessus au milieu d'un « compose up ».
+  group: deploiement
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  images:
+    name: Construire et publier les images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Se connecter au registre
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image du serveur
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository }}/server:latest
+            ${{ env.REGISTRY }}/${{ github.repository }}/server:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # L'étape « build » contient les deux sites déjà exportés ; le conteneur ne fait que les
+      # recopier dans les volumes que Caddy sert, puis s'arrête.
+      - name: Image des applications web
+        uses: docker/build-push-action@v6
+        with:
+          context: web
+          file: web/Dockerfile
+          target: build
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository }}/web:latest
+            ${{ env.REGISTRY }}/${{ github.repository }}/web:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Déployer
+    needs: images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Préparer la clé SSH
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          # L'empreinte est relevée puis figée pour la durée du job : sans known_hosts, ssh
+          # refuse de se connecter ; avec StrictHostKeyChecking=no, il accepterait n'importe qui.
+          ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      # Seuls les fichiers dont le serveur a besoin : le compose, le Caddyfile et le script
+      # d'amorçage. Le code source ne sert plus à rien là-bas, les images sont construites.
+      - name: Envoyer les fichiers de déploiement
+        run: |
+          set -euo pipefail
+          CIBLE="${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
+          ssh -i ~/.ssh/id_deploy "$CIBLE" '
+            set -e
+            command -v docker >/dev/null || { echo "docker absent de ce serveur." >&2; exit 1; }
+            docker compose version >/dev/null || { echo "docker compose v2 absent." >&2; exit 1; }
+            mkdir -p ~/bana/docker
+          '
+          scp -i ~/.ssh/id_deploy \
+            docker/compose.prod.yml docker/Caddyfile docker/bootstrap.sh docker/.env.example \
+            "$CIBLE:bana/docker/"
+
+      - name: Amorcer, tirer les images et démarrer
+        env:
+          DOMAINE: ${{ inputs.domaine }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/id_deploy "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
+            DOMAIN="${DOMAINE:-}" \
+            REGISTRY_USER="${{ github.actor }}" \
+            REGISTRY_TOKEN="${{ secrets.GITHUB_TOKEN }}" \
+            SERVER_IMAGE="${{ env.REGISTRY }}/${{ github.repository }}/server:${{ github.sha }}" \
+            WEB_IMAGE="${{ env.REGISTRY }}/${{ github.repository }}/web:${{ github.sha }}" \
+            'bash -s' <<'DISTANT'
+          set -euo pipefail
+          cd ~/bana/docker
+          chmod +x bootstrap.sh
+
+          # Crée .env au premier passage, respecte les valeurs déjà là ensuite.
+          DOMAIN="${DOMAIN:-}" sh bootstrap.sh
+
+          # Les images sont privées : la connexion se fait avec le jeton du job, qui expire avec
+          # lui. Rien de durable n'est déposé sur la machine.
+          echo "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USER" --password-stdin
+
+          # Le SHA plutôt que « latest » : deux déploiements rapprochés ne doivent pas pouvoir
+          # démarrer sur deux images différentes selon le moment où le pull a eu lieu.
+          {
+            echo "SERVER_IMAGE=$SERVER_IMAGE"
+            echo "WEB_IMAGE=$WEB_IMAGE"
+          } > .env.images
+          cat .env .env.images > .env.effectif
+
+          COMPOSE="docker compose -f compose.prod.yml --env-file .env.effectif"
+          $COMPOSE pull --quiet
+          $COMPOSE up -d --remove-orphans
+
+          # Les clés de notification web n'existent qu'une fois le serveur disponible : il les
+          # engendre lui-même. Faites une seule fois, elles sont ensuite conservées dans .env.
+          if ! grep -q '^VAPID_PUBLIC_KEY=.' .env; then
+            echo "Génération des clés de notification web…"
+            $COMPOSE run -T --rm --no-deps server vapid \
+              | tr -d '\r' | sed 's/^Vapid__PublicKey=/VAPID_PUBLIC_KEY=/; s/^Vapid__PrivateKey=/VAPID_PRIVATE_KEY=/' \
+              | grep '^VAPID_' > .env.vapid
+            grep -v '^VAPID_PUBLIC_KEY=\|^VAPID_PRIVATE_KEY=' .env > .env.tmp
+            cat .env.tmp .env.vapid > .env && rm -f .env.tmp .env.vapid
+            cat .env .env.images > .env.effectif
+            $COMPOSE up -d server
+          fi
+
+          docker logout ghcr.io >/dev/null 2>&1 || true
+          docker image prune -f >/dev/null 2>&1 || true
+          DISTANT
+
+      # Contrôle depuis le conteneur Caddy plutôt que depuis l'extérieur : au premier
+      # déploiement, le certificat TLS n'est pas encore émis et un curl public échouerait pour
+      # une raison qui n'a rien à voir avec le serveur.
+      - name: Vérifier que le serveur répond
+        run: |
+          set -euo pipefail
+          for essai in 1 2 3 4 5 6 7 8 9 10; do
+            if ssh -i ~/.ssh/id_deploy "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
+                 'docker compose -f ~/bana/docker/compose.prod.yml --env-file ~/bana/docker/.env.effectif exec -T caddy wget -qO- http://server:8080/health' \
+                 | grep -q '"status":"ok"'; then
+              echo "Le serveur répond."
+              exit 0
+            fi
+            echo "Tentative $essai : pas encore prêt."
+            sleep 10
+          done
+          echo "::error::Le serveur ne répond pas après le déploiement."
+          ssh -i ~/.ssh/id_deploy "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
+            'docker compose -f ~/bana/docker/compose.prod.yml --env-file ~/bana/docker/.env.effectif logs --tail 60 server'
+          exit 1
+
+      - name: Rappeler les identifiants du premier compte
+        if: success()
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/id_deploy "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" '
+            cd ~/bana/docker
+            echo "Domaine    : $(grep "^DOMAIN=" .env | cut -d= -f2-)"
+            echo "Pilotage   : https://$(grep "^DOMAIN=" .env | cut -d= -f2-)/pilote/"
+            echo "Identifiant: $(grep "^BOOTSTRAP_USERNAME=" .env | cut -d= -f2-)"
+            echo "Le mot de passe initial est dans ~/bana/docker/.env (BOOTSTRAP_PASSWORD)."
+            echo "La clé de publication des mises à jour y est aussi (ADMIN_API_KEY)."
+          '

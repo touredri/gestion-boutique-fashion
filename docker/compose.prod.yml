@@ -24,6 +24,7 @@ services:
       - "5432"
 
   server:
+    image: ${SERVER_IMAGE:-ghcr.io/touredri/gestion-boutique-fashion/server:latest}
     build:
       context: ..
       dockerfile: docker/Dockerfile
@@ -42,6 +43,11 @@ services:
       Vapid__PrivateKey: ${VAPID_PRIVATE_KEY}
       OpenWa__BaseUrl: ${OPENWA_BASE_URL}
       OpenWa__ApiKey: ${OPENWA_API_KEY}
+      # Publication logicielle (lot 5). Sans clé, les routes de publication répondent 404.
+      Admin__ApiKey: ${ADMIN_API_KEY}
+      Updates__Path: /data/updates
+    volumes:
+      - updates:/data/updates
     expose:
       - "8080"
 
@@ -50,6 +56,7 @@ services:
   # Construit la PWA et dépose ses fichiers dans un volume que Caddy sert. Le conteneur
   # s'arrête une fois la copie faite : il n'y a rien à laisser tourner.
   pilote:
+    image: ${WEB_IMAGE:-ghcr.io/touredri/gestion-boutique-fashion/web:latest}
     build:
       context: ../web
       dockerfile: Dockerfile
@@ -101,6 +108,9 @@ services:
 
 volumes:
   postgres-data:
+  # Paquets de mise à jour des terminaux. Volume nommé : ils doivent survivre à un redéploiement,
+  # sinon un terminal en cours de téléchargement se retrouve devant un fichier disparu.
+  updates:
   pilote-dist:
   vitrine-dist:
   caddy-data:
