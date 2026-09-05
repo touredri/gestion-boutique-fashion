@@ -11,12 +11,14 @@ namespace BoutiqueFashion.App;
 public partial class MainWindow : Window
 {
     private readonly ManagerSession session;
+    private readonly ShiftSession shift;
 
-    public MainWindow(ShellViewModel viewModel, ManagerSession session)
+    public MainWindow(ShellViewModel viewModel, ManagerSession session, ShiftSession shift)
     {
         InitializeComponent();
         DataContext = viewModel;
         this.session = session;
+        this.shift = shift;
 
         AddHandler(UIElement.PreviewMouseLeftButtonDownEvent, new MouseButtonEventHandler(OnWindowPreviewMouseDown), true);
         AddHandler(UIElement.PreviewTouchDownEvent, new EventHandler<TouchEventArgs>(OnWindowPreviewTouchDown), true);
@@ -25,18 +27,25 @@ public partial class MainWindow : Window
 
     private void OnWindowPreviewMouseDown(object sender, MouseButtonEventArgs e)
     {
-        session.Touch();
+        Touch();
         TryOpenTouchKeyboard(e.OriginalSource as DependencyObject);
     }
 
     private void OnWindowPreviewTouchDown(object? sender, TouchEventArgs e)
     {
-        session.Touch();
+        Touch();
         TryOpenTouchKeyboard(e.OriginalSource as DependencyObject);
     }
 
-    // Toute interaction repousse l'expiration du mode gérant.
-    private void OnWindowPreviewKeyDown(object sender, KeyEventArgs e) => session.Touch();
+    private void OnWindowPreviewKeyDown(object sender, KeyEventArgs e) => Touch();
+
+    // Toute interaction repousse les deux expirations : celle du mode gérant et celle de la
+    // vacation. ShiftSession ignore l'appel tant qu'aucun code de vacation n'est en place.
+    private void Touch()
+    {
+        session.Touch();
+        shift.Touch();
+    }
 
     private static void TryOpenTouchKeyboard(DependencyObject? source)
     {

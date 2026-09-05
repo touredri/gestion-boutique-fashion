@@ -79,5 +79,8 @@
     </Grid>
     <controls:TouchKeypadOverlay Grid.ColumnSpan="2"/>
     <controls:TouchKeyboardOverlay Grid.ColumnSpan="2"/>
+    <!-- Dernier enfant, donc au-dessus de tout, pavés tactiles compris : un verrou qui laisserait
+         un clavier par-dessus lui ne verrouillerait rien. -->
+    <controls:ShiftLockOverlay Grid.ColumnSpan="2" DataContext="{Binding Shift}"/>
   </Grid>
 </Window>

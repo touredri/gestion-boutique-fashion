@@ -29,9 +29,10 @@ public partial class ShellViewModel : ObservableObject
     private readonly DocumentsViewModel documents; private readonly ReportsViewModel reports; private readonly SettingsViewModel settings;
     private readonly CashViewModel cash; private readonly AdvancesViewModel advances;
 
-    public ShellViewModel(ManagerSession session, DashboardViewModel dashboard, SaleViewModel sale, CatalogViewModel catalog, StockViewModel stock, CustomersViewModel customers, ExpensesViewModel expenses, DocumentsViewModel documents, ReportsViewModel reports, SettingsViewModel settings, CashViewModel cash, AdvancesViewModel advances)
+    public ShellViewModel(ManagerSession session, ShiftSession shift, DashboardViewModel dashboard, SaleViewModel sale, CatalogViewModel catalog, StockViewModel stock, CustomersViewModel customers, ExpensesViewModel expenses, DocumentsViewModel documents, ReportsViewModel reports, SettingsViewModel settings, CashViewModel cash, AdvancesViewModel advances)
     {
         Session = session;
+        Shift = shift;
         this.dashboard = dashboard; this.sale = sale; this.catalog = catalog; this.stock = stock; this.customers = customers;
         this.expenses = expenses; this.documents = documents; this.reports = reports; this.settings = settings; this.cash = cash; this.advances = advances;
         CurrentPage = dashboard;
@@ -39,6 +40,7 @@ public partial class ShellViewModel : ObservableObject
     }
 
     public ManagerSession Session { get; }
+    public ShiftSession Shift { get; }
     [ObservableProperty] private object currentPage; [ObservableProperty] private string pageTitle = "Tableau de bord";
     [ObservableProperty] private string currentTarget = "Dashboard";
 
@@ -46,6 +48,8 @@ public partial class ShellViewModel : ObservableObject
     {
         AppNavigator.Go = Navigate;
         await Session.RefreshPinStateAsync();
+        // Une caisse protégée laissée ouverte doit être verrouillée dès le redémarrage.
+        await Shift.RefreshAsync();
         await dashboard.LoadAsync();
         await sale.LoadAsync();
     }

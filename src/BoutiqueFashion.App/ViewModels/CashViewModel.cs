@@ -14,7 +14,7 @@ namespace BoutiqueFashion.App.ViewModels;
 /// Ici la vacation est nommée, protégée par son propre code, et le montant attendu est affiché
 /// en permanence avec son détail.
 /// </summary>
-public partial class CashViewModel(ICashSessionService cash, IReportService reports, IAppSettingsService settings, ManagerSession session) : ObservableObject, ILoadable
+public partial class CashViewModel(ICashSessionService cash, IReportService reports, IAppSettingsService settings, ManagerSession session, ShiftSession shift) : ObservableObject, ILoadable
 {
     public ManagerSession Session => session;
     public ObservableCollection<ReportRow> CollectedByMode { get; } = [];
@@ -79,6 +79,9 @@ public partial class CashViewModel(ICashSessionService cash, IReportService repo
         Closings.Clear();
         var to = DateTimeOffset.Now.AddDays(1);
         foreach (var row in await reports.CashClosingsAsync(to.AddDays(-31), to)) Closings.Add(row);
+
+        // Ouvrir une vacation avec code arme le verrouillage ; la clôturer le désarme.
+        await shift.RefreshAsync();
     }
 
     [RelayCommand]
