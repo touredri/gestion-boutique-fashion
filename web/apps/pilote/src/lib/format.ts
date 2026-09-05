@@ -8,11 +8,16 @@ export function money(value: number): string {
   return `${amountFormatter.format(value)} F`;
 }
 
-/** Pour les tuiles : 1 240 000 devient « 1,24 M », lisible d'un coup d'œil sur un téléphone. */
+/**
+ * Forme courte pour les tuiles : 1 240 000 devient « 1,24 M ».
+ *
+ * Le seuil est à mille et non à dix mille : sinon une même rangée affiche « 5 000 » à côté de
+ * « 13 k », et l'œil ne compare plus rien.
+ */
 export function compactMoney(value: number): string {
   const abs = Math.abs(value);
   if (abs >= 1_000_000) return `${(value / 1_000_000).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} M`;
-  if (abs >= 10_000) return `${(value / 1_000).toLocaleString("fr-FR", { maximumFractionDigits: 0 })} k`;
+  if (abs >= 1_000) return `${(value / 1_000).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} k`;
   return amountFormatter.format(value);
 }
 

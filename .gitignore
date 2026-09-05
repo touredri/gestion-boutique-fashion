@@ -15,3 +15,7 @@ installer/output/
 # Secrets et sauvegardes du serveur
 docker/.env
 docker/backups/
+
+# Sorties de contrôle visuel Playwright
+.playwright-mcp/
+*.png.tmp

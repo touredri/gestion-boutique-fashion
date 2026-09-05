@@ -21,3 +21,11 @@ public enum PaperWidth { Mm58 = 58, Mm80 = 80 }
 public enum DocumentStyle { Classique, Moderne, Minimal }
 public enum PurchaseOrderStatus { Open, Closed }
 
+/// <summary>D'où vient la commande. Le site vitrine n'est qu'un canal parmi d'autres : une
+/// cliente qui écrit sur WhatsApp passe la même commande.</summary>
+public enum OrderChannel { Vitrine, WhatsApp, Telephone }
+
+/// <summary><c>Processed</c> signifie qu'une vente a été créée pour cette commande — c'est la
+/// vente qui fait foi, jamais un simple changement d'état.</summary>
+public enum OrderStatus { Pending, Processed, Delivered, Cancelled }
+

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, SessionExpired, readToken } from "@/lib/api";
 import { Empty, ErrorNote, Skeleton } from "@/components/ui";
@@ -20,6 +20,10 @@ export function useResource<T>(path: string, cacheKey: string) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [offline, setOffline] = useState(false);
+  // Référence et non état : `load` doit savoir si un écran est déjà rempli sans se recréer à
+  // chaque changement de données — sinon sa fermeture garde la valeur du premier rendu, et
+  // l'écran affiche une erreur alors qu'il a le cache sous la main.
+  const hasData = useRef(false);
 
   const load = useCallback(async () => {
     if (!readToken()) {
@@ -30,6 +34,7 @@ export function useResource<T>(path: string, cacheKey: string) {
     try {
       const fresh = await api.get<T>(path);
       setData(fresh);
+      hasData.current = true;
       setFetchedAt(new Date());
       setError(null);
       setOffline(false);
@@ -42,11 +47,11 @@ export function useResource<T>(path: string, cacheKey: string) {
       // Une erreur réseau sur des données déjà en cache n'est pas une panne : c'est un écran
       // qui vieillit. On le signale sans effacer ce qu'on sait.
       setOffline(true);
-      setError(data ? null : e instanceof Error ? e.message : "Chargement impossible.");
+      if (!hasData.current) setError(e instanceof Error ? e.message : "Chargement impossible.");
     } finally {
       setLoading(false);
     }
-  }, [path, cacheKey, router, data]);
+  }, [path, cacheKey, router]);
 
   useEffect(() => {
     const cached = window.localStorage.getItem(cacheKey);
@@ -54,6 +59,7 @@ export function useResource<T>(path: string, cacheKey: string) {
       try {
         const parsed = JSON.parse(cached) as { at: number; data: T };
         setData(parsed.data);
+        hasData.current = true;
         setFetchedAt(new Date(parsed.at));
         setLoading(false);
       } catch {
@@ -61,10 +67,7 @@ export function useResource<T>(path: string, cacheKey: string) {
       }
     }
     void load();
-    // `load` change à chaque rendu par sa dépendance à `data` ; on ne veut recharger qu'au
-    // changement de ressource.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [path, cacheKey]);
+  }, [path, cacheKey, load]);
 
   return { data, error, loading, offline, fetchedAt, reload: load };
 }

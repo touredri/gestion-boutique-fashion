@@ -34,6 +34,8 @@ public sealed class ServerDbContext(DbContextOptions<ServerDbContext> options) :
     public DbSet<CashMovement> CashMovements => Set<CashMovement>();
     public DbSet<Expense> Expenses => Set<Expense>();
     public DbSet<StockMovement> StockMovements => Set<StockMovement>();
+    public DbSet<Order> Orders => Set<Order>();
+    public DbSet<OrderLine> OrderLines => Set<OrderLine>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -72,6 +74,10 @@ public sealed class ServerDbContext(DbContextOptions<ServerDbContext> options) :
         modelBuilder.Entity<Product>().HasIndex(x => new { x.Seq, x.ShopId });
         modelBuilder.Entity<Variant>().HasIndex(x => x.Seq);
         modelBuilder.Entity<ShopSetting>().HasIndex(x => new { x.ShopId, x.Seq });
+        modelBuilder.Entity<Order>().HasIndex(x => new { x.ShopId, x.Seq });
+        modelBuilder.Entity<Order>().HasIndex(x => x.Number).IsUnique();
+        modelBuilder.Entity<Order>().HasMany(x => x.Lines).WithOne().HasForeignKey(x => x.OrderId).OnDelete(DeleteBehavior.Cascade);
+        modelBuilder.Entity<OrderLine>().Property(x => x.Quantity).HasPrecision(18, 3);
 
         modelBuilder.Entity<ShopStock>().Property(x => x.QuantityOnHand).HasPrecision(18, 3);
         modelBuilder.Entity<ShopStock>().Property(x => x.QuantityReserved).HasPrecision(18, 3);

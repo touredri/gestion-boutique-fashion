@@ -324,3 +324,47 @@ public sealed class StockMovement : ServerEntity
     [MaxLength(80)] public string Actor { get; set; } = string.Empty;
     public DateTimeOffset OccurredAt { get; set; }
 }
+
+// --- Commandes du site vitrine --------------------------------------------
+
+/// <summary>
+/// Demande passée depuis le site vitrine ou reçue par un autre canal. Ce n'est pas une vente :
+/// rien n'est encaissé, rien ne sort du stock. Elle le devient quand une caisse crée la vente
+/// correspondante — c'est cette vente qui fait foi, jamais le seul changement d'état.
+///
+/// La boutique est choisie par la cliente au moment de commander : inventer une règle
+/// d'affectation automatique produirait surtout des commandes envoyées au mauvais endroit.
+/// </summary>
+public sealed class Order : ServerEntity
+{
+    public Guid ShopId { get; set; }
+    [MaxLength(40)] public string Number { get; set; } = string.Empty;
+    [MaxLength(160)] public string CustomerName { get; set; } = string.Empty;
+    [MaxLength(30)] public string Phone { get; set; } = string.Empty;
+    [MaxLength(500)] public string? Note { get; set; }
+    public OrderChannel Channel { get; set; } = OrderChannel.Vitrine;
+    public OrderStatus Status { get; set; } = OrderStatus.Pending;
+    public long TotalXof { get; set; }
+    /// <summary>Renseigné à la création de la vente en caisse. Sa présence est ce qui distingue
+    /// une commande réellement traitée d'une case cochée.</summary>
+    public Guid? SaleId { get; set; }
+    public DateTimeOffset? ProcessedAt { get; set; }
+    public DateTimeOffset? DeliveredAt { get; set; }
+    [MaxLength(300)] public string? CancelReason { get; set; }
+    /// <summary>Curseur de descente : la commande voyage vers la caisse de sa boutique.</summary>
+    public long Seq { get; set; }
+    public List<OrderLine> Lines { get; set; } = [];
+}
+
+public sealed class OrderLine
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid OrderId { get; set; }
+    public Guid VariantId { get; set; }
+    [MaxLength(80)] public string Sku { get; set; } = string.Empty;
+    [MaxLength(200)] public string Description { get; set; } = string.Empty;
+    public decimal Quantity { get; set; }
+    /// <summary>Prix figé au moment de la commande : une cliente ne doit pas découvrir en
+    /// boutique que l'article a augmenté depuis qu'elle l'a réservé.</summary>
+    public long UnitPriceXof { get; set; }
+}

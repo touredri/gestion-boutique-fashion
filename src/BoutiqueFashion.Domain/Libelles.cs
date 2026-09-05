@@ -78,6 +78,21 @@ public static class Libelles
         _ => "Sortie d'espèces"
     };
 
+    public static string Text(OrderStatus value) => value switch
+    {
+        OrderStatus.Pending => "En cours",
+        OrderStatus.Processed => "Traitée",
+        OrderStatus.Delivered => "Livrée",
+        _ => "Annulée"
+    };
+
+    public static string Text(OrderChannel value) => value switch
+    {
+        OrderChannel.Vitrine => "Site vitrine",
+        OrderChannel.WhatsApp => "WhatsApp",
+        _ => "Téléphone"
+    };
+
     public static string Text(SaleStatus value) => value switch
     {
         SaleStatus.Completed => "Validée",
@@ -97,6 +112,8 @@ public static class Libelles
         CreditStatus v => Text(v),
         SaleStatus v => Text(v),
         CashMovementDirection v => Text(v),
+        OrderStatus v => Text(v),
+        OrderChannel v => Text(v),
         null => string.Empty,
         _ => value.ToString() ?? string.Empty
     };

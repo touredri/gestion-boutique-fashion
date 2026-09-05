@@ -65,7 +65,7 @@ function ShopCard({ shop }: { shop: ShopOverview }) {
     shop.reservedAdvances > 0 ? `${shop.reservedAdvances} avance(s) en attente` : null,
     // Un terminal muet est l'anomalie la plus coûteuse : elle veut dire qu'on ne voit plus
     // cette boutique, pas qu'elle ne vend pas.
-    stale ? `Terminal silencieux ${sinceNow(shop.lastSeenAt)}` : null,
+    stale ? `Dernière synchronisation ${sinceNow(shop.lastSeenAt)}` : null,
   ].filter(Boolean) as string[];
 
   return (

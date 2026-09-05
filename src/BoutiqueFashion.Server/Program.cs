@@ -26,6 +26,17 @@ builder.Services.AddHttpClient("openwa");
 builder.Services.AddHttpClient("webpush");
 builder.Services.AddProblemDetails();
 
+// En production, l'application et l'API partagent le même domaine derrière Caddy : aucune
+// requête n'est croisée et rien de tout ceci n'existe. En développement, le serveur de Next
+// tourne sur un autre port, et sans cette autorisation on ne peut pas travailler sur l'interface.
+if (builder.Environment.IsDevelopment())
+{
+    builder.Services.AddCors(options => options.AddDefaultPolicy(policy => policy
+        .WithOrigins("http://localhost:3000", "http://127.0.0.1:3000")
+        .AllowAnyHeader()
+        .AllowAnyMethod()));
+}
+
 var app = builder.Build();
 
 // Migration au démarrage : le serveur est déployé en conteneur et la base est la sienne. Une
@@ -38,7 +49,10 @@ if (!app.Environment.IsEnvironment("Testing"))
     await UserAuthentication.EnsureFirstUserAsync(db, app.Configuration);
 }
 
+if (app.Environment.IsDevelopment()) app.UseCors();
+
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
+app.MapShowcase();
 
 // ---------------------------------------------------------------------------
 // Comptes de pilotage.
@@ -68,6 +82,7 @@ var admin = app.MapGroup("/api").AddEndpointFilter(async (context, next) =>
 });
 
 admin.MapReporting();
+admin.MapOrders();
 
 // ---------------------------------------------------------------------------
 // Alertes. WhatsApp porte le détail, la notification web ne fait que réveiller
