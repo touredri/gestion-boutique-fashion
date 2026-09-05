@@ -31,6 +31,9 @@ public sealed class Shop : ServerEntity
     [MaxLength(120)] public string? City { get; set; }
     [MaxLength(300)] public string? Address { get; set; }
     [MaxLength(30)] public string? Phone { get; set; }
+    /// <summary>Horaires tels qu'ils s'affichent sur le site. Texte libre plutôt que grille :
+    /// « Lun–Sam 9h–19h » se lit mieux que sept lignes, et se corrige en une fois.</summary>
+    [MaxLength(200)] public string? Hours { get; set; }
     public bool IsActive { get; set; } = true;
 }
 
@@ -102,7 +105,7 @@ public sealed class Device : ServerEntity
 
     /// <summary>Version en service sur ce terminal, telle qu'il la déclare à chaque cycle de
     /// synchronisation. Sans elle, « est-ce que la mise à jour s'est installée ? » est une
-    /// question sans réponse depuis Abidjan.</summary>
+    /// question sans réponse depuis Bamako.</summary>
     [MaxLength(40)] public string? AppVersion { get; set; }
     public DateTimeOffset? AppVersionSince { get; set; }
 
@@ -148,8 +151,8 @@ public sealed class Product : SyncedDownEntity
 {
     public Guid CategoryId { get; set; }
     /// <summary>Portée de l'article. <c>null</c> : catalogue global, présent dans toutes les
-    /// boutiques. Renseigné : exclusif à cette boutique — une pièce qu'on ne vend qu'à Marcory
-    /// n'a rien à faire sur la caisse de Yopougon.</summary>
+    /// boutiques. Renseigné : exclusif à cette boutique — une pièce qu'on ne vend qu'à Banankabougou
+    /// n'a rien à faire sur la caisse d'ACI 2000.</summary>
     public Guid? ShopId { get; set; }
     [MaxLength(180)] public string Name { get; set; } = string.Empty;
     [MaxLength(120)] public string? Brand { get; set; }
@@ -177,6 +180,17 @@ public sealed class Variant : SyncedDownEntity
     public DateTimeOffset? PromotionEndsAt { get; set; }
     public decimal LowStockThreshold { get; set; }
     public bool IsActive { get; set; } = true;
+}
+
+/// <summary>
+/// Réglage du site vitrine. Sans boutique : ces textes sont ceux du site, pas d'un point de
+/// vente, et ils ne descendent sur aucun terminal.
+/// </summary>
+public sealed class SiteSetting : ServerEntity
+{
+    [MaxLength(120)] public string Key { get; set; } = string.Empty;
+    public string Value { get; set; } = string.Empty;
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 
 public sealed class ShopSetting : SyncedDownEntity

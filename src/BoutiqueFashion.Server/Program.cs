@@ -191,17 +191,85 @@ admin.MapPost("/auth/password", async (PasswordChangeInput input, HttpContext ht
 admin.MapPost("/shops", async (ShopInput input, ServerDbContext db, CancellationToken ct) =>
 {
     if (string.IsNullOrWhiteSpace(input.Name)) return Results.BadRequest(new { error = "Le nom de la boutique est obligatoire." });
-    var shop = new Shop { Name = input.Name.Trim(), City = input.City, Address = input.Address, Phone = input.Phone };
+    var shop = new Shop { Name = input.Name.Trim(), City = input.City, Address = input.Address, Phone = input.Phone, Hours = input.Hours };
     db.Shops.Add(shop);
+    await MirrorToTerminalAsync(db, shop, ct);
     await db.SaveChangesAsync(ct);
     return Results.Created($"/api/shops/{shop.Id}", shop);
+});
+
+admin.MapPut("/shops/{shopId:guid}", async (Guid shopId, ShopInput input, ServerDbContext db, CancellationToken ct) =>
+{
+    if (string.IsNullOrWhiteSpace(input.Name)) return Results.BadRequest(new { error = "Le nom de la boutique est obligatoire." });
+    var shop = await db.Shops.SingleOrDefaultAsync(x => x.Id == shopId, ct);
+    if (shop is null) return Results.NotFound();
+
+    shop.Name = input.Name.Trim();
+    shop.City = Trim(input.City);
+    shop.Address = Trim(input.Address);
+    shop.Phone = Trim(input.Phone);
+    shop.Hours = Trim(input.Hours);
+    await MirrorToTerminalAsync(db, shop, ct);
+    await db.SaveChangesAsync(ct);
+    return Results.Ok(shop);
+
+    static string? Trim(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+});
+
+// L'identité de la boutique s'écrit ici et se recopie dans ses réglages, qui descendent aux
+// terminaux et impriment les tickets. Sans cette recopie, corriger une adresse changerait le
+// site sans changer le ticket — ou l'inverse — et rien ne le dirait.
+static async Task MirrorToTerminalAsync(ServerDbContext db, Shop shop, CancellationToken ct)
+{
+    var valeurs = new Dictionary<string, string?>
+    {
+        ["Shop.Name"] = shop.Name,
+        ["Shop.Address"] = shop.Address,
+        ["Shop.Phone"] = shop.Phone,
+    };
+
+    foreach (var (key, value) in valeurs)
+    {
+        var row = await db.ShopSettings.SingleOrDefaultAsync(x => x.ShopId == shop.Id && x.Key == key, ct);
+        if (row is null)
+        {
+            if (string.IsNullOrWhiteSpace(value)) continue;
+            row = new ShopSetting { ShopId = shop.Id, Key = key };
+            db.ShopSettings.Add(row);
+        }
+        row.Value = value ?? string.Empty;
+        // Le curseur avance : c'est ce qui fait redescendre la correction au prochain cycle.
+        row.Seq = await db.NextSeqAsync(ct);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Textes du site vitrine. Réglables sans redéploiement : une année d'ouverture
+// ou une accroche n'ont aucune raison d'exiger une mise en production.
+// ---------------------------------------------------------------------------
+
+admin.MapGet("/site-settings", async (ServerDbContext db, CancellationToken ct) =>
+    Results.Ok(await db.SiteSettings.AsNoTracking().OrderBy(x => x.Key)
+        .Select(x => new SettingDto(x.Key, x.Value)).ToListAsync(ct)));
+
+admin.MapPut("/site-settings", async (IReadOnlyList<SettingDto> settings, ServerDbContext db, CancellationToken ct) =>
+{
+    foreach (var dto in settings)
+    {
+        var row = await db.SiteSettings.SingleOrDefaultAsync(x => x.Key == dto.Key, ct);
+        if (row is null) { row = new SiteSetting { Key = dto.Key }; db.SiteSettings.Add(row); }
+        row.Value = dto.Value;
+        row.UpdatedAt = DateTimeOffset.UtcNow;
+    }
+    await db.SaveChangesAsync(ct);
+    return Results.NoContent();
 });
 
 admin.MapGet("/shops", async (ServerDbContext db, CancellationToken ct) =>
     Results.Ok(await db.Shops.OrderBy(x => x.Name)
         .Select(x => new
         {
-            x.Id, x.Name, x.City, x.IsActive,
+            x.Id, x.Name, x.City, x.Address, x.Phone, x.Hours, x.IsActive,
             Devices = db.Devices.Count(d => d.ShopId == x.Id && d.RevokedAt == null),
             LastSeenAt = db.Devices.Where(d => d.ShopId == x.Id).Max(d => (DateTimeOffset?)d.LastSeenAt),
         })
@@ -465,7 +533,7 @@ app.MapPost("/api/devices/status", async (DeviceStatusRequest input, HttpContext
 
 app.Run();
 
-internal sealed record ShopInput(string Name, string? City, string? Address, string? Phone);
+internal sealed record ShopInput(string Name, string? City, string? Address, string? Phone, string? Hours);
 internal sealed record LoginInput(string Username, string Password);
 internal sealed record NotificationSettingsInput(string? WhatsAppNumber, bool OnCashOpened, bool OnCashClosed, bool OnCashVariance, bool OnNewOrder);
 internal sealed record PushSubscriptionInput(string Endpoint, string P256dh, string Auth, string? Label);

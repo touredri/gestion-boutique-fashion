@@ -6,7 +6,7 @@
   vêtements.
 
   Le mouvement est entièrement natif : animations pilotées au défilement, accroches CSS,
-  transitions. Aucune bibliothèque. Sur un réseau mobile ivoirien, quarante kilo-octets de
+  transitions. Aucune bibliothèque. Sur un réseau mobile malien, quarante kilo-octets de
   JavaScript pour animer coûtent plus qu'ils n'apportent, et une animation qui arrive après le
   contenu n'anime plus rien.
 */

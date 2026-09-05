@@ -1,6 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { APERCU, APERCU_CATEGORIES } from "@/lib/apercu";
+import type { ApercuItem } from "@/lib/apercu";
+
+/** Ce qu'une carte sait afficher : un article du catalogue, ou une pièce d'aperçu sans prix. */
+type CardItem = ShowcaseItem | ApercuItem;
 import { OrderSheet } from "@/components/OrderSheet";
 import {
   groupByProduct,
@@ -9,6 +14,7 @@ import {
   swatch,
   type Showcase as ShowcaseData,
   type ShowcaseItem,
+  type ShowcaseShop,
 } from "@/lib/showcase";
 
 /**
@@ -22,6 +28,7 @@ export function Showcase() {
   const [data, setData] = useState<ShowcaseData | null>(null);
   const [failed, setFailed] = useState(false);
   const [selected, setSelected] = useState<{ lead: ShowcaseItem; variants: ShowcaseItem[] } | null>(null);
+  const [apercuOuvert, setApercuOuvert] = useState(false);
 
   useEffect(() => {
     loadShowcase().then(setData).catch(() => setFailed(true));
@@ -31,22 +38,55 @@ export function Showcase() {
   const categories = useMemo(() => [...new Set(groups.map((g) => g.lead.category))].sort(), [groups]);
   const promos = useMemo(() => groups.filter((g) => g.variants.some((v) => v.promotionalPriceXof !== null)), [groups]);
 
+  // Vide seulement une fois le chargement terminé : pendant l'attente, ni aperçu ni page nue.
+  const vide = data !== null && groups.length === 0;
+  const apercuGroups = useMemo(() => APERCU.map((item) => ({ lead: item, variants: [item] })), []);
+
+  // La ville n'est pas un réglage : elle vient des boutiques. « Deux adresses à Bamako »
+  // aujourd'hui, juste après une troisième boutique demain — une ville écrite en dur est
+  // exactement ce qui nous a fait annoncer le mauvais pays pendant des semaines.
+  const villes = useMemo(
+    () => [...new Set((data?.shops ?? []).map((s) => s.city).filter(Boolean))] as string[],
+    [data],
+  );
+
   return (
     <>
-      <Hero />
+      <Hero depuis={data?.settings?.["Vitrine.Depuis"] ?? "2019"} accroche={data?.settings?.["Vitrine.Accroche"]} villes={villes} />
       <Manifesto />
 
-      {promos.length > 0 && <Rail title="En promotion" eyebrow="Prix doux" groups={promos} onPick={setSelected} accent />}
+      {/* L'ancre vit ici et non sur un rayon : « Voir la sélection » de la couverture pointait
+          vers un identifiant porté par Rail, qui ne se rendait pas quand le catalogue était
+          vide — l'unique appel à l'action de la page ne menait donc nulle part. Et plusieurs
+          rayons produisaient plusieurs fois le même identifiant. */}
+      <div id="selection" className="scroll-mt-6">
+        {promos.length > 0 && <Rail title="En promotion" eyebrow="Prix doux" groups={promos} onPick={setSelected} accent />}
 
-      {categories.map((category) => (
-        <Rail
-          key={category}
-          title={category}
-          eyebrow="La sélection"
-          groups={groups.filter((g) => g.lead.category === category)}
-          onPick={setSelected}
-        />
-      ))}
+        {categories.map((category) => (
+          <Rail
+            key={category}
+            title={category}
+            eyebrow="La sélection"
+            groups={groups.filter((g) => g.lead.category === category)}
+            onPick={setSelected}
+          />
+        ))}
+
+        {/* Catalogue encore vide : on montre ce qu'on vendra plutôt qu'une page nue. Ces pièces
+            ne sont pas en base — elles disparaissent d'elles-mêmes au premier article
+            enregistré, sans rien à nettoyer. */}
+        {vide &&
+          APERCU_CATEGORIES.map((category) => (
+            <Rail
+              key={category}
+              title={category}
+              eyebrow="Bientôt en boutique"
+              groups={apercuGroups.filter((g) => g.lead.category === category)}
+              onPick={() => setApercuOuvert(true)}
+              apercu
+            />
+          ))}
+      </div>
 
       {/* Ni squelette ni tournis : une phrase qui dit ce qui se passe, et le reste de la page
           continue de vivre. */}
@@ -59,8 +99,8 @@ export function Showcase() {
         </p>
       )}
 
-      <Shops shops={data?.shops ?? []} />
-      <Footer />
+      <Shops shops={data?.shops ?? []} villes={villes} />
+      <Footer villes={villes} />
 
       {selected && (
         <OrderSheet
@@ -69,6 +109,8 @@ export function Showcase() {
           onClose={() => setSelected(null)}
         />
       )}
+
+      {apercuOuvert && <NoteApercu shops={data?.shops ?? []} onClose={() => setApercuOuvert(false)} />}
     </>
   );
 }
@@ -77,7 +119,15 @@ export function Showcase() {
  * Couverture. Deux plans qui se décalent au défilement : le fond recule, le titre monte plus
  * vite. La profondeur naît de l'écart entre les deux, pas d'une image qui bouge toute seule.
  */
-function Hero() {
+/** Formule « Bamako » ou « Bamako et Ségou ». Deux villes se lisent, cinq se comptent. */
+function libelleVilles(villes: string[], defaut = "Bamako"): string {
+  if (villes.length === 0) return defaut;
+  if (villes.length === 1) return villes[0];
+  if (villes.length === 2) return `${villes[0]} et ${villes[1]}`;
+  return villes.slice(0, -1).join(", ") + ` et ${villes[villes.length - 1]}`;
+}
+
+function Hero({ depuis, accroche, villes }: { depuis: string; accroche?: string; villes: string[] }) {
   return (
     <header className="relative flex min-h-[92dvh] items-end overflow-hidden bg-ink">
       <div
@@ -98,7 +148,9 @@ function Hero() {
       />
 
       <div className="parallax-front relative w-full px-6 pb-20">
-        <p className="mb-4 text-[11px] font-semibold uppercase tracking-[0.32em] text-clay">Abidjan · depuis 2019</p>
+        <p className="mb-4 text-[11px] font-semibold uppercase tracking-[0.32em] text-clay">
+          {libelleVilles(villes)} · depuis {depuis}
+        </p>
         <h1 className="font-display text-[clamp(2.75rem,13vw,4.5rem)] leading-[0.95] text-white">
           La pièce
           <br />
@@ -107,8 +159,8 @@ function Hero() {
           <span className="text-clay italic">remarquera</span>
         </h1>
         <p className="mt-6 max-w-sm text-[15px] leading-relaxed text-white/70">
-          Vêtements, chaussures et accessoires choisis un par un. Deux boutiques, une même
-          exigence : rien que vous ne porteriez pas vous-même.
+          {accroche ??
+            "Vêtements, chaussures et accessoires choisis un par un. Deux boutiques, une même exigence : rien que vous ne porteriez pas vous-même."}
         </p>
         <a
           href="#selection"
@@ -138,22 +190,24 @@ function Manifesto() {
   );
 }
 
-function Rail({
+function Rail<T extends CardItem>({
   title,
   eyebrow,
   groups,
   onPick,
   accent,
+  apercu,
 }: {
   title: string;
   eyebrow: string;
-  groups: { lead: ShowcaseItem; variants: ShowcaseItem[] }[];
-  onPick: (group: { lead: ShowcaseItem; variants: ShowcaseItem[] }) => void;
+  groups: { lead: T; variants: T[] }[];
+  onPick: (group: { lead: T; variants: T[] }) => void;
   accent?: boolean;
+  apercu?: boolean;
 }) {
   if (groups.length === 0) return null;
   return (
-    <section id="selection" className="scroll-mt-6 py-12">
+    <section className="py-12">
       <div className="reveal mb-5 px-6">
         <p className={`text-[11px] font-semibold uppercase tracking-[0.24em] ${accent ? "text-terracotta" : "text-gold"}`}>
           {eyebrow}
@@ -166,7 +220,7 @@ function Rail({
       <div className="rail flex gap-4 overflow-x-auto pb-2">
         <span aria-hidden className="w-2 shrink-0" />
         {groups.map((group) => (
-          <ProductCard key={group.lead.productId} group={group} onPick={() => onPick(group)} />
+          <ProductCard key={group.lead.productId} group={group} onPick={() => onPick(group)} apercu={apercu} />
         ))}
         <span aria-hidden className="w-2 shrink-0" />
       </div>
@@ -177,13 +231,18 @@ function Rail({
 function ProductCard({
   group,
   onPick,
+  apercu,
 }: {
-  group: { lead: ShowcaseItem; variants: ShowcaseItem[] };
+  group: { lead: CardItem; variants: CardItem[] };
   onPick: () => void;
+  apercu?: boolean;
 }) {
   const { lead, variants } = group;
   const promo = variants.find((v) => v.promotionalPriceXof !== null);
-  const lowest = Math.min(...variants.map((v) => v.promotionalPriceXof ?? v.priceXof));
+  // Les pièces d'aperçu n'ont pas de prix : en annoncer un serait promettre un tarif qu'on ne
+  // tiendrait pas au comptoir.
+  const tarifs = variants.map((v) => v.promotionalPriceXof ?? v.priceXof).filter((x): x is number => x !== null);
+  const lowest = tarifs.length > 0 ? Math.min(...tarifs) : null;
   const available = variants.some((v) => v.inStock);
   const colors = [...new Set(variants.map((v) => v.color).filter(Boolean))] as string[];
 
@@ -211,7 +270,7 @@ function ProductCard({
         )}
         {!available && (
           <span className="absolute inset-x-3 top-3 rounded-full bg-ink/70 py-1 text-center text-[10px] font-bold uppercase tracking-wider text-white">
-            Sur commande
+            {apercu ? "Bientôt" : "Sur commande"}
           </span>
         )}
       </div>
@@ -220,8 +279,16 @@ function ProductCard({
       {lead.brand && <p className="text-xs text-faint">{lead.brand}</p>}
 
       <p className="mt-1 flex items-baseline gap-2">
-        <span className="text-[15px] font-semibold text-ink">{price(lowest)}</span>
-        {promo && <span className="text-xs text-faint line-through">{price(promo.priceXof)}</span>}
+        {lowest === null ? (
+          <span className="text-[15px] font-semibold text-muted">Bientôt en boutique</span>
+        ) : (
+          <>
+            <span className="text-[15px] font-semibold text-ink">{price(lowest)}</span>
+            {promo?.priceXof != null && (
+              <span className="text-xs text-faint line-through">{price(promo.priceXof)}</span>
+            )}
+          </>
+        )}
       </p>
 
       {colors.length > 0 && (
@@ -240,11 +307,18 @@ function ProductCard({
   );
 }
 
-function Shops({ shops }: { shops: { id: string; name: string; city: string | null; address: string | null; phone: string | null }[] }) {
+function Shops({ shops, villes }: { shops: ShowcaseShop[]; villes: string[] }) {
+  // Le nombre s'accorde tout seul : « Deux adresses » aujourd'hui, « Trois » le jour où elle en
+  // ouvrira une troisième, sans que personne n'ait à se souvenir de venir corriger ce titre.
+  const nombres = ["Nos", "Une", "Deux", "Trois", "Quatre", "Cinq", "Six"];
+  const titre = shops.length === 0
+    ? "Nos adresses"
+    : `${nombres[shops.length] ?? "Nos"} adresse${shops.length > 1 ? "s" : ""} à ${libelleVilles(villes)}`;
+
   return (
     <section id="boutiques" className="bg-ink px-6 py-16 text-white">
       <p className="reveal text-[11px] font-semibold uppercase tracking-[0.24em] text-clay">Nous trouver</p>
-      <h2 className="reveal mb-8 font-display text-[28px] leading-tight">Deux adresses à Abidjan</h2>
+      <h2 className="reveal mb-8 font-display text-[28px] leading-tight">{titre}</h2>
 
       <div className="space-y-6">
         {shops.map((shop) => (
@@ -252,6 +326,7 @@ function Shops({ shops }: { shops: { id: string; name: string; city: string | nu
             <h3 className="font-display text-xl">{shop.name}</h3>
             {shop.city && <p className="text-sm text-white/60">{shop.city}</p>}
             {shop.address && <p className="mt-1 text-sm text-white/60">{shop.address}</p>}
+            {shop.hours && <p className="mt-1 text-sm text-white/45">{shop.hours}</p>}
             {shop.phone && (
               <a href={`tel:${shop.phone}`} className="mt-3 inline-block text-sm font-semibold text-clay underline underline-offset-4">
                 {shop.phone}
@@ -265,11 +340,59 @@ function Shops({ shops }: { shops: { id: string; name: string; city: string | nu
   );
 }
 
-function Footer() {
+/**
+ * Ce qu'on montre quand on touche une pièce d'aperçu. Jamais le formulaire de commande : on ne
+ * prend pas commande d'un article qui n'existe pas encore, et le dire clairement vaut mieux
+ * qu'un bouton qui échouerait.
+ */
+function NoteApercu({ shops, onClose }: { shops: ShowcaseShop[]; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-end bg-ink/60 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="w-full rounded-t-3xl bg-paper px-6 pb-10 pt-6"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-label="Pièce à venir"
+      >
+        <span aria-hidden className="mx-auto mb-5 block h-1 w-10 rounded-full bg-line" />
+        <h2 className="font-display text-2xl leading-tight text-ink">Cette pièce arrive bientôt</h2>
+        <p className="mt-3 text-sm leading-relaxed text-muted">
+          Notre sélection est en cours de mise en ligne. En attendant, passez nous voir : nous
+          avons déjà de quoi vous habiller.
+        </p>
+
+        {shops.length > 0 && (
+          <div className="mt-5 space-y-3">
+            {shops.map((shop) => (
+              <div key={shop.id} className="border-t border-line pt-3">
+                <p className="font-display text-base text-ink">{shop.name}</p>
+                {shop.address && <p className="text-sm text-muted">{shop.address}</p>}
+                {shop.phone && (
+                  <a href={`tel:${shop.phone}`} className="mt-1 inline-block text-sm font-semibold text-terracotta underline underline-offset-4">
+                    {shop.phone}
+                  </a>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        <button
+          onClick={onClose}
+          className="mt-7 min-h-12 w-full rounded-xl bg-ink text-sm font-semibold text-white"
+        >
+          Continuer la visite
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Footer({ villes }: { villes: string[] }) {
   return (
     <footer className="px-6 py-10 text-center">
       <p className="font-display text-lg text-ink">Bana Shop</p>
-      <p className="mt-1 text-xs text-faint">Abidjan · Côte d’Ivoire</p>
+      <p className="mt-1 text-xs text-faint">{libelleVilles(villes)} · Mali</p>
       <p className="mt-4 text-xs text-muted">
         Réservez en ligne, essayez en boutique. Le paiement se fait sur place.
       </p>

@@ -22,6 +22,7 @@ public sealed class ServerDbContext(DbContextOptions<ServerDbContext> options) :
     public DbSet<Product> Products => Set<Product>();
     public DbSet<Variant> Variants => Set<Variant>();
     public DbSet<ShopSetting> ShopSettings => Set<ShopSetting>();
+    public DbSet<SiteSetting> SiteSettings => Set<SiteSetting>();
     public DbSet<ShopStock> ShopStocks => Set<ShopStock>();
 
     public DbSet<Customer> Customers => Set<Customer>();
@@ -71,6 +72,7 @@ public sealed class ServerDbContext(DbContextOptions<ServerDbContext> options) :
 
         modelBuilder.Entity<Variant>().HasIndex(x => x.Sku).IsUnique();
         modelBuilder.Entity<ShopSetting>().HasIndex(x => new { x.ShopId, x.Key }).IsUnique();
+        modelBuilder.Entity<SiteSetting>().HasIndex(x => x.Key).IsUnique();
 
         // Le curseur se lit par intervalle sur chaque table descendante.
         modelBuilder.Entity<Category>().HasIndex(x => x.Seq);

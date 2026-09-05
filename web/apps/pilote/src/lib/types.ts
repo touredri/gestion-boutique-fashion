@@ -94,6 +94,10 @@ export type Shop = {
   id: string;
   name: string;
   city: string | null;
+  /** Coordonnées : affichées sur le site public et imprimées sur les tickets de la caisse. */
+  address: string | null;
+  phone: string | null;
+  hours: string | null;
   isActive: boolean;
   devices: number;
   lastSeenAt: string | null;

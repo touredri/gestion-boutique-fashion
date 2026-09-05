@@ -108,13 +108,13 @@ export default function AlertesPage() {
                   Le message complet arrive ici : quelle boutique, qui tenait la caisse, et le
                   montant de l’écart s’il y en a un.
                 </p>
-                <Field label="Numéro WhatsApp" hint="Avec l’indicatif pays. Exemple : +225 07 00 00 00 11">
+                <Field label="Numéro WhatsApp" hint="Avec l’indicatif pays. Exemple : +223 70 00 00 11">
                   <input
                     className={inputClass}
                     inputMode="tel"
                     value={form.whatsAppNumber ?? ""}
                     onChange={(e) => setForm({ ...form, whatsAppNumber: e.target.value })}
-                    placeholder="+225 …"
+                    placeholder="+223 …"
                   />
                 </Field>
                 {!form.whatsAppConfigured && (

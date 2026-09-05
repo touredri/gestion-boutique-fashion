@@ -20,9 +20,9 @@ const GROUPS: { title: string; fields: FieldSpec[] }[] = [
   {
     title: "Identité sur les documents",
     fields: [
-      { key: "Shop.Name", label: "Nom affiché", hint: "Apparaît sur les tickets et sert de nom de vendeur par défaut." },
-      { key: "Shop.Address", label: "Adresse" },
-      { key: "Shop.Phone", label: "Téléphone" },
+      // Nom, adresse et téléphone ne sont plus ici : ils vivent dans le volet « adresse », d'où
+      // ils partent à la fois vers le site et vers les tickets. Les laisser en double aurait
+      // laissé deux vérités possibles pour la même information.
       { key: "Shop.Email", label: "E-mail" },
       { key: "Shop.TaxId", label: "NIF / RCCM" },
       { key: "Shop.Slogan", label: "Slogan" },

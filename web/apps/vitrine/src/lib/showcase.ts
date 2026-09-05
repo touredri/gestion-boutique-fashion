@@ -1,6 +1,6 @@
 const BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
 
-export type ShowcaseShop = { id: string; name: string; city: string | null; address: string | null; phone: string | null };
+export type ShowcaseShop = { id: string; name: string; city: string | null; address: string | null; phone: string | null; hours: string | null };
 
 export type ShowcaseItem = {
   variantId: string;
@@ -19,7 +19,9 @@ export type ShowcaseItem = {
   shopIds: string[];
 };
 
-export type Showcase = { shops: ShowcaseShop[]; items: ShowcaseItem[] };
+/** `settings` porte les textes réglables depuis l'application de pilotage : année d'ouverture,
+ *  accroche. Ils se corrigent sans redéploiement. */
+export type Showcase = { shops: ShowcaseShop[]; items: ShowcaseItem[]; settings: Record<string, string> };
 
 export async function loadShowcase(): Promise<Showcase> {
   const response = await fetch(`${BASE}/api/public/showcase`, { cache: "no-store" });

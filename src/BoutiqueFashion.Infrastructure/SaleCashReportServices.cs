@@ -201,7 +201,7 @@ public sealed class CashSessionService(IDbContextFactory<BoutiqueDbContext> fact
         if (await db.CashSessions.AnyAsync(x => x.Status == CashSessionStatus.Open, cancellationToken)) throw new InvalidOperationException("Une caisse est déjà ouverte.");
 
         // À défaut de nom saisi, la boutique elle-même tient la caisse : c'est ce nom qui
-        // apparaîtra sur les ventes, et il vaut mieux « Boutique Marcory » que « Vendeur boutique ».
+        // apparaîtra sur les ventes, et il vaut mieux « Boutique Banankabougou » que « Vendeur boutique ».
         var shopName = await db.AppSettings.Where(x => x.Key == "Shop.Name").Select(x => x.Value).SingleOrDefaultAsync(cancellationToken);
         var name = Coalesce(operatorName, shopName, "Vendeur boutique");
 
