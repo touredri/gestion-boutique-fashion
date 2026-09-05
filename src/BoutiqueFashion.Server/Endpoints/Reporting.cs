@@ -189,11 +189,11 @@ internal static class Reporting
             return Results.Ok(rows);
         });
 
-        group.MapGet("/advances", async (ServerDbContext db, Guid? shopId, bool includeSettled, CancellationToken ct) =>
+        group.MapGet("/advances", async (ServerDbContext db, Guid? shopId, bool? includeSettled, CancellationToken ct) =>
         {
             var credits = db.Credits.AsNoTracking().AsQueryable();
             if (shopId is { } only) credits = credits.Where(x => x.ShopId == only);
-            if (!includeSettled) credits = credits.Where(x => x.Status != CreditStatus.Paid && x.Status != CreditStatus.Cancelled);
+            if (includeSettled is not true) credits = credits.Where(x => x.Status != CreditStatus.Paid && x.Status != CreditStatus.Cancelled);
 
             var rows = await credits
                 .Join(db.Shops, c => c.ShopId, s => s.Id, (c, s) => new { Credit = c, Shop = s })
@@ -210,7 +210,7 @@ internal static class Reporting
             return Results.Ok(rows);
         });
 
-        group.MapGet("/shops/{shopId:guid}/stock-detail", async (Guid shopId, ServerDbContext db, bool lowOnly, CancellationToken ct) =>
+        group.MapGet("/shops/{shopId:guid}/stock-detail", async (Guid shopId, ServerDbContext db, bool? lowOnly, CancellationToken ct) =>
         {
             var joined = db.ShopStocks.AsNoTracking().Where(x => x.ShopId == shopId)
                 .Join(db.Variants.Where(v => v.IsActive), s => s.VariantId, v => v.Id, (s, v) => new { s, v })
@@ -218,7 +218,7 @@ internal static class Reporting
 
             // Le filtre porte sur les colonnes, pas sur le record projeté : EF ne sait pas relire
             // les propriétés d'une projection pour en refaire une clause SQL.
-            if (lowOnly) joined = joined.Where(x => x.s.QuantityOnHand - x.s.QuantityReserved <= x.v.LowStockThreshold);
+            if (lowOnly is true) joined = joined.Where(x => x.s.QuantityOnHand - x.s.QuantityReserved <= x.v.LowStockThreshold);
 
             var rows = await joined
                 .OrderBy(x => x.s.QuantityOnHand - x.s.QuantityReserved).ThenBy(x => x.Product.Name)

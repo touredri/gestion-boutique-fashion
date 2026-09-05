@@ -61,8 +61,11 @@ internal static class Orders
                 byVariant.ContainsKey(x.v.Id),
                 // Un article exclusif n'est proposé que pour sa boutique.
                 x.p.ShopId is { } only ? [only] : byVariant.GetValueOrDefault(x.v.Id, [])))
-                .Where(x => x.ShopIds.Count > 0 || x.InStock)
-                .OrderBy(x => x.Name)
+                // Aucun filtre sur la disponibilité : une boutique dont le stock n'a pas encore
+                // remonté aurait un site vide, ce qui est bien pire que d'annoncer un article
+                // « sur commande ». C'est InStock qui porte l'information, pas l'absence.
+                .OrderByDescending(x => x.InStock)
+                .ThenBy(x => x.Name)
                 .ToList();
 
             return Results.Ok(new Showcase(shops, items));
@@ -129,11 +132,13 @@ internal static class Orders
     /// <summary>Gestion des commandes depuis l'application de pilotage.</summary>
     public static RouteGroupBuilder MapOrders(this RouteGroupBuilder group)
     {
-        group.MapGet("/orders", async (ServerDbContext db, Guid? shopId, bool includeClosed, CancellationToken ct) =>
+        // includeClosed est nullable à dessein : un booléen non nullable absent de la requête
+        // fait échouer la liaison, et la réponse part vide sans le moindre message.
+        group.MapGet("/orders", async (ServerDbContext db, Guid? shopId, bool? includeClosed, CancellationToken ct) =>
         {
             var orders = db.Orders.AsNoTracking().AsQueryable();
             if (shopId is { } only) orders = orders.Where(x => x.ShopId == only);
-            if (!includeClosed) orders = orders.Where(x => x.Status == OrderStatus.Pending || x.Status == OrderStatus.Processed);
+            if (includeClosed is not true) orders = orders.Where(x => x.Status == OrderStatus.Pending || x.Status == OrderStatus.Processed);
 
             var rows = await orders
                 .Join(db.Shops, o => o.ShopId, s => s.Id, (o, s) => new { Order = o, Shop = s })
