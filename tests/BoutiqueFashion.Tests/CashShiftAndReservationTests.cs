@@ -126,6 +126,78 @@ public sealed class CashShiftAndReservationTests : IAsyncLifetime
         Assert.Equal(0, closed.DifferenceXof);
     }
 
+    // --- Entrées et sorties d'espèces hors vente ---------------------------
+
+    [Fact]
+    public async Task Cash_movements_shift_the_expected_amount_without_creating_a_variance()
+    {
+        await Cash.RecordMovementAsync(CashMovementDirection.Out, 4_000, "Achat de monnaie");
+        await Cash.RecordMovementAsync(CashMovementDirection.In, 1_500, "Retour de monnaie");
+
+        var state = await Cash.GetStateAsync();
+        Assert.NotNull(state);
+        Assert.Equal(4_000, state.MovementsOutXof);
+        Assert.Equal(1_500, state.MovementsInXof);
+        Assert.Equal(7_500, state.ExpectedCashXof); // 10 000 - 4 000 + 1 500
+
+        // Le tiroir compté correspond à l'attendu : aucun écart, alors que sans ces mouvements
+        // le vendeur se serait vu reprocher 2 500 FCFA manquants.
+        var closed = await Cash.CloseAsync(7_500, null, ShiftPin);
+        Assert.Equal(0, closed.DifferenceXof);
+    }
+
+    [Fact]
+    public async Task Cash_movements_do_not_touch_expenses_or_profit()
+    {
+        var article = await AddArticleAsync("Ceinture", "MOV-01", 5);
+        await Sales.CreateAsync(new SaleDraft("vente-mouvement", [new SaleLineDraft(article.Id, 1)], [new PaymentDraft(PaymentMode.Cash, 20_000)]));
+        await Cash.RecordMovementAsync(CashMovementDirection.Out, 15_000, "Prélèvement de recette", ManagerPin);
+
+        var summary = await provider.GetRequiredService<IReportService>()
+            .DashboardAsync(DateTimeOffset.Now.AddDays(-1), DateTimeOffset.Now.AddDays(1));
+
+        // C'est toute la raison d'être de l'entité : saisi en dépense, ce prélèvement aurait
+        // amputé le bénéfice de 15 000 FCFA alors que rien n'a été dépensé.
+        Assert.Equal(0, summary.ExpensesXof);
+        Assert.Equal(20_000, summary.SalesXof);
+        Assert.Equal(10_000, summary.GrossMarginXof);
+    }
+
+    [Fact]
+    public async Task Large_withdrawal_needs_the_manager_pin_but_a_small_one_does_not()
+    {
+        await Cash.RecordMovementAsync(CashMovementDirection.Out, 5_000, "Achat de monnaie");
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(
+            () => Cash.RecordMovementAsync(CashMovementDirection.Out, 40_000, "Prélèvement de recette"));
+
+        var granted = await Cash.RecordMovementAsync(CashMovementDirection.Out, 40_000, "Prélèvement de recette", ManagerPin);
+        Assert.Equal(40_000, granted.AmountXof);
+    }
+
+    [Fact]
+    public async Task Incoming_cash_is_never_capped()
+    {
+        // Remettre de l'argent dans le tiroir n'expose à rien : aucun code ne doit être exigé.
+        var movement = await Cash.RecordMovementAsync(CashMovementDirection.In, 500_000, "Appoint du fond de caisse");
+        Assert.Equal(500_000, movement.AmountXof);
+    }
+
+    [Fact]
+    public async Task A_movement_without_reason_is_refused()
+    {
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => Cash.RecordMovementAsync(CashMovementDirection.Out, 1_000, "   "));
+    }
+
+    [Fact]
+    public async Task A_movement_needs_an_open_till()
+    {
+        await Cash.CloseAsync(10_000, null, ShiftPin);
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => Cash.RecordMovementAsync(CashMovementDirection.In, 1_000, "Appoint"));
+    }
+
     // --- Avances réservées -------------------------------------------------
 
     private async Task<(ProductVariant Article, SaleResult Sale, Guid CreditId)> ReserveAsync(string sku, decimal quantity = 1)

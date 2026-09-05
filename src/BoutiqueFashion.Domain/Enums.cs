@@ -10,6 +10,9 @@ public enum StockMovementType { Receipt, Sale, Return, Damaged, Lost, Adjustment
 public enum SaleStatus { Completed, Cancelled, Returned, Reserved }
 public enum CreditStatus { Due, PartiallyPaid, Paid, Overdue, Disputed, Cancelled }
 public enum CashSessionStatus { Open, Closed }
+/// <summary><c>In</c> : apport de fond ou retour de monnaie. <c>Out</c> : prélèvement de recette,
+/// dépôt en banque, sortie pour faire de la monnaie.</summary>
+public enum CashMovementDirection { In, Out }
 public enum DocumentType { Receipt, Invoice, Proforma, PaymentReceipt, DepositReceipt, CreditPaymentReceipt, BalanceReceipt, CreditNote, ReturnNote }
 public enum CustomerSegment { New, Active, Loyal, Vip, Inactive, Debtor }
 public enum PrintJobStatus { Pending, Printing, Completed, Failed }

@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
 using BoutiqueFashion.Application;
+using BoutiqueFashion.Domain;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -36,6 +37,12 @@ public partial class CashViewModel(ICashSessionService cash, IReportService repo
     [ObservableProperty] private string differenceReason = string.Empty;
     [ObservableProperty] private string closingPin = string.Empty;
 
+    // --- Entrées et sorties d'espèces hors vente ---
+    [ObservableProperty] private string movementAmount = string.Empty;
+    [ObservableProperty] private string movementReason = string.Empty;
+    [ObservableProperty] private string movementPin = string.Empty;
+    public ObservableCollection<CashMovementRow> Movements { get; } = [];
+
     partial void OnCountedCashChanged(string value) => RaiseDifference();
     partial void OnStateChanged(CashDeskState? value) => RaiseDifference();
 
@@ -69,8 +76,12 @@ public partial class CashViewModel(ICashSessionService cash, IReportService repo
         IsCashOpen = State is not null;
 
         CollectedByMode.Clear();
+        Movements.Clear();
         if (State is not null)
+        {
             foreach (var row in State.CollectedByMode) CollectedByMode.Add(row);
+            foreach (var row in State.Movements ?? []) Movements.Add(row);
+        }
 
         // Proposition par défaut : la boutique tient sa propre caisse tant qu'on ne nomme personne.
         if (string.IsNullOrWhiteSpace(OperatorName))
@@ -153,6 +164,48 @@ public partial class CashViewModel(ICashSessionService cash, IReportService repo
         {
             Status = e.Message;
             UiFeedback.Error($"Clôture impossible : {e.Message}");
+        }
+        finally { IsBusy = false; }
+    }
+
+    [RelayCommand] private void UseReason(string reason) => MovementReason = reason;
+
+    [RelayCommand] private Task RecordIn() => RecordMovementAsync(CashMovementDirection.In);
+    [RelayCommand] private Task RecordOut() => RecordMovementAsync(CashMovementDirection.Out);
+
+    private async Task RecordMovementAsync(CashMovementDirection direction)
+    {
+        if (IsBusy) return;
+        IsBusy = true;
+        try
+        {
+            if (!long.TryParse(MovementAmount, NumberStyles.Integer, CultureInfo.InvariantCulture, out var amount) || amount <= 0)
+            {
+                Status = "Saisissez le montant du mouvement.";
+                return;
+            }
+            if (string.IsNullOrWhiteSpace(MovementReason))
+            {
+                Status = "Indiquez le motif : sans lui, le mouvement sera indiscernable d'un écart de caisse.";
+                return;
+            }
+
+            var label = direction == CashMovementDirection.In ? "Faire entrer" : "Sortir";
+            if (!UiConfirm.Ask($"{label} {amount:N0} FCFA du tiroir ? Motif : {MovementReason.Trim()}")) return;
+
+            // Le code gérant déjà saisi vaut autorisation pour un dépassement de plafond.
+            var pin = NullIfEmpty(MovementPin) ?? (session.IsManager ? NullIfEmpty(session.Pin) : null);
+            await cash.RecordMovementAsync(direction, amount, MovementReason.Trim(), pin);
+
+            Status = $"{Libelles.Text(direction)} de {amount:N0} FCFA enregistrée.";
+            MovementAmount = MovementReason = MovementPin = string.Empty;
+            UiFeedback.Success(Status);
+            await LoadAsync();
+        }
+        catch (Exception e)
+        {
+            Status = e.Message;
+            UiFeedback.Error($"Mouvement refusé : {e.Message}");
         }
         finally { IsBusy = false; }
     }

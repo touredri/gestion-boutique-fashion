@@ -223,11 +223,18 @@ public sealed class CashSessionService(IDbContextFactory<BoutiqueDbContext> fact
         var salesCount = await db.Sales.AsNoTracking().CountAsync(x => x.CashSessionId == session.Id && x.Status != SaleStatus.Cancelled, cancellationToken);
         var salesTotal = await db.Sales.AsNoTracking().Where(x => x.CashSessionId == session.Id && x.Status != SaleStatus.Cancelled).SumAsync(x => x.TotalXof, cancellationToken);
 
+        var movements = await db.CashMovements.AsNoTracking()
+            .Where(x => x.CashSessionId == session.Id)
+            .OrderByDescending(x => x.CreatedAt)
+            .Select(x => new CashMovementRow(x.Id, x.Direction, x.AmountXof, x.Reason, x.Actor, x.CreatedAt))
+            .ToListAsync(cancellationToken);
+
         return new CashDeskState(
             session.Id, session.Number, session.OperatorName, session.OpenedAt, session.OperatorPinHash is not null,
             session.OpeningFloatXof, totals.SaleCash, totals.CreditCash, totals.CashExpenses,
             totals.Expected, salesCount, salesTotal,
-            byMode.Where(x => x.Value != 0).Select(x => new ReportRow(Libelles.Text(x.Mode), x.Value)).OrderBy(x => x.Label).ToArray());
+            byMode.Where(x => x.Value != 0).Select(x => new ReportRow(Libelles.Text(x.Mode), x.Value)).OrderBy(x => x.Label).ToArray(),
+            totals.MovementsIn, totals.MovementsOut, movements);
     }
 
     public async Task<CashSession> CloseAsync(long countedCashXof, string? differenceReason, string? pin = null, CancellationToken cancellationToken = default)
@@ -267,13 +274,47 @@ public sealed class CashSessionService(IDbContextFactory<BoutiqueDbContext> fact
 
     /// <summary>Espèces attendues en tiroir. Partagé entre l'affichage temps réel et la clôture :
     /// deux formules divergentes feraient apparaître un écart au moment de compter.</summary>
-    private static async Task<(long SaleCash, long CreditCash, long CashExpenses, long Expected)> ComputeAsync(BoutiqueDbContext db, CashSession session, CancellationToken cancellationToken)
+    private static async Task<(long SaleCash, long CreditCash, long CashExpenses, long MovementsIn, long MovementsOut, long Expected)> ComputeAsync(BoutiqueDbContext db, CashSession session, CancellationToken cancellationToken)
     {
         var saleCash = await db.Payments.Where(x => x.Sale!.CashSessionId == session.Id && x.Mode == PaymentMode.Cash).SumAsync(x => x.AmountXof, cancellationToken);
         var creditCash = await db.CreditPayments.Where(x => x.CreatedAt >= session.OpenedAt && x.Mode == PaymentMode.Cash).SumAsync(x => x.AmountXof, cancellationToken);
         var cashExpenses = await db.Expenses.Where(x => x.CreatedAt >= session.OpenedAt && x.Mode == PaymentMode.Cash).SumAsync(x => x.AmountXof, cancellationToken);
-        return (saleCash, creditCash, cashExpenses, session.OpeningFloatXof + saleCash + creditCash - cashExpenses);
+        var movementsIn = await db.CashMovements.Where(x => x.CashSessionId == session.Id && x.Direction == CashMovementDirection.In).SumAsync(x => x.AmountXof, cancellationToken);
+        var movementsOut = await db.CashMovements.Where(x => x.CashSessionId == session.Id && x.Direction == CashMovementDirection.Out).SumAsync(x => x.AmountXof, cancellationToken);
+        var expected = session.OpeningFloatXof + saleCash + creditCash - cashExpenses + movementsIn - movementsOut;
+        return (saleCash, creditCash, cashExpenses, movementsIn, movementsOut, expected);
     }
+
+    public async Task<CashMovement> RecordMovementAsync(CashMovementDirection direction, long amountXof, string reason, string? pin = null, CancellationToken cancellationToken = default)
+    {
+        if (amountXof <= 0) throw new ArgumentOutOfRangeException(nameof(amountXof), "Le montant doit être positif.");
+        // Un mouvement sans motif est indiscernable d'un vol : c'est justement ce qu'on veut éviter.
+        if (string.IsNullOrWhiteSpace(reason)) throw new InvalidOperationException("Le motif du mouvement est obligatoire.");
+
+        await using var db = await factory.CreateDbContextAsync(cancellationToken);
+        var session = await db.CashSessions.SingleOrDefaultAsync(x => x.Status == CashSessionStatus.Open, cancellationToken)
+            ?? throw new InvalidOperationException("Ouvrez la caisse avant d'enregistrer un mouvement d'espèces.");
+
+        // Le plafond ne protège que les sorties : remettre de l'argent dans le tiroir n'expose à rien.
+        if (direction == CashMovementDirection.Out)
+        {
+            var configured = await db.AppSettings.Where(x => x.Key == "Cash.MovementLimitXof").Select(x => x.Value).SingleOrDefaultAsync(cancellationToken);
+            var limit = long.TryParse(configured, out var parsed) && parsed > 0 ? parsed : DefaultMovementLimitXof;
+            if (amountXof > limit && (pin is null || !await authorization.AuthorizeSensitiveActionAsync(pin, $"Sortie d'espèces de {amountXof:N0} FCFA", cancellationToken: cancellationToken)))
+                throw new UnauthorizedAccessException($"Sortie supérieure au plafond de {limit:N0} FCFA : code gérant requis.");
+        }
+
+        var actor = string.IsNullOrWhiteSpace(session.OperatorName) ? "Vendeur boutique" : session.OperatorName;
+        var movement = new CashMovement { CashSessionId = session.Id, Direction = direction, AmountXof = amountXof, Reason = reason.Trim(), Actor = actor };
+        db.CashMovements.Add(movement);
+        db.AuditEntries.Add(new AuditEntry { Actor = actor, Action = direction == CashMovementDirection.In ? "Entrée d'espèces" : "Sortie d'espèces", EntityType = nameof(CashMovement), EntityId = movement.Id.ToString(), AfterJson = JsonSerializer.Serialize(new { amountXof, reason, session.Number }) });
+        await db.SaveChangesAsync(cancellationToken);
+        return movement;
+    }
+
+    /// <summary>Couvre les achats de monnaie et petits appoints du quotidien ; au-delà, c'est la
+    /// recette qui sort, et cela regarde la propriétaire.</summary>
+    private const long DefaultMovementLimitXof = 25_000;
 
     private static string Coalesce(params string?[] candidates) =>
         candidates.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x))?.Trim() ?? string.Empty;

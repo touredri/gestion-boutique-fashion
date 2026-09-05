@@ -25,7 +25,7 @@ permissions:
 
 env:
   # Renseigner pour produire une migration, puis revider une fois qu'elle est commitée.
-  MIGRATION_NAME: ""
+  MIGRATION_NAME: "CashMovements"
 
 jobs:
   build:

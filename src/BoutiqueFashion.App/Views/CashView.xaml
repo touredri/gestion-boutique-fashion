@@ -116,12 +116,90 @@
                   <TextBlock Text="Versements sur crédits et avances" Foreground="{StaticResource Muted}" FontSize="13"/>
                   <TextBlock Text="{Binding State.CashCreditPaymentsXof, StringFormat={}+ {0:N0}}" Style="{StaticResource Money}" FontSize="13" Foreground="{StaticResource Success}" HorizontalAlignment="Right"/>
                 </Grid>
-                <Grid>
+                <Grid Margin="0,0,0,6">
                   <TextBlock Text="Dépenses réglées en espèces" Foreground="{StaticResource Muted}" FontSize="13"/>
                   <TextBlock Text="{Binding State.CashExpensesXof, StringFormat={}- {0:N0}}" Style="{StaticResource Money}" FontSize="13" Foreground="{StaticResource Danger}" HorizontalAlignment="Right"/>
                 </Grid>
+                <Grid Margin="0,0,0,6">
+                  <TextBlock Text="Entrées d'espèces hors vente" Foreground="{StaticResource Muted}" FontSize="13"/>
+                  <TextBlock Text="{Binding State.MovementsInXof, StringFormat={}+ {0:N0}}" Style="{StaticResource Money}" FontSize="13" Foreground="{StaticResource Success}" HorizontalAlignment="Right"/>
+                </Grid>
+                <Grid>
+                  <TextBlock Text="Sorties d'espèces hors vente" Foreground="{StaticResource Muted}" FontSize="13"/>
+                  <TextBlock Text="{Binding State.MovementsOutXof, StringFormat={}- {0:N0}}" Style="{StaticResource Money}" FontSize="13" Foreground="{StaticResource Danger}" HorizontalAlignment="Right"/>
+                </Grid>
               </StackPanel>
             </Border>
+
+            <!-- Entrées et sorties hors vente. Sans elles, tout retrait du tiroir ressortait à la
+                 clôture comme un écart inexpliqué, et la seule façon de le justifier était de le
+                 saisir en dépense — ce qui effaçait le bénéfice de la journée. -->
+            <Expander Header="Entrée ou sortie d'espèces hors vente" Margin="0,12,0,0">
+              <Border Background="{StaticResource Ivory}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="10" Padding="14" Margin="0,6,0,0">
+                <StackPanel>
+                  <TextBlock Text="Pour la monnaie, un appoint de fond de caisse ou un prélèvement de recette. Ce n'est pas une dépense : le bénéfice n'en est pas affecté."
+                             Style="{StaticResource HelperText}" Margin="2,0,2,10"/>
+
+                  <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <controls:KeypadField Value="{Binding MovementAmount}" Title="Montant" Suffix="FCFA" MinWidth="150" Margin="0,0,8,0"/>
+                    <StackPanel Grid.Column="1">
+                      <TextBlock Text="Motif (obligatoire)" Style="{StaticResource FieldLabel}"/>
+                      <TextBox Text="{Binding MovementReason, UpdateSourceTrigger=PropertyChanged}" controls:Placeholder.Text="Pourquoi cet argent entre ou sort"/>
+                    </StackPanel>
+                  </Grid>
+
+                  <WrapPanel Margin="2,6,2,0">
+                    <Button Content="Achat de monnaie" Style="{StaticResource GridCellButton}" Margin="0,0,6,6" Command="{Binding UseReasonCommand}" CommandParameter="Achat de monnaie"/>
+                    <Button Content="Prélèvement recette" Style="{StaticResource GridCellButton}" Margin="0,0,6,6" Command="{Binding UseReasonCommand}" CommandParameter="Prélèvement de recette"/>
+                    <Button Content="Dépôt en banque" Style="{StaticResource GridCellButton}" Margin="0,0,6,6" Command="{Binding UseReasonCommand}" CommandParameter="Dépôt en banque"/>
+                    <Button Content="Appoint fond de caisse" Style="{StaticResource GridCellButton}" Margin="0,0,6,6" Command="{Binding UseReasonCommand}" CommandParameter="Appoint du fond de caisse"/>
+                  </WrapPanel>
+
+                  <TextBlock Text="Code gérant (sortie importante)" Style="{StaticResource FieldLabel}" Margin="4,6,4,1"/>
+                  <controls:KeypadField Value="{Binding MovementPin}" Mask="True" Placeholder="Seulement au-delà du plafond" AutomationProperties.Name="Code gérant pour une sortie importante"/>
+
+                  <Grid Margin="0,10,0,0">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <Button Content="Faire entrer" Command="{Binding RecordInCommand}" Style="{StaticResource PrimaryButton}" Margin="0,0,4,0"/>
+                    <Button Grid.Column="1" Content="Faire sortir" Command="{Binding RecordOutCommand}" Style="{StaticResource DangerButton}" Margin="4,0,0,0"/>
+                  </Grid>
+
+                  <ItemsControl ItemsSource="{Binding Movements}" Margin="0,10,0,0">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate>
+                        <Border BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="2,7">
+                          <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <StackPanel>
+                              <TextBlock Text="{Binding Reason}" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                              <TextBlock FontSize="11" Foreground="{StaticResource Muted}">
+                                <Run Text="{Binding Actor, Mode=OneWay}"/>
+                                <Run Text="·"/>
+                                <Run Text="{Binding At, StringFormat=dd/MM HH:mm, Mode=OneWay}"/>
+                              </TextBlock>
+                            </StackPanel>
+                            <TextBlock Grid.Column="1" FontSize="13" VerticalAlignment="Center" Margin="8,0,0,0"
+                                       Text="{Binding AmountXof, StringFormat={}{0:N0} FCFA}">
+                              <TextBlock.Style>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource Money}">
+                                  <Setter Property="Foreground" Value="{StaticResource Success}"/>
+                                  <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Direction}" Value="Out">
+                                      <Setter Property="Foreground" Value="{StaticResource Danger}"/>
+                                    </DataTrigger>
+                                  </Style.Triggers>
+                                </Style>
+                              </TextBlock.Style>
+                            </TextBlock>
+                          </Grid>
+                        </Border>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </Border>
+            </Expander>
 
             <Grid Margin="0,12,0,0">
               <StackPanel>

@@ -195,6 +195,24 @@ public sealed class CashSession : Entity
     public ICollection<Sale> Sales { get; set; } = [];
 }
 
+/// <summary>
+/// Espèces qui entrent ou sortent du tiroir sans être une vente ni une dépense : la patronne
+/// emporte la recette, on va faire de la monnaie, on renfloue le fond de caisse.
+///
+/// Distinct d'<see cref="Expense"/> à dessein. Une dépense est un coût qui pèse sur le bénéfice ;
+/// un prélèvement de recette n'en est pas un. Faute de cette distinction, la seule façon de
+/// justifier un retrait était de le saisir en dépense, ce qui effaçait le bénéfice de la journée.
+/// </summary>
+public sealed class CashMovement : Entity
+{
+    public Guid CashSessionId { get; set; }
+    public CashSession? CashSession { get; set; }
+    public CashMovementDirection Direction { get; set; }
+    public long AmountXof { get; set; }
+    [MaxLength(250)] public string Reason { get; set; } = string.Empty;
+    [MaxLength(80)] public string Actor { get; set; } = string.Empty;
+}
+
 public sealed class Expense : Entity
 {
     [MaxLength(100)] public string Category { get; set; } = string.Empty;

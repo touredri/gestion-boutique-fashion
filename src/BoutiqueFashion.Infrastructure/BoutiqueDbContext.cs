@@ -34,6 +34,7 @@ public sealed class BoutiqueDbContext(DbContextOptions<BoutiqueDbContext> option
     public DbSet<CustomerCredit> CustomerCredits => Set<CustomerCredit>();
     public DbSet<CreditPayment> CreditPayments => Set<CreditPayment>();
     public DbSet<CashSession> CashSessions => Set<CashSession>();
+    public DbSet<CashMovement> CashMovements => Set<CashMovement>();
     public DbSet<Expense> Expenses => Set<Expense>();
     public DbSet<PurchaseOrder> PurchaseOrders => Set<PurchaseOrder>();
     public DbSet<PurchaseOrderLine> PurchaseOrderLines => Set<PurchaseOrderLine>();
@@ -56,6 +57,7 @@ public sealed class BoutiqueDbContext(DbContextOptions<BoutiqueDbContext> option
         modelBuilder.Entity<AppSetting>().HasIndex(x => x.Key).IsUnique();
         modelBuilder.Entity<DocumentSequence>().HasIndex(x => new { x.Type, x.Year }).IsUnique();
         modelBuilder.Entity<CashSession>().HasIndex(x => x.Status);
+        modelBuilder.Entity<CashMovement>().HasIndex(x => x.CashSessionId);
         modelBuilder.Entity<CustomerCredit>().HasIndex(x => new { x.Status, x.DueAt });
         modelBuilder.Entity<StockMovement>().HasIndex(x => new { x.VariantId, x.CreatedAt });
         modelBuilder.Entity<Sale>().HasMany(x => x.Lines).WithOne(x => x.Sale).HasForeignKey(x => x.SaleId).OnDelete(DeleteBehavior.Restrict);

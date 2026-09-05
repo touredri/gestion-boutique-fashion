@@ -72,6 +72,12 @@ public static class Libelles
         _ => value.ToString()
     };
 
+    public static string Text(CashMovementDirection value) => value switch
+    {
+        CashMovementDirection.In => "Entrée d'espèces",
+        _ => "Sortie d'espèces"
+    };
+
     public static string Text(SaleStatus value) => value switch
     {
         SaleStatus.Completed => "Validée",
@@ -90,6 +96,7 @@ public static class Libelles
         StockMovementType v => Text(v),
         CreditStatus v => Text(v),
         SaleStatus v => Text(v),
+        CashMovementDirection v => Text(v),
         null => string.Empty,
         _ => value.ToString() ?? string.Empty
     };

@@ -105,10 +105,20 @@ public sealed record CashDeskState(
     Guid Id, string Number, string OperatorName, DateTimeOffset OpenedAt, bool HasShiftPin,
     long OpeningFloatXof, long CashSalesXof, long CashCreditPaymentsXof, long CashExpensesXof,
     long ExpectedCashXof, int SalesCount, long TotalSalesXof,
-    IReadOnlyList<ReportRow> CollectedByMode);
+    IReadOnlyList<ReportRow> CollectedByMode,
+    long MovementsInXof = 0, long MovementsOutXof = 0,
+    IReadOnlyList<CashMovementRow>? Movements = null);
+
+public sealed record CashMovementRow(Guid Id, CashMovementDirection Direction, long AmountXof, string Reason, string Actor, DateTimeOffset At);
 
 public interface ICashSessionService
 {
+    /// <summary>
+    /// Espèces entrant ou sortant du tiroir hors vente et hors dépense. Le motif est obligatoire.
+    /// Au-delà du plafond « Cash.MovementLimitXof », une sortie exige le code gérant : les petits
+    /// mouvements du quotidien passent seuls, emporter la recette non.
+    /// </summary>
+    Task<CashMovement> RecordMovementAsync(CashMovementDirection direction, long amountXof, string reason, string? pin = null, CancellationToken cancellationToken = default);
     /// <param name="operatorName">Personne qui tient la caisse. Vide : le nom de la boutique.</param>
     /// <param name="operatorPin">PIN de vacation. Nul : seul le PIN gérant pourra clôturer.</param>
     Task<CashSession> OpenAsync(long openingFloatXof, string? operatorName = null, string? operatorPin = null, CancellationToken cancellationToken = default);
