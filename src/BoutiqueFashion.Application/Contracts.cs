@@ -36,7 +36,8 @@ public sealed record ImportRow(string Product, string Category, string? Brand, s
 public sealed record ImportIssue(int Line, string Message);
 public sealed record ImportPreview(IReadOnlyList<ImportRow> Rows, IReadOnlyList<ImportIssue> Issues);
 public sealed record ReportRow(string Label, long ValueXof, decimal Quantity = 0);
-public sealed record CreditSummary(Guid Id, string SaleNumber, string CustomerName, long OriginalXof, long BalanceXof, DateTimeOffset DueAt, CreditStatus Status);
+// IsReserved distingue les deux formes d'avance : marchandise mise de côté, ou déjà emportée.
+public sealed record CreditSummary(Guid Id, string SaleNumber, string CustomerName, long OriginalXof, long BalanceXof, DateTimeOffset DueAt, CreditStatus Status, bool IsReserved = false, string? CustomerPhone = null);
 public sealed record CreditPaymentRow(Guid Id, string Number, long AmountXof, PaymentMode Mode, DateTimeOffset Date, bool IsReversal, bool Reversed);
 public sealed record CreditPaymentResult(Guid PaymentId, string Number, long NewBalanceXof, Guid DocumentId);
 public sealed record ReturnRequest(string SaleNumber, string ReturnedSku, decimal ReturnedQuantity, string? ReplacementSku, decimal ReplacementQuantity, IReadOnlyList<PaymentDraft> DifferencePayments, string Reason, string ManagerPin, bool Restock = true);

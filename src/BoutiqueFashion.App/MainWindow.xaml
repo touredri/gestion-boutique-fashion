@@ -10,6 +10,7 @@
     <DataTemplate DataType="{x:Type vm:DashboardViewModel}"><views:DashboardView/></DataTemplate>
     <DataTemplate DataType="{x:Type vm:SaleViewModel}"><views:SaleView/></DataTemplate>
     <DataTemplate DataType="{x:Type vm:CashViewModel}"><views:CashView/></DataTemplate>
+    <DataTemplate DataType="{x:Type vm:AdvancesViewModel}"><views:AdvancesView/></DataTemplate>
     <DataTemplate DataType="{x:Type vm:CatalogViewModel}"><views:CatalogView/></DataTemplate>
     <DataTemplate DataType="{x:Type vm:StockViewModel}"><views:StockView/></DataTemplate>
     <DataTemplate DataType="{x:Type vm:CustomersViewModel}"><views:CustomersView/></DataTemplate>
@@ -41,6 +42,8 @@
           <RadioButton Content="Caisse" Tag="&#xE825;" GroupName="Navigation" AutomationProperties.Name="Caisse" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Cash"/>
           <RadioButton Content="Produits" Tag="&#xE7BF;" GroupName="Navigation" AutomationProperties.Name="Produits" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Catalog"/>
           <RadioButton Content="Stock" Tag="&#xE8B7;" GroupName="Navigation" AutomationProperties.Name="Stock" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Stock" Visibility="{Binding Session.IsManager, Converter={StaticResource BoolToVis}}"/>
+          <!-- Visible du vendeur : c'est lui qui reçoit le client venu payer sa tranche. -->
+          <RadioButton Content="Avances" Tag="&#xE8C8;" GroupName="Navigation" AutomationProperties.Name="Avances et crédits" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Advances"/>
           <RadioButton Content="Clients" Tag="&#xE77B;" GroupName="Navigation" AutomationProperties.Name="Clients" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Customers" Visibility="{Binding Session.IsManager, Converter={StaticResource BoolToVis}}"/>
           <RadioButton Content="Dépenses" Tag="&#xE8C7;" GroupName="Navigation" AutomationProperties.Name="Dépenses" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Expenses"/>
           <RadioButton Content="Documents" Tag="&#xE8A5;" GroupName="Navigation" AutomationProperties.Name="Documents" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Documents" Visibility="{Binding Session.IsManager, Converter={StaticResource BoolToVis}}"/>

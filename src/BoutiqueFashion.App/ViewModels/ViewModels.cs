@@ -27,13 +27,13 @@ public partial class ShellViewModel : ObservableObject
     private readonly DashboardViewModel dashboard; private readonly SaleViewModel sale; private readonly CatalogViewModel catalog;
     private readonly StockViewModel stock; private readonly CustomersViewModel customers; private readonly ExpensesViewModel expenses;
     private readonly DocumentsViewModel documents; private readonly ReportsViewModel reports; private readonly SettingsViewModel settings;
-    private readonly CashViewModel cash;
+    private readonly CashViewModel cash; private readonly AdvancesViewModel advances;
 
-    public ShellViewModel(ManagerSession session, DashboardViewModel dashboard, SaleViewModel sale, CatalogViewModel catalog, StockViewModel stock, CustomersViewModel customers, ExpensesViewModel expenses, DocumentsViewModel documents, ReportsViewModel reports, SettingsViewModel settings, CashViewModel cash)
+    public ShellViewModel(ManagerSession session, DashboardViewModel dashboard, SaleViewModel sale, CatalogViewModel catalog, StockViewModel stock, CustomersViewModel customers, ExpensesViewModel expenses, DocumentsViewModel documents, ReportsViewModel reports, SettingsViewModel settings, CashViewModel cash, AdvancesViewModel advances)
     {
         Session = session;
         this.dashboard = dashboard; this.sale = sale; this.catalog = catalog; this.stock = stock; this.customers = customers;
-        this.expenses = expenses; this.documents = documents; this.reports = reports; this.settings = settings; this.cash = cash;
+        this.expenses = expenses; this.documents = documents; this.reports = reports; this.settings = settings; this.cash = cash; this.advances = advances;
         CurrentPage = dashboard;
         Session.PropertyChanged += OnSessionChanged;
     }
@@ -60,7 +60,7 @@ public partial class ShellViewModel : ObservableObject
     {
         // Une navigation forcée (lien direct, retour de verrouillage) ne doit pas ouvrir un écran gérant.
         if (ManagerOnlyPages.Contains(target) && !Session.IsManager) target = "Dashboard";
-        (object Page, string Title) next = target switch { "Sale" => (sale, "Vente"), "Cash" => (cash, "Caisse"), "Catalog" => (catalog, "Produits et variantes"), "Stock" => (stock, "Gestion du stock"), "Customers" => (customers, "Clients et crédits"), "Expenses" => (expenses, "Dépenses"), "Documents" => (documents, "Documents et opérations"), "Reports" => (reports, "Rapports"), "Settings" => (settings, "Paramètres"), _ => (dashboard, "Tableau de bord") };
+        (object Page, string Title) next = target switch { "Sale" => (sale, "Vente"), "Cash" => (cash, "Caisse"), "Advances" => (advances, "Avances et crédits"), "Catalog" => (catalog, "Produits et variantes"), "Stock" => (stock, "Gestion du stock"), "Customers" => (customers, "Clients et crédits"), "Expenses" => (expenses, "Dépenses"), "Documents" => (documents, "Documents et opérations"), "Reports" => (reports, "Rapports"), "Settings" => (settings, "Paramètres"), _ => (dashboard, "Tableau de bord") };
         CurrentPage = next.Page; PageTitle = next.Title; CurrentTarget = target;
         if (CurrentPage is ILoadable loadable) await loadable.LoadAsync();
     }

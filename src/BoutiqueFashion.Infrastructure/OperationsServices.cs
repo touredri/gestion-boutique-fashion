@@ -7,7 +7,7 @@ namespace BoutiqueFashion.Infrastructure;
 
 public sealed class CreditService(IDbContextFactory<BoutiqueDbContext> factory, IAuthorizationService authorization) : ICreditService
 {
-    public async Task<IReadOnlyList<CreditSummary>> ListAsync(CancellationToken cancellationToken = default) { await using var db = await factory.CreateDbContextAsync(cancellationToken); var rows = await db.CustomerCredits.AsNoTracking().Join(db.Sales, c => c.SaleId, s => s.Id, (c, s) => new { Credit = c, Sale = s }).Join(db.Customers, x => x.Credit.CustomerId, c => c.Id, (x, c) => new { x.Credit, x.Sale, Customer = c }).ToListAsync(cancellationToken); return rows.OrderBy(x => x.Credit.DueAt).Select(x => new CreditSummary(x.Credit.Id, x.Sale.Number, x.Customer.Name, x.Credit.OriginalAmountXof, x.Credit.BalanceXof, x.Credit.DueAt, x.Credit.Status)).ToArray(); }
+    public async Task<IReadOnlyList<CreditSummary>> ListAsync(CancellationToken cancellationToken = default) { await using var db = await factory.CreateDbContextAsync(cancellationToken); var rows = await db.CustomerCredits.AsNoTracking().Join(db.Sales, c => c.SaleId, s => s.Id, (c, s) => new { Credit = c, Sale = s }).Join(db.Customers, x => x.Credit.CustomerId, c => c.Id, (x, c) => new { x.Credit, x.Sale, Customer = c }).ToListAsync(cancellationToken); return rows.OrderBy(x => x.Credit.DueAt).Select(x => new CreditSummary(x.Credit.Id, x.Sale.Number, x.Customer.Name, x.Credit.OriginalAmountXof, x.Credit.BalanceXof, x.Credit.DueAt, x.Credit.Status, x.Sale.Status == SaleStatus.Reserved, x.Customer.Phone)).ToArray(); }
 
     public async Task<IReadOnlyList<CreditPaymentRow>> ListPaymentsAsync(Guid creditId, CancellationToken cancellationToken = default)
     {
