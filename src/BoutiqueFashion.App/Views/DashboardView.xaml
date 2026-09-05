@@ -140,9 +140,10 @@
       </Border>
     </Grid>
 
-    <!-- Alertes et indicateurs secondaires -->
-    <Grid Grid.Row="3" Margin="0,8,0,0">
-      <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
+    <!-- Alertes et indicateurs secondaires.
+         UniformGrid plutôt que Grid : il ignore les enfants repliés, donc la carte des crédits
+         masquée au vendeur ne laisse pas une colonne vide au milieu du tableau de bord. -->
+    <UniformGrid Grid.Row="3" Rows="1" Margin="0,8,0,0">
       <Border Style="{StaticResource Card}" Background="{StaticResource TerracottaSoft}" BorderBrush="{StaticResource Terracotta}" BorderThickness="1" Padding="16" Margin="4">
         <StackPanel Orientation="Horizontal">
           <Border Background="{StaticResource TerracottaDark}" CornerRadius="10" Width="44" Height="44" VerticalAlignment="Center">
@@ -157,7 +158,27 @@
           </StackPanel>
         </StackPanel>
       </Border>
-      <Border Grid.Column="1" Style="{StaticResource Card}" Background="{StaticResource GoldSoft}" BorderBrush="{StaticResource Gold}" BorderThickness="1" Padding="16" Margin="4">
+      <!-- Article le mieux vendu. Agrégé par produit : « Robe Amina » et non « AMI-M-ROUGE ». -->
+      <Border Style="{StaticResource Card}" Background="{StaticResource SuccessSoft}" BorderBrush="{StaticResource Success}" BorderThickness="1" Padding="16" Margin="4">
+        <StackPanel Orientation="Horizontal">
+          <Border Background="{StaticResource Success}" CornerRadius="10" Width="44" Height="44" VerticalAlignment="Center">
+            <TextBlock Text="&#xE735;" FontFamily="Segoe MDL2 Assets" Foreground="White" FontSize="19" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          </Border>
+          <StackPanel Margin="14,0,0,0" VerticalAlignment="Center">
+            <TextBlock Text="{Binding Summary.BestSeller.Label, TargetNullValue=Aucune vente ce jour, FallbackValue=Aucune vente ce jour}"
+                       FontSize="16" FontWeight="Bold" Foreground="{StaticResource Ink}" TextTrimming="CharacterEllipsis"/>
+            <TextBlock Foreground="{StaticResource Muted}" FontSize="12" Margin="0,2,0,0">
+              <Run Text="Article le mieux vendu ·"/>
+              <Run Text="{Binding Summary.BestSeller.Quantity, StringFormat={}{0:0.##}, TargetNullValue=0, FallbackValue=0, Mode=OneWay}"/>
+              <Run Text="pièce(s)"/>
+            </TextBlock>
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
+      <!-- Encours clients : information de gestion, hors du périmètre du vendeur. -->
+      <Border Style="{StaticResource Card}" Background="{StaticResource GoldSoft}" BorderBrush="{StaticResource Gold}" BorderThickness="1" Padding="16" Margin="4"
+              Visibility="{Binding Session.IsManager, Converter={StaticResource BoolToVis}}">
         <StackPanel Orientation="Horizontal">
           <Border Background="{StaticResource Gold}" CornerRadius="10" Width="44" Height="44" VerticalAlignment="Center">
             <TextBlock Text="FCFA" Foreground="White" FontSize="12" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
@@ -171,7 +192,7 @@
           </StackPanel>
         </StackPanel>
       </Border>
-    </Grid>
+    </UniformGrid>
 
     <!-- Dernières ventes avec en-tête structuré -->
     <Grid Grid.Row="4" Margin="0,12,0,0">

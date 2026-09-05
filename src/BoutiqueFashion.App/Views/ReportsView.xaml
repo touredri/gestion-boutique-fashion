@@ -51,8 +51,35 @@
       </Grid>
     </Border>
 
+    <!-- StackPanel intercalé : il porte la bannière et les cartes sans décaler les Grid.Row suivants. -->
+    <StackPanel Grid.Row="1">
+
+      <!-- Article le mieux vendu. Mis en tête parce que c'est la première question posée devant
+           un rapport, et qu'il était jusqu'ici noyé dans la liste déroulante des rapports. -->
+      <Border Style="{StaticResource Card}" Background="{StaticResource SuccessSoft}" BorderBrush="{StaticResource Success}" BorderThickness="1" Padding="16" Margin="0,0,0,8">
+        <Grid>
+          <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+          <Border Background="{StaticResource Success}" CornerRadius="10" Width="44" Height="44" VerticalAlignment="Center">
+            <TextBlock Text="&#xE735;" FontFamily="Segoe MDL2 Assets" Foreground="White" FontSize="19" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          </Border>
+          <StackPanel Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center">
+            <TextBlock Text="Article le mieux vendu sur la période" Style="{StaticResource Eyebrow}"/>
+            <TextBlock Text="{Binding Summary.BestSeller.Label, TargetNullValue=Aucune vente sur cette période, FallbackValue=Aucune vente sur cette période}"
+                       FontSize="20" FontWeight="Bold" Foreground="{StaticResource Ink}" TextTrimming="CharacterEllipsis" Margin="0,2,0,0"/>
+          </StackPanel>
+          <StackPanel Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="12,0,0,0">
+            <TextBlock HorizontalAlignment="Right" Style="{StaticResource Money}" FontSize="20" FontWeight="Bold" Foreground="{StaticResource Success}">
+              <Run Text="{Binding Summary.BestSeller.Quantity, StringFormat={}{0:0.##}, TargetNullValue=0, FallbackValue=0, Mode=OneWay}"/>
+              <Run Text="pièce(s)"/>
+            </TextBlock>
+            <TextBlock Text="{Binding Summary.BestSeller.ValueXof, StringFormat={}{0:N0} FCFA, TargetNullValue=—, FallbackValue=—}"
+                       HorizontalAlignment="Right" Style="{StaticResource Money}" FontSize="13" Foreground="{StaticResource Muted}" Margin="0,2,0,0"/>
+          </StackPanel>
+        </Grid>
+      </Border>
+
     <!-- 5 Cartes KPI Principales -->
-    <UniformGrid Grid.Row="1" Columns="5" Margin="-4,0,-4,10">
+    <UniformGrid Columns="5" Margin="-4,0,-4,10">
       <!-- Ventes -->
       <Border Style="{StaticResource Card}" Padding="14">
         <StackPanel>
@@ -89,6 +116,7 @@
         </StackPanel>
       </Border>
     </UniformGrid>
+    </StackPanel>
 
     <!-- Avertissement de coût -->
     <Border Grid.Row="2" Background="{StaticResource DangerSoft}" BorderBrush="{StaticResource Danger}" BorderThickness="1" CornerRadius="8" Padding="14,10" Margin="0,0,0,10" Visibility="{Binding Summary.CostWarning, Converter={StaticResource BoolToVis}}">

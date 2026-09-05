@@ -15,8 +15,14 @@ namespace BoutiqueFashion.App.ViewModels;
 
 public partial class ShellViewModel : ObservableObject
 {
-    /// <summary>Écrans réservés au gérant : quitter le mode doit en faire sortir immédiatement.</summary>
-    private static readonly string[] ManagerOnlyPages = ["Stock", "Expenses", "Documents", "Settings"];
+    /// <summary>
+    /// Écrans réservés au gérant : quitter le mode doit en faire sortir immédiatement.
+    /// Le vendeur ne garde que ce dont il a besoin au comptoir — tableau de bord, vente, produits
+    /// et dépenses. Les rapports et les fiches clients en sortent : ils exposent marges, encours
+    /// et historiques qui ne le concernent pas. Les dépenses y entrent, à l'inverse : c'est lui
+    /// qui règle le taxi ou la recharge d'électricité dans la journée.
+    /// </summary>
+    private static readonly string[] ManagerOnlyPages = ["Stock", "Documents", "Reports", "Customers", "Settings"];
 
     private readonly DashboardViewModel dashboard; private readonly SaleViewModel sale; private readonly CatalogViewModel catalog;
     private readonly StockViewModel stock; private readonly CustomersViewModel customers; private readonly ExpensesViewModel expenses;
@@ -1145,7 +1151,7 @@ public partial class ReportsViewModel(IReportService reports) : ObservableObject
     [ObservableProperty] private string toDate = DateTime.Today.ToString("yyyy-MM-dd");
     [ObservableProperty] private string selectedReportKind = "Ventes par jour";
     [ObservableProperty] private string status = string.Empty;
-    public IReadOnlyList<string> ReportKinds { get; } = ["Ventes par jour", "Modes de paiement", "Ventes par vendeur", "Top produits", "Articles sans vente", "Valeur du stock", "Écarts d'inventaire", "Remises et corrections", "Rotation & dormants"];
+    public IReadOnlyList<string> ReportKinds { get; } = ["Ventes par jour", "Modes de paiement", "Ventes par vendeur", "Top produits", "Top produits (toutes tailles)", "Articles sans vente", "Valeur du stock", "Écarts d'inventaire", "Remises et corrections", "Rotation & dormants"];
 
     public async Task LoadAsync()
     {
@@ -1160,6 +1166,9 @@ public partial class ReportsViewModel(IReportService reports) : ObservableObject
                 "Modes de paiement" => await reports.SalesByPaymentModeAsync(from, to),
                 "Ventes par vendeur" => await reports.SalesBySellerAsync(from, to),
                 "Top produits" => await reports.TopProductsAsync(from, to),
+                // Cumule les variantes d'un même article : une robe déclinée en cinq tailles ne
+                // remonterait jamais devant un article unique si on comptait par SKU.
+                "Top produits (toutes tailles)" => await reports.TopProductsByProductAsync(from, to),
                 "Articles sans vente" => await reports.NoSalesProductsAsync(from, to),
                 "Valeur du stock" => await reports.StockValueByCategoryAsync(),
                 "Écarts d'inventaire" => await reports.InventoryVarianceAsync(from, to),

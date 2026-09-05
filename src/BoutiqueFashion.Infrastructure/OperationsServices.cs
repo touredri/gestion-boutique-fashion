@@ -213,11 +213,15 @@ public sealed class ReturnService(IDbContextFactory<BoutiqueDbContext> factory, 
                 db.StockMovements.Add(new StockMovement { VariantId = v.Id, Type = StockMovementType.Reversal, QuantityDelta = line.Quantity, UnitCostXof = line.FrozenUnitCostXof, Reason = reason, SourceType = nameof(Sale), SourceId = sale.Id, Actor = "Responsable" });
             }
         }
-        foreach (var p in sale.Payments.Where(x => !x.IsReversal)) db.Payments.Add(new Payment { SaleId = sale.Id, Mode = p.Mode, AmountXof = -p.AmountXof, IsReversal = true, ReversesPaymentId = p.Id, Actor = "Responsable" });
+        // Matérialisé avant la boucle : ajouter un Payment dont le SaleId pointe sur cette vente
+        // fait que le suivi de changements l'insère dans sale.Payments, et l'énumération en cours
+        // lève « Collection was modified ». L'annulation de vente ne pouvait donc jamais aboutir.
+        var originalPayments = sale.Payments.Where(x => !x.IsReversal).ToList();
+        foreach (var p in originalPayments) db.Payments.Add(new Payment { SaleId = sale.Id, Mode = p.Mode, AmountXof = -p.AmountXof, IsReversal = true, ReversesPaymentId = p.Id, Actor = "Responsable" });
         sale.Status = SaleStatus.Cancelled;
         var credit = await db.CustomerCredits.SingleOrDefaultAsync(x => x.SaleId == sale.Id, cancellationToken); if (credit != null) { credit.Status = CreditStatus.Cancelled; credit.BalanceXof = 0; }
         var number = await DocumentReceiptFactory.NextNumberAsync(db, DocumentType.CreditNote, cancellationToken);
-        var receipt = await DocumentReceiptFactory.CreateAsync(db, number, sale.Customer?.Name, sale.Lines.Select(x => new ReceiptItem($"Annulation {x.Description}", -x.Quantity, x.UnitPriceXof, 0, -x.LineTotalXof)).ToArray(), -sale.TotalXof, 0, -sale.TotalXof, sale.Payments.Where(x => !x.IsReversal).Select(x => new PaymentDraft(x.Mode, -x.AmountXof, x.ExternalReference)).ToArray(), $"Annulation de {sale.Number} · {reason}", cancellationToken, DocumentType.CreditNote);
+        var receipt = await DocumentReceiptFactory.CreateAsync(db, number, sale.Customer?.Name, sale.Lines.Select(x => new ReceiptItem($"Annulation {x.Description}", -x.Quantity, x.UnitPriceXof, 0, -x.LineTotalXof)).ToArray(), -sale.TotalXof, 0, -sale.TotalXof, originalPayments.Select(x => new PaymentDraft(x.Mode, -x.AmountXof, x.ExternalReference)).ToArray(), $"Annulation de {sale.Number} · {reason}", cancellationToken, DocumentType.CreditNote);
         var doc = new DocumentSnapshot { SaleId = sale.Id, Type = DocumentType.CreditNote, Number = number, JsonPayload = JsonSerializer.Serialize(receipt) }; db.DocumentSnapshots.Add(doc);
         db.AuditEntries.Add(new AuditEntry { Actor = "Responsable", Action = "Annuler vente", EntityType = nameof(Sale), EntityId = sale.Id.ToString(), BeforeJson = JsonSerializer.Serialize(new { Status = SaleStatus.Completed }), AfterJson = JsonSerializer.Serialize(new { reason }) });
         await db.SaveChangesAsync(cancellationToken); await tx.CommitAsync(cancellationToken); return new(doc.Id, number, -sale.TotalXof);

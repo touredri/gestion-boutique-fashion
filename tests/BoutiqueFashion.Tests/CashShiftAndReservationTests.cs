@@ -219,11 +219,13 @@ public sealed class CashShiftAndReservationTests : IAsyncLifetime
     [Fact]
     public async Task Stock_movements_balance_out_over_the_life_of_a_reservation()
     {
-        var (article, _, creditId) = await ReserveAsync("RES-07");
+        var (_, sale, creditId) = await ReserveAsync("RES-07");
         await Credits.PayAsync(creditId, 15_000, PaymentMode.Cash, null);
 
         await using var db = await provider.GetRequiredService<IDbContextFactory<BoutiqueDbContext>>().CreateDbContextAsync();
-        var movements = await db.StockMovements.Where(x => x.VariantId == article.Id).ToListAsync();
+        // Portée à la vente : la réception initiale de l'article ne fait pas partie du cycle
+        // qu'on vérifie ici.
+        var movements = await db.StockMovements.Where(x => x.SourceId == sale.SaleId).ToListAsync();
 
         // Mise de côté (-1), levée (+1), vente (-1) : le cumul doit valoir la quantité réellement
         // vendue, sinon tout rapport qui somme l'historique compterait deux fois.
@@ -260,6 +262,25 @@ public sealed class CashShiftAndReservationTests : IAsyncLifetime
         await Credits.PayAsync(creditId, 15_000, PaymentMode.Cash, null);
         var after = await reports.DashboardAsync(from, to);
         Assert.Equal(20_000, after.SalesXof);
+    }
+
+    [Fact]
+    public async Task Cancelling_a_normal_sale_restocks_and_reverses_its_payments()
+    {
+        // Non-régression : l'annulation ajoutait un paiement à une collection qu'elle était en
+        // train de parcourir, et échouait donc systématiquement. Aucun test ne la couvrait.
+        var article = await AddArticleAsync("Tunique", "CAN-01", 5);
+        var sale = await Sales.CreateAsync(new SaleDraft("annulation", [new SaleLineDraft(article.Id, 2)], [new PaymentDraft(PaymentMode.Cash, 40_000)]));
+
+        await provider.GetRequiredService<IReturnService>().CancelSaleAsync(sale.Number, "Erreur de saisie", ManagerPin);
+
+        Assert.Equal(5, (await ReloadAsync("CAN-01")).QuantityOnHand);
+
+        await using var db = await provider.GetRequiredService<IDbContextFactory<BoutiqueDbContext>>().CreateDbContextAsync();
+        var cancelled = await db.Sales.Include(x => x.Payments).SingleAsync(x => x.Id == sale.SaleId);
+        Assert.Equal(SaleStatus.Cancelled, cancelled.Status);
+        Assert.Equal(2, cancelled.Payments.Count);              // l'encaissement et sa contre-écriture
+        Assert.Equal(0, cancelled.Payments.Sum(x => x.AmountXof));
     }
 
     // --- Meilleur article --------------------------------------------------

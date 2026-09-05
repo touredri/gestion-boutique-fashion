@@ -29,12 +29,12 @@ public sealed class DatabaseMigrationTests : IDisposable
     }
 
     /// <summary>
-    /// Fabrique une base telle que la produisait <c>EnsureCreated</c> : le schéma d'origine,
-    /// sans les colonnes du lot 1 et surtout sans <c>__EFMigrationsHistory</c>.
+    /// Ramène le schéma à celui d'avant le lot 1. À appeler une fois les données en place :
+    /// le modèle EF connaît toujours ces colonnes, donc tout INSERT postérieur à leur suppression
+    /// échouerait.
     /// </summary>
-    private static async Task CreateLegacyDatabaseAsync(BoutiqueDbContext db)
+    private static async Task StripLot1ColumnsAsync(BoutiqueDbContext db)
     {
-        await db.Database.EnsureCreatedAsync();
         foreach (var statement in new[]
         {
             """ALTER TABLE "CashSessions" DROP COLUMN "OperatorName";""",
@@ -58,13 +58,17 @@ public sealed class DatabaseMigrationTests : IDisposable
         {
             var factory = provider.GetRequiredService<IDbContextFactory<BoutiqueDbContext>>();
             await using var db = await factory.CreateDbContextAsync();
-            await CreateLegacyDatabaseAsync(db);
 
+            // EnsureCreated produit le schéma courant : on garnit d'abord la base, puis on la
+            // ramène au schéma d'origine. L'ordre inverse ferait insérer des colonnes disparues.
+            await db.Database.EnsureCreatedAsync();
             db.AppSettings.Add(new AppSetting { Key = "Shop.Name", Value = "Boutique héritée" });
             db.Categories.Add(new Category { Id = categoryId, Name = "Vêtements" });
             db.Products.Add(new Product { Id = productId, Name = "Robe ancienne", CategoryId = categoryId });
             db.ProductVariants.Add(new ProductVariant { Id = variantId, ProductId = productId, Sku = "OLD-01", CostXof = 5_000, PriceXof = 12_000, QuantityOnHand = 7 });
             await db.SaveChangesAsync();
+
+            await StripLot1ColumnsAsync(db);
         }
         SqliteConnection.ClearAllPools();
 
