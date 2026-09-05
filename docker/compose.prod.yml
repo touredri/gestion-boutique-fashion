@@ -42,11 +42,25 @@ services:
 
   # Caddy termine le TLS et renouvelle le certificat tout seul. Le serveur n'est donc jamais
   # exposé en clair, et les terminaux parlent en HTTPS — ils transportent un jeton d'appareil.
+  # Construit la PWA et dépose ses fichiers dans un volume que Caddy sert. Le conteneur
+  # s'arrête une fois la copie faite : il n'y a rien à laisser tourner.
+  pilote:
+    build:
+      context: ../web
+      dockerfile: Dockerfile
+      target: build
+    command: sh -c "rm -rf /srv/* && cp -r /web/apps/pilote/out/. /srv/"
+    volumes:
+      - pilote-dist:/srv
+
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
     depends_on:
-      - server
+      server:
+        condition: service_started
+      pilote:
+        condition: service_completed_successfully
     ports:
       - "80:80"
       - "443:443"
@@ -54,6 +68,7 @@ services:
       DOMAIN: ${DOMAIN}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - pilote-dist:/srv/pilote:ro
       - caddy-data:/data
       - caddy-config:/config
 
@@ -79,5 +94,6 @@ services:
 
 volumes:
   postgres-data:
+  pilote-dist:
   caddy-data:
   caddy-config:

@@ -1,5 +1,25 @@
 {$DOMAIN} {
-	# Le certificat est obtenu et renouvelé par Caddy sans intervention.
-	encode gzip
-	reverse_proxy server:8080
+	encode gzip zstd
+
+	# L'API d'abord : tout le reste est l'application, servie en fichiers statiques depuis la
+	# même origine. Aucune requête croisée, donc aucun CORS à configurer et aucune adresse de
+	# serveur à saisir dans l'application.
+	handle /api/* {
+		reverse_proxy server:8080
+	}
+	handle /health {
+		reverse_proxy server:8080
+	}
+
+	handle {
+		root * /srv/pilote
+		# Le service worker ne doit jamais être servi depuis un cache : une version figée
+		# empêcherait toute mise à jour de l'application d'atteindre le téléphone.
+		@sw path /sw.js
+		header @sw Cache-Control "no-cache"
+		@assets path /_next/static/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+		try_files {path} {path}/ /index.html
+		file_server
+	}
 }
