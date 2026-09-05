@@ -23,8 +23,15 @@ public sealed record ShowcaseItem(
     string? Size, string? Color, long PriceXof, long? PromotionalPriceXof, bool InStock,
     IReadOnlyList<Guid> ShopIds);
 
-public sealed record ShowcaseShop(Guid Id, string Name, string? City, string? Address, string? Phone);
-public sealed record Showcase(IReadOnlyList<ShowcaseShop> Shops, IReadOnlyList<ShowcaseItem> Items);
+public sealed record ShowcaseShop(Guid Id, string Name, string? City, string? Address, string? Phone, string? Hours);
+
+/// <summary>Ce que le site public reçoit. <c>Settings</c> porte les textes réglables depuis
+/// l'application de pilotage — année d'ouverture, accroche — pour qu'ils se corrigent sans
+/// redéploiement.</summary>
+public sealed record Showcase(
+    IReadOnlyList<ShowcaseShop> Shops,
+    IReadOnlyList<ShowcaseItem> Items,
+    IReadOnlyDictionary<string, string> Settings);
 
 internal static class Orders
 {
@@ -35,7 +42,10 @@ internal static class Orders
         app.MapGet("/api/public/showcase", async (ServerDbContext db, CancellationToken ct) =>
         {
             var shops = await db.Shops.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.Name)
-                .Select(x => new ShowcaseShop(x.Id, x.Name, x.City, x.Address, x.Phone)).ToListAsync(ct);
+                .Select(x => new ShowcaseShop(x.Id, x.Name, x.City, x.Address, x.Phone, x.Hours)).ToListAsync(ct);
+
+            var settings = await db.SiteSettings.AsNoTracking()
+                .ToDictionaryAsync(x => x.Key, x => x.Value, ct);
 
             var rows = await db.Variants.AsNoTracking().Where(x => x.IsActive)
                 .Join(db.Products.Where(p => p.IsActive), v => v.ProductId, p => p.Id, (v, p) => new { v, p })
@@ -68,7 +78,7 @@ internal static class Orders
                 .ThenBy(x => x.Name)
                 .ToList();
 
-            return Results.Ok(new Showcase(shops, items));
+            return Results.Ok(new Showcase(shops, items, settings));
         });
 
         app.MapPost("/api/public/orders", async (OrderInput input, ServerDbContext db, Notifier notifier, CancellationToken ct) =>

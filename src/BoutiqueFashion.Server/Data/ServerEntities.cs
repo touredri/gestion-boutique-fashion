@@ -31,6 +31,9 @@ public sealed class Shop : ServerEntity
     [MaxLength(120)] public string? City { get; set; }
     [MaxLength(300)] public string? Address { get; set; }
     [MaxLength(30)] public string? Phone { get; set; }
+    /// <summary>Horaires tels qu'ils s'affichent sur le site. Texte libre plutôt que grille :
+    /// « Lun–Sam 9h–19h » se lit mieux que sept lignes, et se corrige en une fois.</summary>
+    [MaxLength(200)] public string? Hours { get; set; }
     public bool IsActive { get; set; } = true;
 }
 
@@ -177,6 +180,17 @@ public sealed class Variant : SyncedDownEntity
     public DateTimeOffset? PromotionEndsAt { get; set; }
     public decimal LowStockThreshold { get; set; }
     public bool IsActive { get; set; } = true;
+}
+
+/// <summary>
+/// Réglage du site vitrine. Sans boutique : ces textes sont ceux du site, pas d'un point de
+/// vente, et ils ne descendent sur aucun terminal.
+/// </summary>
+public sealed class SiteSetting : ServerEntity
+{
+    [MaxLength(120)] public string Key { get; set; } = string.Empty;
+    public string Value { get; set; } = string.Empty;
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 
 public sealed class ShopSetting : SyncedDownEntity
