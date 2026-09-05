@@ -75,7 +75,7 @@ public sealed class SyncOutboxTests : IAsyncLifetime
         var result = await provider.GetRequiredService<ISaleService>().CreateAsync(new SaleDraft(
             "sync-vente", [new SaleLineDraft(article.Id, 2)], [new PaymentDraft(PaymentMode.Cash, 40_000)]));
 
-        var entry = Assert.Single((await OutboxAsync()).Where(x => x.EntityType == SyncEntityTypes.Sale));
+        var entry = Assert.Single(await OutboxAsync(), x => x.EntityType == SyncEntityTypes.Sale);
         Assert.Equal(result.SaleId, entry.EntityId);
 
         var payload = Payload<SalePayload>(entry);
@@ -100,7 +100,7 @@ public sealed class SyncOutboxTests : IAsyncLifetime
             [new PaymentDraft(PaymentMode.Cash, 10_000), new PaymentDraft(PaymentMode.Credit, 20_000)],
             customer.Id, CreditDueAt: DateTimeOffset.Now.AddDays(30), ReserveStock: true));
 
-        var payload = Payload<SalePayload>(Assert.Single((await OutboxAsync()).Where(x => x.EntityType == SyncEntityTypes.Sale)));
+        var payload = Payload<SalePayload>(Assert.Single(await OutboxAsync(), x => x.EntityType == SyncEntityTypes.Sale));
         Assert.Equal(SaleStatus.Reserved, payload.Status);
         Assert.NotNull(payload.Credit);
         Assert.Equal(20_000, payload.Credit.OriginalAmountXof);
@@ -131,7 +131,7 @@ public sealed class SyncOutboxTests : IAsyncLifetime
         await provider.GetRequiredService<ISaleService>().CreateAsync(draft);
         await provider.GetRequiredService<ISaleService>().CreateAsync(draft);
 
-        Assert.Single((await OutboxAsync()).Where(x => x.EntityType == SyncEntityTypes.Sale));
+        Assert.Single(await OutboxAsync(), x => x.EntityType == SyncEntityTypes.Sale);
     }
 
     [Fact]
@@ -163,7 +163,7 @@ public sealed class SyncOutboxTests : IAsyncLifetime
         await provider.GetRequiredService<ICashSessionService>().CloseAsync(10_000, null, "4321");
 
         var payload = Payload<CashSessionClosedPayload>(
-            Assert.Single((await OutboxAsync()).Where(x => x.EntityType == SyncEntityTypes.CashSessionClosed)));
+            Assert.Single(await OutboxAsync(), x => x.EntityType == SyncEntityTypes.CashSessionClosed));
         Assert.Equal(10_000, payload.CountedCashXof);
         Assert.Equal(0, payload.DifferenceXof);
         Assert.Equal("Awa", payload.ClosedBy);
