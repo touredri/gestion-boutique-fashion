@@ -180,6 +180,36 @@ jobs:
             'docker compose -f ~/bana/docker/compose.prod.yml --env-file ~/bana/docker/.env.effectif logs --tail 60 server'
           exit 1
 
+      # Le contrôle de santé ne dit que « le serveur vit ». Celui-ci dit « les requêtes arrivent
+      # au bon endroit » — la panne qu'on veut attraper est un chemin non routé qui tombe dans le
+      # repli SPA de la vitrine et répond 200 avec du HTML, ce qui ressemble à un succès partout
+      # sauf sur le terminal qui attendait du JSON.
+      - name: Vérifier le routage
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/id_deploy "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" 'bash -s' <<'DISTANT'
+          set -euo pipefail
+          echec=0
+          verifier() {
+            code=$(curl -s -o /tmp/corps -w "%{http_code}" -m 15 "http://127.0.0.1:8081$1")
+            type=$(file -b --mime-type /tmp/corps 2>/dev/null || echo inconnu)
+            if [ "$code" != "$2" ]; then
+              echo "  ÉCHEC $1 : $code reçu, $2 attendu ($type)"
+              echec=1
+            else
+              echo "  ok    $1 : $code"
+            fi
+          }
+          # Sans jeton d'appareil, le flux de mise à jour doit refuser. Un 200 signifierait
+          # qu'il n'atteint pas le serveur du tout.
+          verifier /updates/releases.win.json 401
+          verifier /api/shops 401
+          verifier /api/public/showcase 200
+          verifier /health 200
+          rm -f /tmp/corps
+          exit $echec
+          DISTANT
+
       # nginx est déjà la porte d'entrée de cette machine. On ne la remplace pas : on y ajoute un
       # bloc qui transmet le domaine à Caddy, resté sur la boucle locale.
       - name: Installer le bloc nginx

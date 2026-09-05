@@ -13,6 +13,14 @@
 		reverse_proxy server:8080
 	}
 
+	# Flux et paquets de mise à jour des terminaux. Sans ce bloc, /updates tombe dans le repli
+	# SPA de la vitrine plus bas : le terminal reçoit la page d'accueil du site en 200 au lieu
+	# de son flux, Velopack n'y comprend rien, et le seul symptôme est une caisse qui ne se met
+	# plus à jour — à trois heures de route, sans erreur nulle part.
+	handle /updates/* {
+		reverse_proxy server:8080
+	}
+
 	# L'application de pilotage, sous son propre chemin. Elle est privée : c'est la vitrine qui
 	# occupe la racine, parce que c'est elle que les clientes atteignent.
 	#
