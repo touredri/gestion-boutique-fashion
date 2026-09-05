@@ -1,3 +1,6 @@
+// System.IO explicitement : le projet temporaire que WPF fabrique pour compiler le XAML
+// n'hérite pas des usings implicites, et File.Create y devient introuvable.
+using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Windows.Threading;
