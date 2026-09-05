@@ -9,7 +9,10 @@
         <TextBlock Text="PRODUITS &amp; CATALOGUE" Style="{StaticResource Eyebrow}" Margin="0,0,0,2"/>
         <TextBlock Text="Gestion des articles, variantes et prix" Style="{StaticResource SectionTitle}"/>
       </StackPanel>
-      <Button Grid.Column="1" Content="Importer un CSV" Command="{Binding BrowseImportFileCommand}" VerticalAlignment="Center" MinWidth="130"/>
+      <!-- L'import de masse écrit directement au catalogue : il reste au gérant. Le vendeur garde
+           l'onglet de saisie, qui n'envoie qu'une proposition à valider. -->
+      <Button Grid.Column="1" Content="Importer un CSV" Command="{Binding BrowseImportFileCommand}" VerticalAlignment="Center" MinWidth="130"
+              Visibility="{Binding Session.IsManager, Converter={StaticResource BoolToVis}}"/>
     </Grid>
 
     <TabControl Grid.Row="1" SelectedIndex="{Binding SelectedTab}" Padding="0">

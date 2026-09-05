@@ -50,10 +50,9 @@
       </Grid>
 
       <!-- ================= OUVERTURE ================= -->
-      <Border Grid.Row="1" Style="{StaticResource Card}" Margin="4,0,4,12" Padding="18">
-        <Border.Resources>
-          <Style TargetType="Border" BasedOn="{StaticResource Card}"/>
-        </Border.Resources>
+      <!-- Style en élément et non en attribut : les deux à la fois lèvent MC3024, et seul
+           l'élément permet de porter le déclencheur de visibilité. -->
+      <Border Grid.Row="1" Margin="4,0,4,12" Padding="18">
         <Border.Style>
           <Style TargetType="Border" BasedOn="{StaticResource Card}">
             <Setter Property="Visibility" Value="Collapsed"/>

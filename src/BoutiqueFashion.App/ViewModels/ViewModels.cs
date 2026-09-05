@@ -272,15 +272,27 @@ public partial class SaleViewModel(ICatalogService catalog, ICustomerService cus
     public long PayableXof => TotalXof - BusinessRules.CalculateDiscount(TotalXof, DiscountPercent == 0 ? DiscountKind.None : DiscountKind.Percentage, DiscountPercent);
     public long ChangePreview { get { var sum = Payments.Sum(x => x.AmountXof); return sum > PayableXof ? sum - PayableXof : 0; } }
     public ManagerSession Session => session;
+    /// <summary>Une part de la vente reste à devoir : c'est ce qui ouvre le choix entre emport
+    /// immédiat et mise de côté.</summary>
+    public bool HasCreditPortion => SelectedPaymentMode == PaymentMode.Credit || Payments.Any(x => x.Mode == PaymentMode.Credit);
+
+    /// <summary>Avance « réservé jusqu'au solde » : la marchandise attend en boutique.</summary>
+    [ObservableProperty] private bool reserveStock;
+    partial void OnReserveStockChanged(bool value) => RaiseTotals();
+    [RelayCommand] private void TakeAway() => ReserveStock = false;
+    [RelayCommand] private void Reserve() => ReserveStock = true;
+
     /// <summary>Vente que le service refusera sans PIN valide. Croisé avec Session.IsManager dans la vue,
-    /// car l'état de session change hors de ce ViewModel et ne serait pas notifié ici.</summary>
-    public bool IsSensitiveSale => DiscountPercent != 0 || SelectedPaymentMode == PaymentMode.Credit || Payments.Any(x => x.Mode == PaymentMode.Credit);
+    /// car l'état de session change hors de ce ViewModel et ne serait pas notifié ici.
+    /// L'avance réservée en est exclue : rien ne quitte la boutique, donc rien n'est exposé.</summary>
+    public bool IsSensitiveSale => DiscountPercent != 0 || (HasCreditPortion && !ReserveStock);
     private void RaiseTotals()
     {
         OnPropertyChanged(nameof(TotalXof));
         OnPropertyChanged(nameof(PayableXof));
         OnPropertyChanged(nameof(PaymentTotalXof));
         OnPropertyChanged(nameof(ChangePreview));
+        OnPropertyChanged(nameof(HasCreditPortion));
         OnPropertyChanged(nameof(IsSensitiveSale));
         CompleteCommand.NotifyCanExecuteChanged();
     }
@@ -410,11 +422,16 @@ public partial class SaleViewModel(ICatalogService catalog, ICustomerService cus
             var hasCredit = paymentDrafts.Any(x => x.Mode == PaymentMode.Credit);
             var key = Guid.NewGuid().ToString("N");
             DateTimeOffset? creditDue = hasCredit ? DateTimeOffset.Parse(CreditDueDate) : null;
-            var draft = new SaleDraft(key, Cart.Select(x => new SaleLineDraft(x.Variant.Id, x.Quantity, x.EffectiveDiscountKind, x.DiscountValue)).ToArray(), paymentDrafts, SelectedCustomer?.Id, DiscountPercent == 0 ? DiscountKind.None : DiscountKind.Percentage, DiscountPercent, DiscountReason, ManagerPin, creditDue, null, null);
+            var reserving = hasCredit && ReserveStock;
+            var draft = new SaleDraft(key, Cart.Select(x => new SaleLineDraft(x.Variant.Id, x.Quantity, x.EffectiveDiscountKind, x.DiscountValue)).ToArray(), paymentDrafts, SelectedCustomer?.Id, DiscountPercent == 0 ? DiscountKind.None : DiscountKind.Percentage, DiscountPercent, DiscountReason, ManagerPin, creditDue, null, null, reserving);
             var result = await sales.CreateAsync(draft);
             var documentLabel = PrintInvoice ? "Facture" : "Reçu";
-            var message = $"Vente {result.Number} enregistrée · {documentLabel} créé.";
-            Status = $"Vente {result.Number} enregistrée • {documentLabel} créé (visible dans Documents)";
+            var message = reserving
+                ? $"Avance {result.Number} enregistrée · articles mis de côté jusqu'au solde."
+                : $"Vente {result.Number} enregistrée · {documentLabel} créé.";
+            Status = reserving
+                ? $"Avance {result.Number} enregistrée • articles réservés jusqu'au solde"
+                : $"Vente {result.Number} enregistrée • {documentLabel} créé (visible dans Documents)";
             if (result.ChangeXof > 0) { Status += $" • Monnaie à rendre : {result.ChangeXof:N0} FCFA"; message += $"\nMonnaie à rendre : {result.ChangeXof:N0} FCFA."; }
             if (result.HasNegativeStock) { Status += " • Alerte : stock négatif à régulariser"; message += "\nAlerte : stock négatif à régulariser."; }
             if (SelectedPrinter is not null)
@@ -423,7 +440,7 @@ public partial class SaleViewModel(ICatalogService catalog, ICustomerService cus
                 try { var receipt = await documents.GetReceiptAsync(documentId, false); await printerService.PrintReceiptAsync(SelectedPrinter, receipt); await documents.MarkPrintedAsync(documentId); message += $"\n{documentLabel} imprimé."; }
                 catch (Exception e) { Status += $" • Impression: {e.Message}"; message += $"\nImpression échouée : {e.Message}"; }
             }
-            Cart.Clear(); Payments.Clear(); DiscountPercent = 0; SelectedPaymentMode = PaymentMode.Cash; PrintInvoice = false; NewCustomerName = string.Empty; NewCustomerPhone = string.Empty; SelectedCustomer = null;
+            Cart.Clear(); Payments.Clear(); DiscountPercent = 0; SelectedPaymentMode = PaymentMode.Cash; PrintInvoice = false; NewCustomerName = string.Empty; NewCustomerPhone = string.Empty; SelectedCustomer = null; ReserveStock = false;
             RaiseTotals();
             UiFeedback.Success(message);
             await LoadAsync();
