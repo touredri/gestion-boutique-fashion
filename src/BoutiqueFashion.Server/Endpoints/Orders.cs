@@ -87,7 +87,7 @@ internal static class Orders
             if (variants.Count != ids.Count) return Results.BadRequest(new { error = "Un article demandé n'est plus disponible." });
 
             var now = DateTimeOffset.UtcNow;
-            var order = new Order
+            var order = new Data.Order
             {
                 ShopId = input.ShopId,
                 Number = await NextNumberAsync(db, ct),
@@ -104,7 +104,7 @@ internal static class Orders
                 var price = item.v.PromotionalPriceXof is not null && item.v.PromotionStartsAt <= now && item.v.PromotionEndsAt >= now
                     ? item.v.PromotionalPriceXof.Value
                     : item.v.PriceXof;
-                order.Lines.Add(new OrderLine
+                order.Lines.Add(new Data.OrderLine
                 {
                     OrderId = order.Id,
                     VariantId = item.v.Id,
