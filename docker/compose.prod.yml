@@ -54,9 +54,10 @@ services:
       context: ../web
       dockerfile: Dockerfile
       target: build
-    command: sh -c "rm -rf /srv/* && cp -r /web/apps/pilote/out/. /srv/"
+    command: sh -c "rm -rf /srv/pilote/* /srv/vitrine/* && cp -r /web/apps/pilote/out/. /srv/pilote/ && cp -r /web/apps/vitrine/out/. /srv/vitrine/"
     volumes:
-      - pilote-dist:/srv
+      - pilote-dist:/srv/pilote
+      - vitrine-dist:/srv/vitrine
 
   caddy:
     image: caddy:2-alpine
@@ -74,6 +75,7 @@ services:
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - pilote-dist:/srv/pilote:ro
+      - vitrine-dist:/srv/vitrine:ro
       - caddy-data:/data
       - caddy-config:/config
 
@@ -100,5 +102,6 @@ services:
 volumes:
   postgres-data:
   pilote-dist:
+  vitrine-dist:
   caddy-data:
   caddy-config:

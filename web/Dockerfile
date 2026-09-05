@@ -4,10 +4,12 @@ WORKDIR /web
 
 COPY package.json package-lock.json ./
 COPY apps/pilote/package.json apps/pilote/
+COPY apps/vitrine/package.json apps/vitrine/
 RUN npm ci --no-audit --no-fund
 
 COPY apps/pilote/ apps/pilote/
-RUN npm run build --workspace @bana/pilote
+COPY apps/vitrine/ apps/vitrine/
+RUN npm run build --workspace @bana/pilote && npm run build --workspace @bana/vitrine
 
 # Étape finale sans serveur : Caddy montera ce dossier. Une image nginx de plus n'apporterait
 # qu'un second processus à surveiller.

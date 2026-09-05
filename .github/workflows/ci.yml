@@ -138,7 +138,7 @@ jobs:
           Write-Host "Tout est vert."
 
   pwa:
-    name: PWA (Node)
+    name: PWA et vitrine (Node)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -149,19 +149,19 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: npm ci --no-audit --no-fund
         working-directory: web
-      - run: npm run typecheck --workspace @bana/pilote
+      - run: npm run typecheck
         working-directory: web
-      - run: npm run build --workspace @bana/pilote
+      - run: npm run build
         working-directory: web
       # Une PWA sans manifeste ni service worker s'installe mal et ne fonctionne pas hors ligne :
       # l'export doit les contenir, et rien ne le garantit à part cette vérification.
-      - name: Vérifier l'export
-        working-directory: web/apps/pilote
+      - name: Vérifier les exports
+        working-directory: web/apps
         run: |
-          for f in out/index.html out/manifest.webmanifest out/sw.js out/icon-512.png; do
+          for f in pilote/out/index.html pilote/out/manifest.webmanifest pilote/out/sw.js pilote/out/icon-512.png vitrine/out/index.html; do
             [ -f "$f" ] || { echo "::error::$f manquant dans l'export"; exit 1; }
           done
-          echo "Export complet."
+          echo "Exports complets."
 
   serveur:
     name: Serveur (Linux + PostgreSQL)
