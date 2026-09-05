@@ -56,6 +56,8 @@ public static class Libelles
         StockMovementType.Adjustment => "Ajustement",
         StockMovementType.Inventory => "Inventaire",
         StockMovementType.Reversal => "Contre-passation",
+        StockMovementType.Reservation => "Mise de côté",
+        StockMovementType.ReservationRelease => "Levée de réservation",
         _ => value.ToString()
     };
 
@@ -75,6 +77,7 @@ public static class Libelles
         SaleStatus.Completed => "Validée",
         SaleStatus.Cancelled => "Annulée",
         SaleStatus.Returned => "Retournée",
+        SaleStatus.Reserved => "Réservée (avance)",
         _ => value.ToString()
     };
 

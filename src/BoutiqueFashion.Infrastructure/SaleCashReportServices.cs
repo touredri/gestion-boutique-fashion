@@ -15,9 +15,13 @@ public sealed class SaleService(IDbContextFactory<BoutiqueDbContext> factory, IA
         var sensitiveDiscount = draft.DiscountKind == DiscountKind.Percentage && draft.DiscountValue > BusinessRules.SellerDiscountLimitPercent;
         sensitiveDiscount |= draft.Lines.Any(x => x.DiscountKind == DiscountKind.Percentage && x.DiscountValue > BusinessRules.SellerDiscountLimitPercent);
         var hasCredit = draft.Payments.Any(x => x.Mode == PaymentMode.Credit && x.AmountXof > 0);
+        if (draft.ReserveStock && !hasCredit)
+            throw new InvalidOperationException("Une avance suppose un reste à payer : ajoutez une ligne de paiement « Crédit » pour le solde.");
         if (sensitiveDiscount && (draft.ManagerPin is null || !await authorization.AuthorizeSensitiveActionAsync(draft.ManagerPin, "Remise supérieure à 10 %", cancellationToken: cancellationToken)))
             throw new UnauthorizedAccessException("PIN responsable requis pour cette remise.");
-        if (hasCredit && (draft.ManagerPin is null || !await authorization.AuthorizeSensitiveActionAsync(draft.ManagerPin, "Vente à crédit", cancellationToken: cancellationToken)))
+        // L'avance réservée ne fait courir aucun risque : la marchandise ne quitte pas la boutique.
+        // Le vendeur peut donc l'enregistrer seul, contrairement au crédit avec emport.
+        if (hasCredit && !draft.ReserveStock && (draft.ManagerPin is null || !await authorization.AuthorizeSensitiveActionAsync(draft.ManagerPin, "Vente à crédit", cancellationToken: cancellationToken)))
             throw new UnauthorizedAccessException("PIN responsable requis pour le crédit.");
 
         await using var db = await factory.CreateDbContextAsync(cancellationToken);
@@ -36,7 +40,15 @@ public sealed class SaleService(IDbContextFactory<BoutiqueDbContext> factory, IA
         var variants = await db.ProductVariants.Include(x => x.Product).Where(x => ids.Contains(x.Id)).ToDictionaryAsync(x => x.Id, cancellationToken);
         if (variants.Count != ids.Length) throw new KeyNotFoundException("Un article du panier est introuvable.");
 
-        var sale = new Sale { IdempotencyKey = draft.IdempotencyKey, CashSessionId = cashSession.Id, CustomerId = draft.CustomerId };
+        var sale = new Sale
+        {
+            IdempotencyKey = draft.IdempotencyKey,
+            CashSessionId = cashSession.Id,
+            CustomerId = draft.CustomerId,
+            // Le vendeur n'est plus une constante : c'est la personne qui tient la vacation.
+            SellerName = string.IsNullOrWhiteSpace(cashSession.OperatorName) ? "Vendeur boutique" : cashSession.OperatorName,
+            Status = draft.ReserveStock ? SaleStatus.Reserved : SaleStatus.Completed,
+        };
         long subtotal = 0;
         foreach (var lineDraft in draft.Lines)
         {
@@ -80,8 +92,14 @@ public sealed class SaleService(IDbContextFactory<BoutiqueDbContext> factory, IA
         if (hasCredit)
         {
             if (customer is null || draft.CreditDueAt is null) throw new InvalidOperationException("Un client et une échéance sont obligatoires pour le crédit.");
-            var outstanding = await db.CustomerCredits.Where(x => x.CustomerId == customer.Id && x.Status != CreditStatus.Paid && x.Status != CreditStatus.Cancelled).SumAsync(x => x.BalanceXof, cancellationToken);
-            if (customer.CreditLimitXof <= 0 || outstanding + creditAmount > customer.CreditLimitXof) throw new InvalidOperationException("Le plafond de crédit du client est dépassé.");
+            // Le plafond protège contre la marchandise partie sans être payée. Une avance réservée
+            // n'expose à rien : exiger un plafond y interdirait le cas d'usage le plus courant,
+            // celui du client de passage qui bloque un article et revient le solder.
+            if (!draft.ReserveStock)
+            {
+                var outstanding = await db.CustomerCredits.Where(x => x.CustomerId == customer.Id && x.Status != CreditStatus.Paid && x.Status != CreditStatus.Cancelled).SumAsync(x => x.BalanceXof, cancellationToken);
+                if (customer.CreditLimitXof <= 0 || outstanding + creditAmount > customer.CreditLimitXof) throw new InvalidOperationException("Le plafond de crédit du client est dépassé.");
+            }
             db.CustomerCredits.Add(new CustomerCredit { SaleId = sale.Id, CustomerId = customer.Id, OriginalAmountXof = creditAmount, BalanceXof = creditAmount, DueAt = draft.CreditDueAt.Value });
         }
 
@@ -102,9 +120,22 @@ public sealed class SaleService(IDbContextFactory<BoutiqueDbContext> factory, IA
         foreach (var line in sale.Lines)
         {
             var variant = variants[line.VariantId];
-            variant.QuantityOnHand -= line.Quantity;
-            negativeStock |= variant.QuantityOnHand < 0;
-            db.StockMovements.Add(new StockMovement { VariantId = variant.Id, Type = StockMovementType.Sale, QuantityDelta = -line.Quantity, UnitCostXof = line.FrozenUnitCostXof, Reason = $"Vente {sale.Number}", SourceType = nameof(Sale), SourceId = sale.Id });
+            if (draft.ReserveStock)
+            {
+                // La marchandise reste en boutique : QuantityOnHand ne bouge pas, seule la part
+                // réservée grandit. On ne peut pas mettre de côté ce qu'on n'a pas — contrairement
+                // à une vente normale, qui tolère le stock négatif à régulariser.
+                if (variant.QuantityAvailable < line.Quantity)
+                    throw new InvalidOperationException($"{variant.Sku} : {variant.QuantityAvailable:0.##} disponible(s), impossible d'en réserver {line.Quantity:0.##}.");
+                variant.QuantityReserved += line.Quantity;
+                db.StockMovements.Add(new StockMovement { VariantId = variant.Id, Type = StockMovementType.Reservation, QuantityDelta = -line.Quantity, UnitCostXof = line.FrozenUnitCostXof, Reason = $"Mise de côté {sale.Number}", SourceType = nameof(Sale), SourceId = sale.Id, Actor = sale.SellerName });
+            }
+            else
+            {
+                variant.QuantityOnHand -= line.Quantity;
+                negativeStock |= variant.QuantityOnHand < 0;
+                db.StockMovements.Add(new StockMovement { VariantId = variant.Id, Type = StockMovementType.Sale, QuantityDelta = -line.Quantity, UnitCostXof = line.FrozenUnitCostXof, Reason = $"Vente {sale.Number}", SourceType = nameof(Sale), SourceId = sale.Id, Actor = sale.SellerName });
+            }
         }
         db.Sales.Add(sale);
 
@@ -121,10 +152,13 @@ public sealed class SaleService(IDbContextFactory<BoutiqueDbContext> factory, IA
         {
             var deposit = sale.TotalXof - creditAmount;
             var depositNumber = await DocumentReceiptFactory.NextNumberAsync(db, DocumentType.DepositReceipt, cancellationToken);
-            db.DocumentSnapshots.Add(new DocumentSnapshot { SaleId = sale.Id, Type = DocumentType.DepositReceipt, Number = depositNumber, JsonPayload = JsonSerializer.Serialize(await DocumentReceiptFactory.CreateAsync(db, depositNumber, customer?.Name, [new ReceiptItem($"Acompte sur vente {sale.Number}", 1, deposit, 0, deposit)], deposit, 0, deposit, draft.Payments.Where(x => x.Mode != PaymentMode.Credit).ToArray(), $"Reste à payer : {creditAmount:N0} FCFA", cancellationToken, DocumentType.DepositReceipt)) });
+            var depositFooter = draft.ReserveStock
+                ? $"Reste à payer : {creditAmount:N0} FCFA · Marchandise réservée en boutique jusqu'au solde."
+                : $"Reste à payer : {creditAmount:N0} FCFA";
+            db.DocumentSnapshots.Add(new DocumentSnapshot { SaleId = sale.Id, Type = DocumentType.DepositReceipt, Number = depositNumber, JsonPayload = JsonSerializer.Serialize(await DocumentReceiptFactory.CreateAsync(db, depositNumber, customer?.Name, [new ReceiptItem($"Acompte sur vente {sale.Number}", 1, deposit, 0, deposit)], deposit, 0, deposit, draft.Payments.Where(x => x.Mode != PaymentMode.Credit).ToArray(), depositFooter, cancellationToken, DocumentType.DepositReceipt)) });
         }
 
-        db.AuditEntries.Add(new AuditEntry { Actor = "Vendeur boutique", Action = "Créer vente", EntityType = nameof(Sale), EntityId = sale.Id.ToString(), AfterJson = JsonSerializer.Serialize(new { sale.Number, sale.TotalXof, change, customer = customer?.Name }) });
+        db.AuditEntries.Add(new AuditEntry { Actor = sale.SellerName, Action = draft.ReserveStock ? "Créer avance réservée" : "Créer vente", EntityType = nameof(Sale), EntityId = sale.Id.ToString(), AfterJson = JsonSerializer.Serialize(new { sale.Number, sale.TotalXof, change, customer = customer?.Name, reserved = draft.ReserveStock }) });
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return new SaleResult(sale.Id, sale.Number, sale.TotalXof, snapshot.Id, false, negativeStock, change, invoiceSnapshot.Id);
@@ -135,13 +169,27 @@ public sealed class SaleService(IDbContextFactory<BoutiqueDbContext> factory, IA
 
 public sealed class CashSessionService(IDbContextFactory<BoutiqueDbContext> factory, IAuthorizationService authorization) : ICashSessionService
 {
-    public async Task<CashSession> OpenAsync(long openingFloatXof, CancellationToken cancellationToken = default)
+    public async Task<CashSession> OpenAsync(long openingFloatXof, string? operatorName = null, string? operatorPin = null, CancellationToken cancellationToken = default)
     {
         if (openingFloatXof < 0) throw new ArgumentOutOfRangeException(nameof(openingFloatXof));
+        if (!string.IsNullOrEmpty(operatorPin)) PinHasher.Validate(operatorPin, nameof(operatorPin));
         await using var db = await factory.CreateDbContextAsync(cancellationToken);
         if (await db.CashSessions.AnyAsync(x => x.Status == CashSessionStatus.Open, cancellationToken)) throw new InvalidOperationException("Une caisse est déjà ouverte.");
-        var session = new CashSession { Number = $"CAI-{DateTime.Now:yyyyMMdd-HHmmss}", OpeningFloatXof = openingFloatXof };
+
+        // À défaut de nom saisi, la boutique elle-même tient la caisse : c'est ce nom qui
+        // apparaîtra sur les ventes, et il vaut mieux « Boutique Marcory » que « Vendeur boutique ».
+        var shopName = await db.AppSettings.Where(x => x.Key == "Shop.Name").Select(x => x.Value).SingleOrDefaultAsync(cancellationToken);
+        var name = Coalesce(operatorName, shopName, "Vendeur boutique");
+
+        var session = new CashSession
+        {
+            Number = $"CAI-{DateTime.Now:yyyyMMdd-HHmmss}",
+            OpeningFloatXof = openingFloatXof,
+            OperatorName = name,
+            OperatorPinHash = string.IsNullOrEmpty(operatorPin) ? null : PinHasher.Hash(operatorPin),
+        };
         db.CashSessions.Add(session);
+        db.AuditEntries.Add(new AuditEntry { Actor = name, Action = "Ouvrir caisse", EntityType = nameof(CashSession), EntityId = session.Id.ToString(), AfterJson = JsonSerializer.Serialize(new { session.Number, openingFloatXof, hasPin = session.OperatorPinHash is not null }) });
         await db.SaveChangesAsync(cancellationToken);
         return session;
     }
@@ -152,28 +200,83 @@ public sealed class CashSessionService(IDbContextFactory<BoutiqueDbContext> fact
         return await db.CashSessions.AsNoTracking().SingleOrDefaultAsync(x => x.Status == CashSessionStatus.Open, cancellationToken);
     }
 
-    public async Task<CashSession> CloseAsync(long countedCashXof, string? differenceReason, string? managerPin = null, CancellationToken cancellationToken = default)
+    public async Task<bool> VerifyShiftPinAsync(string pin, CancellationToken cancellationToken = default)
     {
         await using var db = await factory.CreateDbContextAsync(cancellationToken);
-        var session = await db.CashSessions.Include(x => x.Sales).ThenInclude(x => x.Payments).SingleOrDefaultAsync(x => x.Status == CashSessionStatus.Open, cancellationToken) ?? throw new InvalidOperationException("Aucune caisse ouverte.");
-        var saleCash = session.Sales.SelectMany(x => x.Payments).Where(x => x.Mode == PaymentMode.Cash).Sum(x => x.AmountXof);
-        var creditCash = await db.CreditPayments.Where(x => x.CreatedAt >= session.OpenedAt && x.Mode == PaymentMode.Cash).SumAsync(x => x.AmountXof, cancellationToken);
-        var cashExpenses = await db.Expenses.Where(x => x.CreatedAt >= session.OpenedAt && x.Mode == PaymentMode.Cash).SumAsync(x => x.AmountXof, cancellationToken);
-        var expected = session.OpeningFloatXof + saleCash + creditCash - cashExpenses;
-        var difference = countedCashXof - expected;
+        var hash = await db.CashSessions.AsNoTracking().Where(x => x.Status == CashSessionStatus.Open).Select(x => x.OperatorPinHash).SingleOrDefaultAsync(cancellationToken);
+        return PinHasher.Verify(pin, hash);
+    }
+
+    public async Task<CashDeskState?> GetStateAsync(CancellationToken cancellationToken = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(cancellationToken);
+        var session = await db.CashSessions.AsNoTracking().SingleOrDefaultAsync(x => x.Status == CashSessionStatus.Open, cancellationToken);
+        if (session is null) return null;
+        var totals = await ComputeAsync(db, session, cancellationToken);
+
+        var byMode = await db.Payments.AsNoTracking()
+            .Where(x => x.Sale!.CashSessionId == session.Id)
+            .GroupBy(x => x.Mode)
+            .Select(g => new { Mode = g.Key, Value = g.Sum(y => y.AmountXof) })
+            .ToListAsync(cancellationToken);
+
+        var salesCount = await db.Sales.AsNoTracking().CountAsync(x => x.CashSessionId == session.Id && x.Status != SaleStatus.Cancelled, cancellationToken);
+        var salesTotal = await db.Sales.AsNoTracking().Where(x => x.CashSessionId == session.Id && x.Status != SaleStatus.Cancelled).SumAsync(x => x.TotalXof, cancellationToken);
+
+        return new CashDeskState(
+            session.Id, session.Number, session.OperatorName, session.OpenedAt, session.OperatorPinHash is not null,
+            session.OpeningFloatXof, totals.SaleCash, totals.CreditCash, totals.CashExpenses,
+            totals.Expected, salesCount, salesTotal,
+            byMode.Where(x => x.Value != 0).Select(x => new ReportRow(Libelles.Text(x.Mode), x.Value)).OrderBy(x => x.Label).ToArray());
+    }
+
+    public async Task<CashSession> CloseAsync(long countedCashXof, string? differenceReason, string? pin = null, CancellationToken cancellationToken = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(cancellationToken);
+        var session = await db.CashSessions.SingleOrDefaultAsync(x => x.Status == CashSessionStatus.Open, cancellationToken) ?? throw new InvalidOperationException("Aucune caisse ouverte.");
+
+        var totals = await ComputeAsync(db, session, cancellationToken);
+        var difference = countedCashXof - totals.Expected;
         if (difference != 0 && string.IsNullOrWhiteSpace(differenceReason)) throw new InvalidOperationException("Un motif est obligatoire en cas d'écart.");
+
         var toleranceSetting = await db.AppSettings.Where(x => x.Key == "Cash.VarianceToleranceXof").Select(x => x.Value).SingleOrDefaultAsync(cancellationToken);
         var tolerance = long.TryParse(toleranceSetting, out var parsedTolerance) ? parsedTolerance : 0;
-        if (Math.Abs(difference) > tolerance)
-        {
-            if (managerPin is null || !await authorization.AuthorizeSensitiveActionAsync(managerPin, "Clôture de caisse avec écart", cancellationToken: cancellationToken))
-                throw new UnauthorizedAccessException($"Écart de {difference:N0} FCFA au-delà de la tolérance ({tolerance:N0} FCFA) : PIN responsable requis.");
-        }
-        session.ExpectedCashXof = expected; session.CountedCashXof = countedCashXof; session.DifferenceXof = difference; session.DifferenceReason = differenceReason; session.ClosedAt = DateTimeOffset.UtcNow; session.Status = CashSessionStatus.Closed;
-        db.AuditEntries.Add(new AuditEntry { Actor = "Responsable", Action = "Clôturer caisse", EntityType = nameof(CashSession), EntityId = session.Id.ToString(), AfterJson = JsonSerializer.Serialize(new { expected, countedCashXof, difference }) });
+        var beyondTolerance = Math.Abs(difference) > tolerance;
+
+        // Qui clôture ? Le PIN de vacation suffit au quotidien ; l'écart hors tolérance reste une
+        // décision du gérant, comme avant. Le code gérant n'est vérifié que s'il peut servir :
+        // le tester systématiquement inscrirait un refus à l'audit à chaque clôture ordinaire.
+        var isShiftPin = PinHasher.Verify(pin, session.OperatorPinHash);
+        var isManagerPin = (!isShiftPin || beyondTolerance)
+            && !string.IsNullOrEmpty(pin)
+            && await authorization.AuthorizeSensitiveActionAsync(pin, "Clôturer la caisse", cancellationToken: cancellationToken);
+
+        if (session.OperatorPinHash is not null && !isShiftPin && !isManagerPin)
+            throw new UnauthorizedAccessException("Code de vacation ou code gérant requis pour clôturer la caisse.");
+        if (beyondTolerance && !isManagerPin)
+            throw new UnauthorizedAccessException($"Écart de {difference:N0} FCFA au-delà de la tolérance ({tolerance:N0} FCFA) : code gérant requis.");
+
+        var closedBy = isManagerPin ? "Responsable" : session.OperatorName;
+        session.ExpectedCashXof = totals.Expected; session.CountedCashXof = countedCashXof; session.DifferenceXof = difference;
+        session.DifferenceReason = differenceReason; session.ClosedAt = DateTimeOffset.UtcNow; session.Status = CashSessionStatus.Closed;
+        session.ClosedBy = closedBy;
+        db.AuditEntries.Add(new AuditEntry { Actor = closedBy, Action = "Clôturer caisse", EntityType = nameof(CashSession), EntityId = session.Id.ToString(), AfterJson = JsonSerializer.Serialize(new { expected = totals.Expected, countedCashXof, difference, operator_ = session.OperatorName }) });
         await db.SaveChangesAsync(cancellationToken);
         return session;
     }
+
+    /// <summary>Espèces attendues en tiroir. Partagé entre l'affichage temps réel et la clôture :
+    /// deux formules divergentes feraient apparaître un écart au moment de compter.</summary>
+    private static async Task<(long SaleCash, long CreditCash, long CashExpenses, long Expected)> ComputeAsync(BoutiqueDbContext db, CashSession session, CancellationToken cancellationToken)
+    {
+        var saleCash = await db.Payments.Where(x => x.Sale!.CashSessionId == session.Id && x.Mode == PaymentMode.Cash).SumAsync(x => x.AmountXof, cancellationToken);
+        var creditCash = await db.CreditPayments.Where(x => x.CreatedAt >= session.OpenedAt && x.Mode == PaymentMode.Cash).SumAsync(x => x.AmountXof, cancellationToken);
+        var cashExpenses = await db.Expenses.Where(x => x.CreatedAt >= session.OpenedAt && x.Mode == PaymentMode.Cash).SumAsync(x => x.AmountXof, cancellationToken);
+        return (saleCash, creditCash, cashExpenses, session.OpeningFloatXof + saleCash + creditCash - cashExpenses);
+    }
+
+    private static string Coalesce(params string?[] candidates) =>
+        candidates.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x))?.Trim() ?? string.Empty;
 }
 
 public sealed class ReportService(IDbContextFactory<BoutiqueDbContext> factory) : IReportService
@@ -186,15 +289,35 @@ public sealed class ReportService(IDbContextFactory<BoutiqueDbContext> factory) 
         var saleCollected = await db.Payments.Where(x => x.CreatedAt >= from && x.CreatedAt < to && x.Mode != PaymentMode.Credit).SumAsync(x => x.AmountXof, cancellationToken);
         var creditCollected = await db.CreditPayments.Where(x => x.CreatedAt >= from && x.CreatedAt < to).SumAsync(x => x.AmountXof, cancellationToken);
         var collected = saleCollected + creditCollected;
-        var soldLines = await db.SaleLines.AsNoTracking().Where(x => x.CreatedAt >= from && x.CreatedAt < to && x.Sale!.Status == SaleStatus.Completed).Select(x => new { x.Quantity, x.FrozenUnitCostXof }).ToListAsync(cancellationToken);
+        // Une seule lecture des lignes vendues sert au coût de revient et au meilleur article :
+        // deux requêtes sur le même ensemble n'apporteraient rien.
+        var soldLines = await db.SaleLines.AsNoTracking()
+            .Where(x => x.CreatedAt >= from && x.CreatedAt < to && x.Sale!.Status == SaleStatus.Completed)
+            // La variante peut avoir été supprimée depuis : on retombe alors sur la description
+            // figée au moment de la vente, jamais sur du vide.
+            .Select(x => new
+            {
+                x.Quantity,
+                x.FrozenUnitCostXof,
+                x.LineTotalXof,
+                Name = x.Variant != null && x.Variant.Product != null ? x.Variant.Product.Name : x.Description,
+            })
+            .ToListAsync(cancellationToken);
         var cost = soldLines.Sum(x => decimal.ToInt64(decimal.Round(x.Quantity * x.FrozenUnitCostXof, 0)));
+        var bestSeller = soldLines
+            .GroupBy(x => x.Name)
+            .Select(g => new BestSeller(g.Key, g.Sum(y => y.Quantity), g.Sum(y => y.LineTotalXof)))
+            .OrderByDescending(x => x.Quantity).ThenByDescending(x => x.ValueXof)
+            .FirstOrDefault();
         var expenses = await db.Expenses.Where(x => x.CreatedAt >= from && x.CreatedAt < to).SumAsync(x => x.AmountXof, cancellationToken);
         var credit = await db.CustomerCredits.Where(x => x.Status != CreditStatus.Paid && x.Status != CreditStatus.Cancelled).SumAsync(x => x.BalanceXof, cancellationToken);
-        var stocks = await db.ProductVariants.AsNoTracking().Where(x => x.IsActive).Select(x => new { x.QuantityOnHand, x.LowStockThreshold }).ToListAsync(cancellationToken);
-        var low = stocks.Count(x => x.QuantityOnHand <= x.LowStockThreshold);
+        // Le seuil se juge sur le disponible : un article entièrement réservé est en rupture
+        // commerciale, même si les cartons sont encore dans la réserve.
+        var stocks = await db.ProductVariants.AsNoTracking().Where(x => x.IsActive).Select(x => new { x.QuantityOnHand, x.QuantityReserved, x.LowStockThreshold }).ToListAsync(cancellationToken);
+        var low = stocks.Count(x => x.QuantityOnHand - x.QuantityReserved <= x.LowStockThreshold);
         var salesCount = await sales.CountAsync(cancellationToken);
         var grossMargin = salesXof - cost;
-        return new DashboardSummary(salesXof, collected, grossMargin, expenses, credit, low, grossMargin - expenses, soldLines.Any(x => x.FrozenUnitCostXof <= 0), salesCount);
+        return new DashboardSummary(salesXof, collected, grossMargin, expenses, credit, low, grossMargin - expenses, soldLines.Any(x => x.FrozenUnitCostXof <= 0), salesCount, bestSeller);
     }
 
     public async Task<IReadOnlyList<RecentSaleRow>> RecentSalesAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default)
@@ -243,6 +366,23 @@ public sealed class ReportService(IDbContextFactory<BoutiqueDbContext> factory) 
         return lines.GroupBy(x => x.Sku)
             .Select(g => new ReportRow(g.Key, g.Sum(y => y.LineTotalXof), g.Sum(y => y.Quantity)))
             .OrderByDescending(x => x.Quantity).Take(10).ToArray();
+    }
+
+    public async Task<IReadOnlyList<ReportRow>> TopProductsByProductAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(cancellationToken);
+        var lines = await db.SaleLines.AsNoTracking()
+            .Where(x => x.CreatedAt >= from && x.CreatedAt < to && x.Sale!.Status == SaleStatus.Completed)
+            .Select(x => new
+            {
+                Name = x.Variant != null && x.Variant.Product != null ? x.Variant.Product.Name : x.Description,
+                x.LineTotalXof,
+                x.Quantity,
+            })
+            .ToListAsync(cancellationToken);
+        return lines.GroupBy(x => x.Name)
+            .Select(g => new ReportRow(g.Key, g.Sum(y => y.LineTotalXof), g.Sum(y => y.Quantity)))
+            .OrderByDescending(x => x.Quantity).ThenByDescending(x => x.ValueXof).Take(10).ToArray();
     }
 
     public async Task<IReadOnlyList<ReportRow>> NoSalesProductsAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default)
@@ -322,7 +462,7 @@ public sealed class ReportService(IDbContextFactory<BoutiqueDbContext> factory) 
     {
         await using var db = await factory.CreateDbContextAsync(cancellationToken);
         var active = await db.ProductVariants.AsNoTracking().Include(x => x.Product).Where(x => x.IsActive).ToListAsync(cancellationToken);
-        var variants = active.Where(x => x.QuantityOnHand <= x.LowStockThreshold).OrderBy(x => x.QuantityOnHand).ToList();
+        var variants = active.Where(x => x.QuantityAvailable <= x.LowStockThreshold).OrderBy(x => x.QuantityAvailable).ToList();
         var negativeIds = variants.Where(x => x.QuantityOnHand < 0).Select(x => x.Id).ToArray();
         var relatedRows = await db.SaleLines.AsNoTracking().Where(x => negativeIds.Contains(x.VariantId))
             .Select(x => new { x.VariantId, x.CreatedAt, Number = x.Sale!.Number })

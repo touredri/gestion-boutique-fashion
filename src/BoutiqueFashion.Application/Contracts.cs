@@ -15,11 +15,18 @@ public sealed record SaleDraft(
     string? ManagerPin = null,
     DateTimeOffset? CreditDueAt = null,
     string? NewCustomerName = null,
-    string? NewCustomerPhone = null);
+    string? NewCustomerPhone = null,
+    // Avance « réservé jusqu'au solde » : la marchandise reste en boutique et n'est que réservée.
+    // Sans ce drapeau, une vente à crédit sort le stock immédiatement.
+    // (commentaire simple et non doc XML : une balise ici déclencherait CS1587, promu en erreur.)
+    bool ReserveStock = false);
 
 public sealed record SaleResult(Guid SaleId, string Number, long TotalXof, Guid DocumentId, bool AlreadyExisted, bool HasNegativeStock, long ChangeXof = 0, Guid? InvoiceDocumentId = null);
 public sealed record StockAdjustment(Guid VariantId, decimal QuantityDelta, StockMovementType Type, long UnitCostXof, string Reason, string Actor);
-public sealed record DashboardSummary(long SalesXof, long CollectedXof, long GrossMarginXof, long ExpensesXof, long CreditBalanceXof, int LowStockCount, long EstimatedProfitXof = 0, bool CostWarning = false, int SalesCount = 0);
+public sealed record DashboardSummary(long SalesXof, long CollectedXof, long GrossMarginXof, long ExpensesXof, long CreditBalanceXof, int LowStockCount, long EstimatedProfitXof = 0, bool CostWarning = false, int SalesCount = 0, BestSeller? BestSeller = null);
+/// <summary>Article le mieux vendu sur la période, agrégé au niveau du produit et non de la
+/// variante : « la robe Amina » parle, « ROBE-AMINA-M-ROUGE » beaucoup moins.</summary>
+public sealed record BestSeller(string Label, decimal Quantity, long ValueXof);
 public sealed record RecentSaleRow(string Number, string Time, string Customer, long TotalXof);
 public sealed record PrinterProfile(string Name, PrinterConnectionKind ConnectionKind, string Address, PaperWidth PaperWidth, bool CutPaper = true);
 public sealed record ReceiptItem(string Description, decimal Quantity, long UnitPriceXof, long DiscountXof, long TotalXof);
@@ -91,11 +98,25 @@ public interface IAuthorizationService
     Task<bool> AuthorizeSensitiveActionAsync(string pin, string action, string actor = "Responsable", CancellationToken cancellationToken = default);
 }
 
+/// <summary>Photographie de la vacation en cours : ce que la caisse devrait contenir, et pourquoi.
+/// Calculée à la demande — rien n'est stocké tant que la caisse n'est pas clôturée.</summary>
+public sealed record CashDeskState(
+    Guid Id, string Number, string OperatorName, DateTimeOffset OpenedAt, bool HasShiftPin,
+    long OpeningFloatXof, long CashSalesXof, long CashCreditPaymentsXof, long CashExpensesXof,
+    long ExpectedCashXof, int SalesCount, long TotalSalesXof,
+    IReadOnlyList<ReportRow> CollectedByMode);
+
 public interface ICashSessionService
 {
-    Task<CashSession> OpenAsync(long openingFloatXof, CancellationToken cancellationToken = default);
+    /// <param name="operatorName">Personne qui tient la caisse. Vide : le nom de la boutique.</param>
+    /// <param name="operatorPin">PIN de vacation. Nul : seul le PIN gérant pourra clôturer.</param>
+    Task<CashSession> OpenAsync(long openingFloatXof, string? operatorName = null, string? operatorPin = null, CancellationToken cancellationToken = default);
     Task<CashSession?> GetOpenAsync(CancellationToken cancellationToken = default);
-    Task<CashSession> CloseAsync(long countedCashXof, string? differenceReason, string? managerPin = null, CancellationToken cancellationToken = default);
+    /// <param name="pin">PIN de vacation ou PIN gérant. Un écart hors tolérance exige le PIN gérant.</param>
+    Task<CashSession> CloseAsync(long countedCashXof, string? differenceReason, string? pin = null, CancellationToken cancellationToken = default);
+    /// <summary>Déverrouillage de l'espace vendeur après mise en veille.</summary>
+    Task<bool> VerifyShiftPinAsync(string pin, CancellationToken cancellationToken = default);
+    Task<CashDeskState?> GetStateAsync(CancellationToken cancellationToken = default);
 }
 
 public interface IThermalPrinterService
@@ -140,6 +161,8 @@ public interface IReportService
     Task<IReadOnlyList<ReportRow>> SalesByDayAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<ReportRow>> SalesBySellerAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<ReportRow>> TopProductsAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default);
+    /// <summary>Même classement, mais regroupé par produit plutôt que par variante.</summary>
+    Task<IReadOnlyList<ReportRow>> TopProductsByProductAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<ReportRow>> NoSalesProductsAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<ReportRow>> StockValueByCategoryAsync(CancellationToken cancellationToken = default);
     Task<IReadOnlyList<ReportRow>> InventoryVarianceAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default);

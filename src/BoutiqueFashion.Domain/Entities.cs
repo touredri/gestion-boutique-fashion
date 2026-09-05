@@ -61,6 +61,9 @@ public sealed class ProductVariant : Entity
     public DateTimeOffset? PromotionStartsAt { get; set; }
     public DateTimeOffset? PromotionEndsAt { get; set; }
     public decimal QuantityOnHand { get; set; }
+    /// <summary>Quantité physiquement présente mais promise à une avance en cours : elle reste
+    /// dans <see cref="QuantityOnHand"/> jusqu'à la remise, et n'est donc pas vendable.</summary>
+    public decimal QuantityReserved { get; set; }
     public decimal WeightedAverageCostXof { get; set; }
     public decimal LowStockThreshold { get; set; }
     public bool IsActive { get; set; } = true;
@@ -68,7 +71,9 @@ public sealed class ProductVariant : Entity
     public ICollection<ProductImage> Images { get; set; } = [];
     [NotMapped] public string? PrimaryImagePath => Images?.FirstOrDefault(x => x.IsPrimary)?.RelativePath ?? Images?.FirstOrDefault()?.RelativePath ?? Product?.PrimaryImagePath;
     [NotMapped] public long MarginXof => PriceXof - CostXof;
-    [NotMapped] public bool IsOutOfStock => QuantityOnHand <= 0;
+    /// <summary>Ce qu'un vendeur peut réellement mettre au panier : le réservé est déjà vendu.</summary>
+    [NotMapped] public decimal QuantityAvailable => QuantityOnHand - QuantityReserved;
+    [NotMapped] public bool IsOutOfStock => QuantityAvailable <= 0;
 }
 
 public sealed class StockMovement : Entity
@@ -172,6 +177,13 @@ public sealed class CreditPayment : Entity
 public sealed class CashSession : Entity
 {
     [MaxLength(40)] public string Number { get; set; } = string.Empty;
+    /// <summary>Personne qui tient la caisse pour cette vacation. Sert de <see cref="Sale.SellerName"/>
+    /// à toutes les ventes de la session ; à défaut de nom saisi, le nom de la boutique.</summary>
+    [MaxLength(80)] public string OperatorName { get; set; } = string.Empty;
+    /// <summary>PIN de vacation, choisi à l'ouverture. Nul si la caisse a été ouverte sans code :
+    /// la clôture n'est alors possible qu'avec le PIN gérant.</summary>
+    [MaxLength(200)] public string? OperatorPinHash { get; set; }
+    [MaxLength(80)] public string? ClosedBy { get; set; }
     public long OpeningFloatXof { get; set; }
     public long? CountedCashXof { get; set; }
     public long? ExpectedCashXof { get; set; }
