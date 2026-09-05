@@ -60,6 +60,8 @@ public sealed class BoutiqueDbContext(DbContextOptions<BoutiqueDbContext> option
     public DbSet<PrintJob> PrintJobs => Set<PrintJob>();
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
     public DbSet<SyncOutboxEntry> SyncOutbox => Set<SyncOutboxEntry>();
+    public DbSet<Order> Orders => Set<Order>();
+    public DbSet<OrderLine> OrderLines => Set<OrderLine>();
     public DbSet<AppSetting> AppSettings => Set<AppSetting>();
     public DbSet<DocumentSequence> DocumentSequences => Set<DocumentSequence>();
 
@@ -79,6 +81,10 @@ public sealed class BoutiqueDbContext(DbContextOptions<BoutiqueDbContext> option
         modelBuilder.Entity<CashMovement>().HasIndex(x => x.CashSessionId);
         // L'agent de synchronisation ne lit que les lignes non envoyées, dans l'ordre d'écriture.
         modelBuilder.Entity<SyncOutboxEntry>().HasIndex(x => new { x.SentAt, x.CreatedAt });
+        modelBuilder.Entity<Order>().HasIndex(x => x.Number).IsUnique();
+        modelBuilder.Entity<Order>().HasIndex(x => x.Status);
+        modelBuilder.Entity<Order>().HasMany(x => x.Lines).WithOne(x => x.Order).HasForeignKey(x => x.OrderId).OnDelete(DeleteBehavior.Cascade);
+        modelBuilder.Entity<OrderLine>().Property(x => x.Quantity).HasPrecision(18, 3);
         modelBuilder.Entity<CustomerCredit>().HasIndex(x => new { x.Status, x.DueAt });
         modelBuilder.Entity<StockMovement>().HasIndex(x => new { x.VariantId, x.CreatedAt });
         modelBuilder.Entity<Sale>().HasMany(x => x.Lines).WithOne(x => x.Sale).HasForeignKey(x => x.SaleId).OnDelete(DeleteBehavior.Restrict);

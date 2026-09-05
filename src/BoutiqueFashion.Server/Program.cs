@@ -377,6 +377,17 @@ app.MapGet("/api/sync/pull", async (long since, HttpContext http, ServerDbContex
     // Le filtre ci-dessus cesse d'envoyer un article dont la portée s'est resserrée ailleurs :
     // sans cette liste, le terminal en garderait une copie fantôme, vendable et invisible du
     // serveur.
+    // Les commandes de cette boutique, dans leur état courant. Elles descendent par le même
+    // curseur que le référentiel : une annulation décidée depuis le téléphone atteint donc la
+    // caisse au prochain cycle, sans mécanisme séparé.
+    var orders = await db.Orders.AsNoTracking()
+        .Where(x => x.ShopId == device.ShopId && x.Seq > since)
+        .OrderBy(x => x.Seq).Take(PageSize)
+        .Select(x => new OrderDto(
+            x.Id, x.Number, x.CustomerName, x.Phone, x.Note, x.Channel, x.Status, x.TotalXof, x.SaleId, x.CreatedAt,
+            x.Lines.Select(l => new OrderLineDto(l.VariantId, l.Sku, l.Description, l.Quantity, l.UnitPriceXof)).ToList()))
+        .ToListAsync(ct);
+
     var retired = await db.Products.AsNoTracking()
         .Where(x => x.Seq > since && x.ShopId != null && x.ShopId != device.ShopId)
         .OrderBy(x => x.Seq).Take(PageSize).Select(x => x.Id).ToListAsync(ct);
@@ -390,11 +401,12 @@ app.MapGet("/api/sync/pull", async (long since, HttpContext http, ServerDbContex
         await Ceiling(db.Variants.Where(x => x.Seq > since && visible.Any(p => p.Id == x.ProductId)).Select(x => x.Seq), variants.Count, PageSize, ct),
         await Ceiling(db.ShopSettings.Where(x => x.ShopId == device.ShopId && x.Seq > since).Select(x => x.Seq), settings.Count, PageSize, ct),
         await Ceiling(db.Products.Where(x => x.Seq > since && x.ShopId != null && x.ShopId != device.ShopId).Select(x => x.Seq), retired.Count, PageSize, ct),
+        await Ceiling(db.Orders.Where(x => x.ShopId == device.ShopId && x.Seq > since).Select(x => x.Seq), orders.Count, PageSize, ct),
     };
     var truncated = highest.Where(x => x is not null).Select(x => x!.Value).ToArray();
     var cursor = truncated.Length > 0 ? truncated.Min() : await MaxSeqAsync(db, device.ShopId, since, ct);
 
-    return Results.Ok(new SyncPullResponse(cursor, categories, products, variants, settings, truncated.Length > 0, retired));
+    return Results.Ok(new SyncPullResponse(cursor, categories, products, variants, settings, truncated.Length > 0, retired, orders));
 
     static async Task<long?> Ceiling(IQueryable<long> sequences, int returned, int pageSize, CancellationToken ct) =>
         returned < pageSize ? null : await sequences.OrderBy(x => x).Skip(pageSize - 1).FirstAsync(ct);
@@ -407,6 +419,7 @@ app.MapGet("/api/sync/pull", async (long since, HttpContext http, ServerDbContex
             await db.Products.MaxAsync(x => (long?)x.Seq, ct) ?? 0,
             await db.Variants.MaxAsync(x => (long?)x.Seq, ct) ?? 0,
             await db.ShopSettings.Where(x => x.ShopId == shopId).MaxAsync(x => (long?)x.Seq, ct) ?? 0,
+            await db.Orders.Where(x => x.ShopId == shopId).MaxAsync(x => (long?)x.Seq, ct) ?? 0,
         };
         return Math.Max(since, candidates.Max());
     }

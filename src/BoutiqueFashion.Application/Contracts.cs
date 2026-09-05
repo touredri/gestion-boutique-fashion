@@ -19,7 +19,11 @@ public sealed record SaleDraft(
     // Avance « réservé jusqu'au solde » : la marchandise reste en boutique et n'est que réservée.
     // Sans ce drapeau, une vente à crédit sort le stock immédiatement.
     // (commentaire simple et non doc XML : une balise ici déclencherait CS1587, promu en erreur.)
-    bool ReserveStock = false);
+    bool ReserveStock = false,
+    // Commande du site vitrine que cette vente vient honorer. Renseignée, elle passe en
+    // « traitée » dans la transaction même qui crée la vente : c'est ce qui garantit qu'un
+    // état « traité » correspond toujours à un encaissement réel.
+    Guid? OrderId = null);
 
 public sealed record SaleResult(Guid SaleId, string Number, long TotalXof, Guid DocumentId, bool AlreadyExisted, bool HasNegativeStock, long ChangeXof = 0, Guid? InvoiceDocumentId = null);
 public sealed record StockAdjustment(Guid VariantId, decimal QuantityDelta, StockMovementType Type, long UnitCostXof, string Reason, string Actor);
@@ -281,4 +285,19 @@ public interface IDocumentService
     Task<ReceiptData> GetReceiptAsync(Guid documentId, bool duplicate, CancellationToken cancellationToken = default);
     Task<ReceiptData> BuildSampleAsync(DocumentType type, CancellationToken cancellationToken = default);
     Task MarkPrintedAsync(Guid documentId, CancellationToken cancellationToken = default);
+}
+
+public sealed record OrderLineRow(Guid VariantId, string Sku, string Description, decimal Quantity, long UnitPriceXof);
+
+public sealed record OrderRow(
+    Guid Id, string Number, string CustomerName, string Phone, string? Note,
+    OrderChannel Channel, OrderStatus Status, long TotalXof, Guid? SaleId,
+    DateTimeOffset PlacedAt, IReadOnlyList<OrderLineRow> Lines);
+
+public interface IOrderService
+{
+    Task<IReadOnlyList<OrderRow>> ListAsync(bool includeClosed = false, CancellationToken cancellationToken = default);
+    /// <summary>Marque la commande livrée. Seule une commande déjà encaissée peut l'être :
+    /// on ne remet pas une marchandise qui n'a pas été payée.</summary>
+    Task MarkDeliveredAsync(Guid orderId, CancellationToken cancellationToken = default);
 }

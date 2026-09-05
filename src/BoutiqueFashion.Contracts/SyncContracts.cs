@@ -27,6 +27,8 @@ public static class SyncEntityTypes
     public const string Customer = "Customer";
     public const string StockMovement = "StockMovement";
     public const string ProductDraft = "ProductDraft";
+    /// <summary>Changement d'état d'une commande décidé en caisse.</summary>
+    public const string OrderStatus = "OrderStatus";
 }
 
 /// <summary>Une ligne d'outbox prête à partir. <paramref name="Id"/> est la clé d'idempotence :
@@ -51,7 +53,10 @@ public sealed record SyncPullResponse(
     /// Articles qui ne concernent plus cette boutique : leur portée a été restreinte à une autre.
     /// Sans cette liste, le terminal garderait à jamais une copie devenue invisible côté serveur,
     /// puisque le filtre de descente cesse justement de la lui envoyer.
-    IReadOnlyList<Guid>? RetiredProductIds = null);
+    IReadOnlyList<Guid>? RetiredProductIds = null,
+    /// Commandes de cette boutique, dans les deux sens : elles descendent avec leur état
+    /// courant, et la caisse renvoie le sien quand elle encaisse ou livre.
+    IReadOnlyList<OrderDto>? Orders = null);
 
 // --- Descendant du serveur -------------------------------------------------
 
@@ -72,6 +77,17 @@ public sealed record VariantDto(
     decimal LowStockThreshold, bool IsActive);
 
 public sealed record SettingDto(string Key, string Value);
+
+public sealed record OrderLineDto(Guid VariantId, string Sku, string Description, decimal Quantity, long UnitPriceXof);
+
+public sealed record OrderDto(
+    Guid Id, string Number, string CustomerName, string Phone, string? Note,
+    OrderChannel Channel, OrderStatus Status, long TotalXof, Guid? SaleId,
+    DateTimeOffset PlacedAt, IReadOnlyList<OrderLineDto> Lines);
+
+/// <summary>Ce que la caisse renvoie : l'état, et la vente qui le justifie. Sans cet
+/// identifiant, « traitée » ne serait qu'une case cochée.</summary>
+public sealed record OrderStatusPayload(Guid Id, OrderStatus Status, Guid? SaleId, DateTimeOffset ChangedAt);
 
 // --- Montant du terminal ---------------------------------------------------
 

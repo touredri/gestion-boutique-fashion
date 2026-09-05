@@ -240,6 +240,39 @@ public sealed class PurchaseOrderLine : Entity
     public decimal ReceivedQuantity { get; set; }
 }
 
+/// <summary>
+/// Commande reçue du site vitrine, descendue sur la caisse de sa boutique.
+///
+/// Elle n'est pas une vente : rien n'est encaissé, rien ne sort du stock tant que le vendeur n'a
+/// pas encaissé. <see cref="SaleId"/> est ce qui distingue une commande réellement traitée d'une
+/// case cochée — il est renseigné dans la transaction même qui crée la vente.
+/// </summary>
+public sealed class Order : Entity
+{
+    [MaxLength(40)] public string Number { get; set; } = string.Empty;
+    [MaxLength(160)] public string CustomerName { get; set; } = string.Empty;
+    [MaxLength(30)] public string Phone { get; set; } = string.Empty;
+    [MaxLength(500)] public string? Note { get; set; }
+    public OrderChannel Channel { get; set; } = OrderChannel.Vitrine;
+    public OrderStatus Status { get; set; } = OrderStatus.Pending;
+    public long TotalXof { get; set; }
+    public Guid? SaleId { get; set; }
+    public DateTimeOffset PlacedAt { get; set; }
+    public ICollection<OrderLine> Lines { get; set; } = [];
+}
+
+public sealed class OrderLine : Entity
+{
+    public Guid OrderId { get; set; }
+    public Order? Order { get; set; }
+    public Guid VariantId { get; set; }
+    [MaxLength(80)] public string Sku { get; set; } = string.Empty;
+    [MaxLength(200)] public string Description { get; set; } = string.Empty;
+    public decimal Quantity { get; set; }
+    /// <summary>Prix figé à la commande : la cliente a réservé à ce prix-là.</summary>
+    public long UnitPriceXof { get; set; }
+}
+
 public sealed class DocumentSnapshot : Entity
 {
     public Guid? SaleId { get; set; }

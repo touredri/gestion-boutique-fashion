@@ -276,6 +276,33 @@ public sealed class SyncService(
                 variant.IsActive = false;
         }
 
+        // Les commandes descendent avec leur état courant. Elles sont remplacées et non
+        // fusionnées : le serveur en est la source, et une annulation décidée depuis le téléphone
+        // doit effacer ce que la caisse croyait savoir.
+        foreach (var dto in page.Orders ?? [])
+        {
+            var order = await db.Orders.Include(x => x.Lines).SingleOrDefaultAsync(x => x.Id == dto.Id, cancellationToken);
+            if (order is null)
+            {
+                order = new Order { Id = dto.Id, PlacedAt = dto.PlacedAt };
+                db.Orders.Add(order);
+            }
+            else
+            {
+                db.OrderLines.RemoveRange(order.Lines);
+                order.Lines.Clear();
+            }
+            order.Number = dto.Number; order.CustomerName = dto.CustomerName; order.Phone = dto.Phone;
+            order.Note = dto.Note; order.Channel = dto.Channel; order.Status = dto.Status;
+            order.TotalXof = dto.TotalXof; order.SaleId = dto.SaleId; order.UpdatedAt = DateTimeOffset.UtcNow;
+            foreach (var line in dto.Lines)
+                order.Lines.Add(new OrderLine
+                {
+                    OrderId = order.Id, VariantId = line.VariantId, Sku = line.Sku,
+                    Description = line.Description, Quantity = line.Quantity, UnitPriceXof = line.UnitPriceXof,
+                });
+        }
+
         foreach (var dto in page.Settings)
         {
             // Les clés de synchronisation appartiennent au terminal : les laisser être écrasées

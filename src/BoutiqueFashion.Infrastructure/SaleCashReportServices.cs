@@ -164,6 +164,22 @@ public sealed class SaleService(IDbContextFactory<BoutiqueDbContext> factory, IA
         }
 
         db.AuditEntries.Add(new AuditEntry { Actor = sale.SellerName, Action = draft.ReserveStock ? "Créer avance réservée" : "Créer vente", EntityType = nameof(Sale), EntityId = sale.Id.ToString(), AfterJson = JsonSerializer.Serialize(new { sale.Number, sale.TotalXof, change, customer = customer?.Name, reserved = draft.ReserveStock }) });
+        // La commande honorée bascule ici, et nulle part ailleurs. Le faire dans la transaction
+        // de la vente est la seule façon de garantir qu'une commande « traitée » corresponde
+        // toujours à un encaissement : un appel séparé pourrait échouer après coup.
+        if (draft.OrderId is { } orderId)
+        {
+            var order = await db.Orders.SingleOrDefaultAsync(x => x.Id == orderId, cancellationToken)
+                ?? throw new KeyNotFoundException("Commande introuvable.");
+            if (order.Status is OrderStatus.Cancelled)
+                throw new InvalidOperationException($"La commande {order.Number} a été annulée depuis l'application mobile.");
+            order.Status = OrderStatus.Processed;
+            order.SaleId = sale.Id;
+            order.UpdatedAt = DateTimeOffset.UtcNow;
+            Outbox.Enqueue(db, SyncEntityTypes.OrderStatus, order.Id,
+                new OrderStatusPayload(order.Id, OrderStatus.Processed, sale.Id, DateTimeOffset.UtcNow));
+        }
+
         // La vente part en un seul événement, lignes et paiements compris : le serveur ne doit
         // jamais voir une vente sans son détail, ni l'inverse.
         Outbox.Enqueue(db, SyncEntityTypes.Sale, sale.Id, Outbox.From(sale, credit));

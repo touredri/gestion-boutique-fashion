@@ -11,6 +11,7 @@
     <DataTemplate DataType="{x:Type vm:SaleViewModel}"><views:SaleView/></DataTemplate>
     <DataTemplate DataType="{x:Type vm:CashViewModel}"><views:CashView/></DataTemplate>
     <DataTemplate DataType="{x:Type vm:AdvancesViewModel}"><views:AdvancesView/></DataTemplate>
+    <DataTemplate DataType="{x:Type vm:OrdersViewModel}"><views:OrdersView/></DataTemplate>
     <DataTemplate DataType="{x:Type vm:CatalogViewModel}"><views:CatalogView/></DataTemplate>
     <DataTemplate DataType="{x:Type vm:StockViewModel}"><views:StockView/></DataTemplate>
     <DataTemplate DataType="{x:Type vm:CustomersViewModel}"><views:CustomersView/></DataTemplate>
@@ -42,6 +43,18 @@
           <RadioButton Content="Caisse" Tag="&#xE825;" GroupName="Navigation" AutomationProperties.Name="Caisse" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Cash"/>
           <RadioButton Content="Produits" Tag="&#xE7BF;" GroupName="Navigation" AutomationProperties.Name="Produits" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Catalog"/>
           <RadioButton Content="Stock" Tag="&#xE8B7;" GroupName="Navigation" AutomationProperties.Name="Stock" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Stock" Visibility="{Binding Session.IsManager, Converter={StaticResource BoolToVis}}"/>
+          <!-- Visible du vendeur : c'est lui qui reçoit la cliente venue chercher sa commande.
+               La pastille compte les commandes en attente, sinon elles passeraient inaperçues. -->
+          <RadioButton Tag="&#xE7BF;" GroupName="Navigation" AutomationProperties.Name="Commandes" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Orders">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Text="Commandes" VerticalAlignment="Center"/>
+              <Border Background="{StaticResource Terracotta}" CornerRadius="9" MinWidth="18" Height="18" Margin="8,0,0,0"
+                      Visibility="{Binding Orders.HasPending, Converter={StaticResource BoolToVis}}">
+                <TextBlock Text="{Binding Orders.PendingCount}" Foreground="White" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="5,0"/>
+              </Border>
+            </StackPanel>
+          </RadioButton>
+
           <!-- Visible du vendeur : c'est lui qui reçoit le client venu payer sa tranche. -->
           <RadioButton Content="Avances" Tag="&#xE8C8;" GroupName="Navigation" AutomationProperties.Name="Avances et crédits" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Advances"/>
           <RadioButton Content="Clients" Tag="&#xE77B;" GroupName="Navigation" AutomationProperties.Name="Clients" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Customers" Visibility="{Binding Session.IsManager, Converter={StaticResource BoolToVis}}"/>

@@ -77,6 +77,7 @@ internal sealed class SyncApplier(ServerDbContext db, Notifier notifier)
         SyncEntityTypes.CreditPayment => ApplyCreditPaymentAsync(shopId, Read<CreditPaymentPayload>(e), cancellationToken),
         SyncEntityTypes.Customer => ApplyCustomerAsync(Read<CustomerPayload>(e), cancellationToken),
         SyncEntityTypes.StockMovement => ApplyStockMovementAsync(shopId, Read<StockMovementPayload>(e), cancellationToken),
+        SyncEntityTypes.OrderStatus => ApplyOrderStatusAsync(shopId, Read<OrderStatusPayload>(e), cancellationToken),
         _ => throw new InvalidOperationException($"Type d'événement inconnu : {e.EntityType}."),
     };
 
@@ -244,6 +245,25 @@ internal sealed class SyncApplier(ServerDbContext db, Notifier notifier)
         existing.Preferences = p.Preferences; existing.PreferredChannel = p.PreferredChannel;
         existing.CreditLimitXof = p.CreditLimitXof; existing.MarketingConsent = p.MarketingConsent;
         existing.IsArchived = p.IsArchived; existing.UpdatedAt = stamp;
+    }
+
+    // --- Commandes ---------------------------------------------------------
+
+    private async Task ApplyOrderStatusAsync(Guid shopId, OrderStatusPayload p, CancellationToken cancellationToken)
+    {
+        var order = await db.Orders.SingleOrDefaultAsync(x => x.Id == p.Id && x.ShopId == shopId, cancellationToken)
+            ?? throw new KeyNotFoundException("Commande inconnue de cette boutique.");
+
+        // Une commande annulée depuis le téléphone ne se rouvre pas parce qu'une caisse
+        // longtemps hors ligne renvoie un état antérieur.
+        if (order.Status == Domain.OrderStatus.Cancelled) return;
+
+        order.Status = p.Status;
+        order.SaleId = p.SaleId ?? order.SaleId;
+        if (p.Status == Domain.OrderStatus.Processed) order.ProcessedAt = p.ChangedAt;
+        if (p.Status == Domain.OrderStatus.Delivered) order.DeliveredAt = p.ChangedAt;
+        // Le curseur avance pour que les autres terminaux de la boutique voient le changement.
+        order.Seq = await db.NextSeqAsync(cancellationToken);
     }
 
     // --- Stock -------------------------------------------------------------
