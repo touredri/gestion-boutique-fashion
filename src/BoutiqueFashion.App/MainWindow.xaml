@@ -66,13 +66,37 @@
             <TextBlock Text="Boutique Fashion" Foreground="{StaticResource Muted}" FontSize="11" FontWeight="SemiBold"/>
             <TextBlock Text="{Binding PageTitle}" Style="{StaticResource PageTitle}"/>
           </StackPanel>
-          <!-- Indicateur de mode : sans lui, impossible de savoir si la caisse est déverrouillée. -->
-          <Border Grid.Column="1" Background="{StaticResource WarningSoft}" BorderBrush="{StaticResource Warning}" BorderThickness="1" CornerRadius="8" Padding="10,5" VerticalAlignment="Center" Visibility="{Binding Session.IsManager, Converter={StaticResource BoolToVis}}">
-            <StackPanel Orientation="Horizontal">
-              <TextBlock Text="MODE GÉRANT" Foreground="{StaticResource Warning}" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
-              <TextBlock Text="· expire après 15 min d'inactivité" Foreground="{StaticResource Warning}" FontSize="11" VerticalAlignment="Center" Margin="6,0,0,0"/>
-            </StackPanel>
-          </Border>
+          <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+            <!-- État de la synchronisation. Discret par principe : hors ligne est un état normal
+                 en boutique, pas une alarme. Il ne se colore qu'en cas de blocage réel. -->
+            <Border CornerRadius="8" Padding="10,5" Margin="0,0,8,0" ToolTip="{Binding Sync.State.LastError}">
+              <Border.Style>
+                <Style TargetType="Border">
+                  <Setter Property="Background" Value="{StaticResource Ivory}"/>
+                  <Setter Property="BorderBrush" Value="{StaticResource Line}"/>
+                  <Setter Property="BorderThickness" Value="1"/>
+                  <Style.Triggers>
+                    <DataTrigger Binding="{Binding Sync.HasTrouble}" Value="True">
+                      <Setter Property="Background" Value="{StaticResource WarningSoft}"/>
+                      <Setter Property="BorderBrush" Value="{StaticResource Warning}"/>
+                    </DataTrigger>
+                  </Style.Triggers>
+                </Style>
+              </Border.Style>
+              <StackPanel Orientation="Horizontal">
+                <TextBlock Text="&#xE895;" FontFamily="Segoe MDL2 Assets" FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0" Foreground="{StaticResource Muted}"/>
+                <TextBlock Text="{Binding Sync.Label}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource Muted}" VerticalAlignment="Center"/>
+              </StackPanel>
+            </Border>
+
+            <!-- Indicateur de mode : sans lui, impossible de savoir si la caisse est déverrouillée. -->
+            <Border Background="{StaticResource WarningSoft}" BorderBrush="{StaticResource Warning}" BorderThickness="1" CornerRadius="8" Padding="10,5" Visibility="{Binding Session.IsManager, Converter={StaticResource BoolToVis}}">
+              <StackPanel Orientation="Horizontal">
+                <TextBlock Text="MODE GÉRANT" Foreground="{StaticResource Warning}" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
+                <TextBlock Text="· expire après 15 min d'inactivité" Foreground="{StaticResource Warning}" FontSize="11" VerticalAlignment="Center" Margin="6,0,0,0"/>
+              </StackPanel>
+            </Border>
+          </StackPanel>
         </Grid>
       </Border>
       <ContentControl Grid.Row="1" Content="{Binding CurrentPage}" Focusable="False"/>

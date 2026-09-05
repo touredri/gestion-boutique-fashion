@@ -29,10 +29,11 @@ public partial class ShellViewModel : ObservableObject
     private readonly DocumentsViewModel documents; private readonly ReportsViewModel reports; private readonly SettingsViewModel settings;
     private readonly CashViewModel cash; private readonly AdvancesViewModel advances;
 
-    public ShellViewModel(ManagerSession session, ShiftSession shift, DashboardViewModel dashboard, SaleViewModel sale, CatalogViewModel catalog, StockViewModel stock, CustomersViewModel customers, ExpensesViewModel expenses, DocumentsViewModel documents, ReportsViewModel reports, SettingsViewModel settings, CashViewModel cash, AdvancesViewModel advances)
+    public ShellViewModel(ManagerSession session, ShiftSession shift, SyncAgent sync, DashboardViewModel dashboard, SaleViewModel sale, CatalogViewModel catalog, StockViewModel stock, CustomersViewModel customers, ExpensesViewModel expenses, DocumentsViewModel documents, ReportsViewModel reports, SettingsViewModel settings, CashViewModel cash, AdvancesViewModel advances)
     {
         Session = session;
         Shift = shift;
+        Sync = sync;
         this.dashboard = dashboard; this.sale = sale; this.catalog = catalog; this.stock = stock; this.customers = customers;
         this.expenses = expenses; this.documents = documents; this.reports = reports; this.settings = settings; this.cash = cash; this.advances = advances;
         CurrentPage = dashboard;
@@ -41,6 +42,7 @@ public partial class ShellViewModel : ObservableObject
 
     public ManagerSession Session { get; }
     public ShiftSession Shift { get; }
+    public SyncAgent Sync { get; }
     [ObservableProperty] private object currentPage; [ObservableProperty] private string pageTitle = "Tableau de bord";
     [ObservableProperty] private string currentTarget = "Dashboard";
 
@@ -1190,8 +1192,52 @@ public partial class ReportsViewModel(IReportService reports) : ObservableObject
     }
 }
 
-public partial class SettingsViewModel(IAuthorizationService authorization, IAppSettingsService settings, IBackupService backup, IThermalPrinterService printer, IDocumentService documents, IA4DocumentService a4, ManagerSession session) : ObservableObject, ILoadable
+public partial class SettingsViewModel(IAuthorizationService authorization, IAppSettingsService settings, IBackupService backup, IThermalPrinterService printer, IDocumentService documents, IA4DocumentService a4, ManagerSession session, ISyncService sync, SyncAgent agent) : ObservableObject, ILoadable
 {
+    // --- Appairage du terminal à sa boutique ---
+    [ObservableProperty] private string syncServerUrl = string.Empty;
+    [ObservableProperty] private string enrollmentCode = string.Empty;
+    [ObservableProperty] private string deviceName = Environment.MachineName;
+    [ObservableProperty] private string syncStatus = string.Empty;
+    public SyncAgent Sync => agent;
+
+    [RelayCommand]
+    private async Task Enroll()
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(SyncServerUrl)) { SyncStatus = "Indiquez l'adresse du serveur."; return; }
+            if (string.IsNullOrWhiteSpace(EnrollmentCode)) { SyncStatus = "Saisissez le code d'appairage fourni par l'application mobile."; return; }
+            var state = await sync.EnrollAsync(SyncServerUrl, EnrollmentCode, DeviceName);
+            EnrollmentCode = string.Empty;
+            SyncStatus = $"Terminal rattaché à « {state.ShopName} ».";
+            UiFeedback.Success(SyncStatus);
+            // Premier cycle immédiat : le catalogue de la boutique descend sans attendre.
+            await agent.RunAsync();
+        }
+        catch (Exception e) { SyncStatus = e.Message; UiFeedback.Error($"Appairage impossible : {e.Message}"); }
+    }
+
+    [RelayCommand]
+    private async Task SyncNow()
+    {
+        await agent.RunAsync();
+        SyncStatus = agent.State.LastError ?? agent.Label;
+    }
+
+    [RelayCommand]
+    private async Task Unpair()
+    {
+        if (!UiConfirm.Ask("Détacher ce terminal de sa boutique ? Les ventes non encore remontées resteront en attente jusqu'à un nouvel appairage.")) return;
+        try
+        {
+            await sync.ForgetAsync(session.Pin);
+            SyncStatus = "Terminal détaché.";
+            await agent.RefreshAsync();
+        }
+        catch (Exception e) { SyncStatus = e.Message; }
+    }
+
     public ObservableCollection<PrinterProfile> Printers { get; } = [];
     public ManagerSession Session => session;
     public IReadOnlyList<DocumentType> DocumentTypes { get; } = Enum.GetValues<DocumentType>();
@@ -1227,6 +1273,8 @@ public partial class SettingsViewModel(IAuthorizationService authorization, IApp
         SerialBaud = int.TryParse(await settings.GetAsync("Printer.SerialBaud"), out var baud) && SerialBauds.Contains(baud) ? baud : 9600;
         SelectedPaperWidthOption = (await settings.GetAsync("Printer.PaperWidth") ?? "80") == "58" ? "58 mm" : "80 mm";
         NetworkPrinter = await settings.GetAsync("Printer.Tcp") ?? "";
+        SyncServerUrl = await settings.GetAsync(SyncService.ServerUrlKey) ?? SyncServerUrl;
+        await agent.RefreshAsync();
         await LoadFlagsAsync();
     }
 

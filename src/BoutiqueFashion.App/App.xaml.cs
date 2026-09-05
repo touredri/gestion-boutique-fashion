@@ -13,7 +13,7 @@ public partial class App : System.Windows.Application
     private readonly IHost host = Host.CreateDefaultBuilder().ConfigureServices(services =>
     {
         services.AddBoutiqueInfrastructure();
-        services.AddSingleton<ManagerSession>(); services.AddSingleton<ShiftSession>();
+        services.AddSingleton<ManagerSession>(); services.AddSingleton<ShiftSession>(); services.AddSingleton<SyncAgent>();
         services.AddSingleton<ShellViewModel>(); services.AddSingleton<DashboardViewModel>(); services.AddSingleton<SaleViewModel>(); services.AddSingleton<CashViewModel>(); services.AddSingleton<AdvancesViewModel>();
         services.AddSingleton<CatalogViewModel>(); services.AddSingleton<StockViewModel>(); services.AddSingleton<CustomersViewModel>();
         services.AddSingleton<ExpensesViewModel>(); services.AddSingleton<DocumentsViewModel>(); services.AddSingleton<ReportsViewModel>(); services.AddSingleton<SettingsViewModel>(); services.AddSingleton<MainWindow>();
@@ -26,6 +26,9 @@ public partial class App : System.Windows.Application
         await TryBackupAsync(); backupTimer.Tick += async (_, _) => await TryBackupAsync(); backupTimer.Start();
         var window = host.Services.GetRequiredService<MainWindow>(); window.Show();
         await host.Services.GetRequiredService<ShellViewModel>().InitializeAsync();
+        // Démarré après la fenêtre : la caisse doit être utilisable même si le
+        // serveur est injoignable, donc la synchronisation ne retarde rien.
+        await host.Services.GetRequiredService<SyncAgent>().StartAsync();
     }
 
     private async Task TryBackupAsync() { try { await host.Services.GetRequiredService<IBackupService>().CreateAsync(); } catch { /* L'échec reste non bloquant; la sauvegarde manuelle affiche l'erreur. */ } }

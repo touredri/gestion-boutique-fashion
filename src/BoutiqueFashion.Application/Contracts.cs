@@ -231,6 +231,23 @@ public interface IExpenseService
     Task<IReadOnlyList<Expense>> ListRecentAsync(int count = 20, CancellationToken cancellationToken = default);
 }
 
+/// <summary>Ce que la barre de titre doit pouvoir dire d'un coup d'œil : appairé ou non, combien
+/// d'événements attendent, et si la dernière tentative a échoué.</summary>
+public sealed record SyncState(
+    bool IsEnrolled, string? ShopName, int PendingCount,
+    DateTimeOffset? LastSuccessAt, string? LastError, bool IsRunning);
+
+public interface ISyncService
+{
+    Task<SyncState> GetStateAsync(CancellationToken cancellationToken = default);
+    /// <summary>Échange un code d'appairage contre un jeton d'appareil. Exige le réseau, une fois.</summary>
+    Task<SyncState> EnrollAsync(string serverUrl, string code, string deviceName, CancellationToken cancellationToken = default);
+    /// <summary>Un cycle complet : remontée des faits puis descente du référentiel. Ne lève
+    /// jamais — hors réseau, la file grossit et la boutique continue.</summary>
+    Task<SyncState> RunOnceAsync(CancellationToken cancellationToken = default);
+    Task<SyncState> ForgetAsync(string managerPin, CancellationToken cancellationToken = default);
+}
+
 public interface IAppSettingsService
 {
     Task<string?> GetAsync(string key, CancellationToken cancellationToken = default);

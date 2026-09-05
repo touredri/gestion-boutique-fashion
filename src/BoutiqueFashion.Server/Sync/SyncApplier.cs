@@ -96,8 +96,8 @@ internal sealed class SyncApplier(ServerDbContext db)
                 ChangeXof = p.ChangeXof,
                 Status = p.Status,
                 OccurredAt = p.CreatedAt,
-                Lines = [.. p.Lines.Select(l => new SaleLine { SaleId = p.Id, VariantId = l.VariantId, Sku = l.Sku, Description = l.Description, Quantity = l.Quantity, UnitPriceXof = l.UnitPriceXof, FrozenUnitCostXof = l.FrozenUnitCostXof, DiscountXof = l.DiscountXof, LineTotalXof = l.LineTotalXof })],
-                Payments = [.. p.Payments.Select(x => new SalePayment { Id = x.Id, SaleId = p.Id, Mode = x.Mode, AmountXof = x.AmountXof, ExternalReference = x.ExternalReference, IsReversal = x.IsReversal })],
+                Lines = [.. p.Lines.Select(l => new Data.SaleLine { SaleId = p.Id, VariantId = l.VariantId, Sku = l.Sku, Description = l.Description, Quantity = l.Quantity, UnitPriceXof = l.UnitPriceXof, FrozenUnitCostXof = l.FrozenUnitCostXof, DiscountXof = l.DiscountXof, LineTotalXof = l.LineTotalXof })],
+                Payments = [.. p.Payments.Select(x => new Data.SalePayment { Id = x.Id, SaleId = p.Id, Mode = x.Mode, AmountXof = x.AmountXof, ExternalReference = x.ExternalReference, IsReversal = x.IsReversal })],
             });
         }
         else
