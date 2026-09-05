@@ -60,6 +60,35 @@ public sealed class UserSession : ServerEntity
     public DateTimeOffset? RevokedAt { get; set; }
 }
 
+/// <summary>
+/// Abonnement d'un navigateur aux notifications. L'endpoint est fourni par le service de push
+/// du navigateur ; les deux clés servent au chiffrement, que nous n'utilisons pas — voir
+/// WebPushSender pour la raison.
+/// </summary>
+public sealed class PushSubscription : ServerEntity
+{
+    public Guid UserId { get; set; }
+    [MaxLength(500)] public string Endpoint { get; set; } = string.Empty;
+    [MaxLength(200)] public string P256dh { get; set; } = string.Empty;
+    [MaxLength(200)] public string Auth { get; set; } = string.Empty;
+    [MaxLength(200)] public string? Label { get; set; }
+    public DateTimeOffset? LastUsedAt { get; set; }
+}
+
+/// <summary>Réglages d'alerte. Une seule ligne : la propriétaire est seule à les recevoir.</summary>
+public sealed class NotificationSettings
+{
+    public int Id { get; set; } = 1;
+    /// <summary>Numéro WhatsApp au format international, sans « + » ni espaces.</summary>
+    [MaxLength(30)] public string? WhatsAppNumber { get; set; }
+    public bool OnCashOpened { get; set; } = true;
+    public bool OnCashClosed { get; set; } = true;
+    /// <summary>Un écart de caisse est la seule alerte qui mérite de réveiller quelqu'un.</summary>
+    public bool OnCashVariance { get; set; } = true;
+    public bool OnNewOrder { get; set; } = true;
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
 public sealed class Device : ServerEntity
 {
     public Guid ShopId { get; set; }

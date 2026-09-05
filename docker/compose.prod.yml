@@ -37,6 +37,11 @@ services:
       Bootstrap__Username: ${BOOTSTRAP_USERNAME}
       Bootstrap__Password: ${BOOTSTRAP_PASSWORD}
       Bootstrap__DisplayName: ${BOOTSTRAP_DISPLAY_NAME}
+      Vapid__Subject: ${VAPID_SUBJECT}
+      Vapid__PublicKey: ${VAPID_PUBLIC_KEY}
+      Vapid__PrivateKey: ${VAPID_PRIVATE_KEY}
+      OpenWa__BaseUrl: ${OPENWA_BASE_URL}
+      OpenWa__ApiKey: ${OPENWA_API_KEY}
     expose:
       - "8080"
 

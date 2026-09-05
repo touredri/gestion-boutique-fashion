@@ -13,6 +13,8 @@ public sealed class ServerDbContext(DbContextOptions<ServerDbContext> options) :
     public DbSet<User> Users => Set<User>();
     public DbSet<UserSession> UserSessions => Set<UserSession>();
     public DbSet<Device> Devices => Set<Device>();
+    public DbSet<PushSubscription> PushSubscriptions => Set<PushSubscription>();
+    public DbSet<NotificationSettings> NotificationSettings => Set<NotificationSettings>();
     public DbSet<EnrollmentCode> EnrollmentCodes => Set<EnrollmentCode>();
     public DbSet<ProcessedEvent> ProcessedEvents => Set<ProcessedEvent>();
 
@@ -40,6 +42,7 @@ public sealed class ServerDbContext(DbContextOptions<ServerDbContext> options) :
         modelBuilder.Entity<User>().HasIndex(x => x.Username).IsUnique();
         modelBuilder.Entity<UserSession>().HasIndex(x => x.TokenHash).IsUnique();
         modelBuilder.Entity<UserSession>().HasIndex(x => x.ExpiresAt);
+        modelBuilder.Entity<PushSubscription>().HasIndex(x => x.Endpoint).IsUnique();
         modelBuilder.Entity<Device>().HasIndex(x => x.TokenHash).IsUnique();
         modelBuilder.Entity<Device>().HasIndex(x => x.ShopId);
         modelBuilder.Entity<EnrollmentCode>().HasIndex(x => x.Code).IsUnique();

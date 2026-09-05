@@ -1,8 +1,19 @@
 using BoutiqueFashion.Contracts;
 using BoutiqueFashion.Server.Data;
 using BoutiqueFashion.Server.Endpoints;
+using BoutiqueFashion.Server.Notifications;
 using BoutiqueFashion.Server.Sync;
 using Microsoft.EntityFrameworkCore;
+
+// Génération des clés VAPID en ligne de commande : sans elle il faudrait un outil externe
+// pour configurer les notifications, ce qui garantit qu'on ne le fera jamais.
+if (args is ["vapid", ..])
+{
+    var (publicKey, privateKey) = Vapid.GenerateKeys();
+    Console.WriteLine($"Vapid__PublicKey={publicKey}");
+    Console.WriteLine($"Vapid__PrivateKey={privateKey}");
+    return;
+}
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -10,6 +21,9 @@ builder.Services.AddDbContext<ServerDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("Postgres")
         ?? "Host=localhost;Port=5432;Database=boutique;Username=boutique;Password=boutique"));
 builder.Services.AddScoped<SyncApplier>();
+builder.Services.AddScoped<Notifier>();
+builder.Services.AddHttpClient("openwa");
+builder.Services.AddHttpClient("webpush");
 builder.Services.AddProblemDetails();
 
 var app = builder.Build();
@@ -54,6 +68,69 @@ var admin = app.MapGroup("/api").AddEndpointFilter(async (context, next) =>
 });
 
 admin.MapReporting();
+
+// ---------------------------------------------------------------------------
+// Alertes. WhatsApp porte le détail, la notification web ne fait que réveiller
+// l'application — voir Notifier pour la raison.
+// ---------------------------------------------------------------------------
+
+admin.MapGet("/notifications/settings", async (ServerDbContext db, IConfiguration config, CancellationToken ct) =>
+{
+    var settings = await db.NotificationSettings.FirstOrDefaultAsync(ct) ?? new NotificationSettings();
+    return Results.Ok(new
+    {
+        settings.WhatsAppNumber, settings.OnCashOpened, settings.OnCashClosed,
+        settings.OnCashVariance, settings.OnNewOrder,
+        // La clé publique est nécessaire au navigateur pour s'abonner ; son absence indique
+        // que les notifications web ne sont pas configurées sur ce serveur.
+        VapidPublicKey = config["Vapid:PublicKey"],
+        WhatsAppConfigured = !string.IsNullOrWhiteSpace(config["OpenWa:BaseUrl"]),
+        Subscriptions = await db.PushSubscriptions.CountAsync(ct),
+    });
+});
+
+admin.MapPut("/notifications/settings", async (NotificationSettingsInput input, ServerDbContext db, CancellationToken ct) =>
+{
+    var settings = await db.NotificationSettings.FirstOrDefaultAsync(ct);
+    if (settings is null) { settings = new NotificationSettings(); db.NotificationSettings.Add(settings); }
+    // Seuls les chiffres : un numéro copié depuis un carnet arrive avec des espaces et un « + ».
+    settings.WhatsAppNumber = string.IsNullOrWhiteSpace(input.WhatsAppNumber)
+        ? null
+        : new string([.. input.WhatsAppNumber.Where(char.IsDigit)]);
+    settings.OnCashOpened = input.OnCashOpened;
+    settings.OnCashClosed = input.OnCashClosed;
+    settings.OnCashVariance = input.OnCashVariance;
+    settings.OnNewOrder = input.OnNewOrder;
+    settings.UpdatedAt = DateTimeOffset.UtcNow;
+    await db.SaveChangesAsync(ct);
+    return Results.NoContent();
+});
+
+admin.MapPost("/notifications/subscriptions", async (PushSubscriptionInput input, HttpContext http, ServerDbContext db, CancellationToken ct) =>
+{
+    var user = (UserContext)http.Items["user"]!;
+    var existing = await db.PushSubscriptions.SingleOrDefaultAsync(x => x.Endpoint == input.Endpoint, ct);
+    if (existing is null)
+        db.PushSubscriptions.Add(new PushSubscription { UserId = user.UserId, Endpoint = input.Endpoint, P256dh = input.P256dh, Auth = input.Auth, Label = input.Label });
+    else { existing.P256dh = input.P256dh; existing.Auth = input.Auth; existing.UserId = user.UserId; }
+    await db.SaveChangesAsync(ct);
+    return Results.NoContent();
+});
+
+admin.MapDelete("/notifications/subscriptions", async (string endpoint, ServerDbContext db, CancellationToken ct) =>
+{
+    var existing = await db.PushSubscriptions.SingleOrDefaultAsync(x => x.Endpoint == endpoint, ct);
+    if (existing is not null) { db.PushSubscriptions.Remove(existing); await db.SaveChangesAsync(ct); }
+    return Results.NoContent();
+});
+
+admin.MapPost("/notifications/test", async (Notifier notifier, CancellationToken ct) =>
+{
+    // Un bouton d'essai vaut mieux qu'une configuration qu'on croit bonne : c'est le seul moyen
+    // de savoir que le message arrive vraiment sur le bon téléphone.
+    await notifier.SendAsync(new Alert(NotificationKind.CashOpened, "Bana Shop", "Message de test. Vos alertes sont bien configurées."), ct);
+    return Results.NoContent();
+});
 
 admin.MapGet("/auth/me", (HttpContext http) =>
 {
@@ -324,6 +401,8 @@ app.Run();
 
 internal sealed record ShopInput(string Name, string? City, string? Address, string? Phone);
 internal sealed record LoginInput(string Username, string Password);
+internal sealed record NotificationSettingsInput(string? WhatsAppNumber, bool OnCashOpened, bool OnCashClosed, bool OnCashVariance, bool OnNewOrder);
+internal sealed record PushSubscriptionInput(string Endpoint, string P256dh, string Auth, string? Label);
 internal sealed record PasswordChangeInput(string CurrentPassword, string NewPassword);
 
 internal sealed record CatalogInput(

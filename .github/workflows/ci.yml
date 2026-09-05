@@ -27,7 +27,7 @@ permissions:
 env:
   # Renseigner pour produire une migration, puis revider une fois qu'elle est commitée.
   MIGRATION_NAME: ""
-  SERVER_MIGRATION_NAME: ""
+  SERVER_MIGRATION_NAME: "Notifications"
 
 jobs:
   terminal:

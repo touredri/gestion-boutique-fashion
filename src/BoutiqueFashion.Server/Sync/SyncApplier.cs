@@ -2,6 +2,7 @@ using System.Text.Json;
 using BoutiqueFashion.Contracts;
 using BoutiqueFashion.Domain;
 using BoutiqueFashion.Server.Data;
+using BoutiqueFashion.Server.Notifications;
 using Microsoft.EntityFrameworkCore;
 
 namespace BoutiqueFashion.Server.Sync;
@@ -21,9 +22,14 @@ namespace BoutiqueFashion.Server.Sync;
 /// Le coût est un aller-retour par événement plutôt qu'un par lot. Pour une boutique qui produit
 /// quelques centaines d'événements par jour, c'est sans conséquence.
 /// </summary>
-internal sealed class SyncApplier(ServerDbContext db)
+internal sealed class SyncApplier(ServerDbContext db, Notifier notifier)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+
+    /// <summary>Alertes retenues pendant l'application, envoyées une fois le lot écrit. Les
+    /// émettre au fil de l'eau enverrait des messages pour des faits qu'une erreur ultérieure
+    /// aurait annulés.</summary>
+    private readonly List<Alert> pending = [];
 
     public async Task<SyncPushResponse> ApplyAsync(Guid shopId, IReadOnlyList<SyncEvent> events, CancellationToken cancellationToken)
     {
@@ -54,6 +60,9 @@ internal sealed class SyncApplier(ServerDbContext db)
                 rejected.Add(new SyncRejection(e.Id, ex.Message));
             }
         }
+
+        foreach (var alert in pending) await notifier.SendAsync(alert, cancellationToken);
+        pending.Clear();
 
         return new SyncPushResponse(accepted, rejected);
     }
@@ -127,6 +136,10 @@ internal sealed class SyncApplier(ServerDbContext db)
             Id = p.Id, ShopId = shopId, Number = p.Number, OperatorName = p.OperatorName,
             OpeningFloatXof = p.OpeningFloatXof, OpenedAt = p.OpenedAt, IsClosed = false,
         });
+
+        var shop = await db.Shops.AsNoTracking().SingleOrDefaultAsync(x => x.Id == shopId, cancellationToken);
+        pending.Add(new Alert(NotificationKind.CashOpened, $"Caisse ouverte · {shop?.Name}",
+            $"{p.OperatorName} a ouvert la caisse avec {p.OpeningFloatXof:N0} F de fond."));
     }
 
     private async Task ApplyCashClosedAsync(Guid shopId, CashSessionClosedPayload p, CancellationToken cancellationToken)
@@ -148,6 +161,16 @@ internal sealed class SyncApplier(ServerDbContext db)
         session.DifferenceReason = p.DifferenceReason;
         session.ClosedAt = p.ClosedAt;
         session.IsClosed = true;
+
+        var shop = await db.Shops.AsNoTracking().SingleOrDefaultAsync(x => x.Id == shopId, cancellationToken);
+        // Un écart mérite sa propre alerte : il se règle le soir même, pas au prochain passage.
+        pending.Add(p.DifferenceXof == 0
+            ? new Alert(NotificationKind.CashClosed, $"Caisse clôturée · {shop?.Name}",
+                $"{p.OperatorName} a clôturé sans écart. {p.CountedCashXof:N0} F comptés.")
+            : new Alert(NotificationKind.CashVariance, $"Écart de caisse · {shop?.Name}",
+                $"{p.OperatorName} a clôturé avec {p.DifferenceXof:N0} F d'écart. "
+                + $"Attendu {p.ExpectedCashXof:N0} F, compté {p.CountedCashXof:N0} F."
+                + (string.IsNullOrWhiteSpace(p.DifferenceReason) ? "" : $" Motif : {p.DifferenceReason}.")));
     }
 
     private async Task ApplyCashMovementAsync(Guid shopId, CashMovementPayload p, CancellationToken cancellationToken)
