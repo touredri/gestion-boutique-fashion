@@ -9,6 +9,7 @@ using BoutiqueFashion.Application;
 namespace BoutiqueFashion.App.Views;
 
 public partial class DashboardView : UserControl { public DashboardView() => InitializeComponent(); }
+public partial class CashView : UserControl { public CashView() => InitializeComponent(); }
 public partial class SaleView : UserControl
 {
     public SaleView() => InitializeComponent();

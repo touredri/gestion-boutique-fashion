@@ -1,0 +1,217 @@
+<UserControl x:Class="BoutiqueFashion.App.Views.CashView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:BoutiqueFashion.App.Controls">
+  <UserControl.Resources>
+    <!-- Deux styles jumeaux plutôt qu'un convertisseur : la bascule ouverte/fermée pilote des
+         blocs entiers, et une valeur locale de Visibility l'emporterait sur le déclencheur. -->
+    <Style x:Key="WhenOpen" TargetType="FrameworkElement">
+      <Setter Property="Visibility" Value="Collapsed"/>
+      <Style.Triggers>
+        <DataTrigger Binding="{Binding IsCashOpen}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
+      </Style.Triggers>
+    </Style>
+    <Style x:Key="WhenClosed" TargetType="FrameworkElement">
+      <Setter Property="Visibility" Value="Collapsed"/>
+      <Style.Triggers>
+        <DataTrigger Binding="{Binding IsCashOpen}" Value="False"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
+      </Style.Triggers>
+    </Style>
+  </UserControl.Resources>
+
+  <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <Grid Margin="18">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/>
+      </Grid.RowDefinitions>
+
+      <!-- En-tête -->
+      <Grid Margin="4,0,4,12">
+        <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+        <StackPanel>
+          <TextBlock Text="Caisse" Style="{StaticResource Eyebrow}" Margin="0,0,0,3"/>
+          <TextBlock Text="Ouverture, suivi et clôture de la vacation" FontSize="22" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/>
+        </StackPanel>
+        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+          <Border Background="{StaticResource SuccessSoft}" BorderBrush="{StaticResource Success}" BorderThickness="1" CornerRadius="6" Padding="10,5" Margin="0,0,8,0" Style="{StaticResource WhenOpen}">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Text="● CAISSE OUVERTE" Foreground="{StaticResource Success}" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
+              <TextBlock Text="{Binding State.OperatorName, StringFormat={} · {0}}" Foreground="{StaticResource Success}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"/>
+            </StackPanel>
+          </Border>
+          <Border Background="{StaticResource DangerSoft}" BorderBrush="{StaticResource Danger}" BorderThickness="1" CornerRadius="6" Padding="10,5" Margin="0,0,8,0" Style="{StaticResource WhenClosed}">
+            <TextBlock Text="● CAISSE FERMÉE" Foreground="{StaticResource Danger}" FontSize="11" FontWeight="Bold"/>
+          </Border>
+          <Button Content="Actualiser" Command="{Binding RefreshCommand}" MinWidth="110"/>
+        </StackPanel>
+      </Grid>
+
+      <!-- ================= OUVERTURE ================= -->
+      <Border Grid.Row="1" Style="{StaticResource Card}" Margin="4,0,4,12" Padding="18">
+        <Border.Resources>
+          <Style TargetType="Border" BasedOn="{StaticResource Card}"/>
+        </Border.Resources>
+        <Border.Style>
+          <Style TargetType="Border" BasedOn="{StaticResource Card}">
+            <Setter Property="Visibility" Value="Collapsed"/>
+            <Style.Triggers>
+              <DataTrigger Binding="{Binding IsCashOpen}" Value="False"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
+            </Style.Triggers>
+          </Style>
+        </Border.Style>
+        <StackPanel>
+          <TextBlock Text="Démarrer la journée" Style="{StaticResource SectionTitle}"/>
+          <TextBlock Text="Nommez la personne qui tient la caisse : toutes les ventes de la vacation lui seront attribuées. Son code permettra de clôturer sans déranger le gérant."
+                     Style="{StaticResource HelperText}" Margin="2,0,2,14"/>
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="1.2*"/>
+              <ColumnDefinition Width="1.4*"/>
+              <ColumnDefinition Width="*"/>
+              <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <controls:KeypadField Value="{Binding OpeningFloat}" Title="Fond de caisse" Suffix="FCFA" Margin="0,0,8,0"/>
+            <StackPanel Grid.Column="1" Margin="0,0,8,0">
+              <TextBlock Text="Vendeur en poste" Style="{StaticResource FieldLabel}"/>
+              <TextBox Text="{Binding OperatorName, UpdateSourceTrigger=PropertyChanged}" controls:Placeholder.Text="Nom du vendeur" AutomationProperties.Name="Vendeur en poste"/>
+            </StackPanel>
+            <StackPanel Grid.Column="2" Margin="0,0,8,0">
+              <TextBlock Text="Code de vacation" Style="{StaticResource FieldLabel}"/>
+              <controls:KeypadField Value="{Binding ShiftPin}" Mask="True" Placeholder="4 à 12 chiffres" AutomationProperties.Name="Code de vacation"/>
+            </StackPanel>
+            <StackPanel Grid.Column="3">
+              <TextBlock Text="Confirmer le code" Style="{StaticResource FieldLabel}"/>
+              <controls:KeypadField Value="{Binding ShiftPinConfirm}" Mask="True" Placeholder="Ressaisir" AutomationProperties.Name="Confirmation du code de vacation"/>
+            </StackPanel>
+          </Grid>
+          <TextBlock Text="Le code de vacation est facultatif. Sans lui, la clôture exigera le code gérant."
+                     Style="{StaticResource HelperText}" Margin="2,8,2,0"/>
+          <Button Content="Ouvrir la caisse" Command="{Binding OpenCommand}" Style="{StaticResource HeroButton}" HorizontalAlignment="Left" MinWidth="200" Margin="0,14,0,0"/>
+        </StackPanel>
+      </Border>
+
+      <!-- ================= VACATION EN COURS ================= -->
+      <Grid Grid.Row="2" Style="{StaticResource WhenOpen}">
+        <Grid.ColumnDefinitions><ColumnDefinition Width="1.15*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+
+        <!-- Ce que le tiroir devrait contenir -->
+        <Border Style="{StaticResource RaisedCard}" Padding="20" Margin="4">
+          <StackPanel>
+            <TextBlock Text="Espèces attendues en caisse" Style="{StaticResource Eyebrow}"/>
+            <TextBlock Text="{Binding State.ExpectedCashXof, StringFormat={}{0:N0} FCFA}" FontSize="34" Style="{StaticResource Money}" Foreground="{StaticResource Ink}" Margin="0,4,0,10"/>
+
+            <Border Background="{StaticResource Ivory}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="10" Padding="14">
+              <StackPanel>
+                <Grid Margin="0,0,0,6">
+                  <TextBlock Text="Fond de caisse initial" Foreground="{StaticResource Muted}" FontSize="13"/>
+                  <TextBlock Text="{Binding State.OpeningFloatXof, StringFormat={}{0:N0}}" Style="{StaticResource Money}" FontSize="13" HorizontalAlignment="Right"/>
+                </Grid>
+                <Grid Margin="0,0,0,6">
+                  <TextBlock Text="Ventes réglées en espèces" Foreground="{StaticResource Muted}" FontSize="13"/>
+                  <TextBlock Text="{Binding State.CashSalesXof, StringFormat={}+ {0:N0}}" Style="{StaticResource Money}" FontSize="13" Foreground="{StaticResource Success}" HorizontalAlignment="Right"/>
+                </Grid>
+                <Grid Margin="0,0,0,6">
+                  <TextBlock Text="Versements sur crédits et avances" Foreground="{StaticResource Muted}" FontSize="13"/>
+                  <TextBlock Text="{Binding State.CashCreditPaymentsXof, StringFormat={}+ {0:N0}}" Style="{StaticResource Money}" FontSize="13" Foreground="{StaticResource Success}" HorizontalAlignment="Right"/>
+                </Grid>
+                <Grid>
+                  <TextBlock Text="Dépenses réglées en espèces" Foreground="{StaticResource Muted}" FontSize="13"/>
+                  <TextBlock Text="{Binding State.CashExpensesXof, StringFormat={}- {0:N0}}" Style="{StaticResource Money}" FontSize="13" Foreground="{StaticResource Danger}" HorizontalAlignment="Right"/>
+                </Grid>
+              </StackPanel>
+            </Border>
+
+            <Grid Margin="0,12,0,0">
+              <StackPanel>
+                <TextBlock Text="{Binding State.Number}" Style="{StaticResource Eyebrow}"/>
+                <TextBlock Text="{Binding State.OpenedAt, StringFormat=Ouverte le {0:dd/MM/yyyy à HH:mm}}" Foreground="{StaticResource Muted}" FontSize="12"/>
+              </StackPanel>
+              <StackPanel HorizontalAlignment="Right">
+                <TextBlock Text="{Binding State.SalesCount, StringFormat={}{0} vente(s)}" FontWeight="SemiBold" HorizontalAlignment="Right"/>
+                <TextBlock Text="{Binding State.TotalSalesXof, StringFormat={}{0:N0} FCFA encaissés au total}" Foreground="{StaticResource Muted}" FontSize="12" HorizontalAlignment="Right"/>
+              </StackPanel>
+            </Grid>
+
+            <Button Content="Aller encaisser une vente" Command="{Binding GoToSaleCommand}" Style="{StaticResource PrimaryButton}" HorizontalAlignment="Left" MinWidth="220" Margin="0,14,0,0"/>
+          </StackPanel>
+        </Border>
+
+        <!-- Clôture -->
+        <Border Grid.Column="1" Style="{StaticResource Card}" Padding="18" Margin="4">
+          <StackPanel>
+            <TextBlock Text="Clôturer la vacation" Style="{StaticResource SectionTitle}"/>
+            <TextBlock Text="Comptez les espèces présentes dans le tiroir, fond de caisse compris." Style="{StaticResource HelperText}" Margin="2,0,2,12"/>
+
+            <controls:KeypadField Value="{Binding CountedCash}" Title="Espèces réelles comptées" Suffix="FCFA"/>
+
+            <!-- L'écart s'annonce avant validation : le vendeur peut encore recompter. -->
+            <Border CornerRadius="8" Padding="12,8" Margin="4,10,4,0" Visibility="{Binding HasCounted, Converter={StaticResource BoolToVis}}">
+              <Border.Style>
+                <Style TargetType="Border">
+                  <Setter Property="Background" Value="{StaticResource SuccessSoft}"/>
+                  <Setter Property="BorderBrush" Value="{StaticResource Success}"/>
+                  <Setter Property="BorderThickness" Value="1"/>
+                  <Style.Triggers>
+                    <DataTrigger Binding="{Binding IsShort}" Value="True">
+                      <Setter Property="Background" Value="{StaticResource DangerSoft}"/>
+                      <Setter Property="BorderBrush" Value="{StaticResource Danger}"/>
+                    </DataTrigger>
+                  </Style.Triggers>
+                </Style>
+              </Border.Style>
+              <TextBlock Text="{Binding DifferenceLabel}" FontWeight="Bold" FontSize="13" Foreground="{StaticResource Ink}"/>
+            </Border>
+
+            <TextBlock Text="Motif de l'écart" Style="{StaticResource FieldLabel}" Margin="4,10,4,1"/>
+            <TextBox Text="{Binding DifferenceReason}" controls:Placeholder.Text="Obligatoire si le compte ne tombe pas juste"/>
+
+            <TextBlock Text="Code de vacation ou code gérant" Style="{StaticResource FieldLabel}" Margin="4,8,4,1"/>
+            <controls:KeypadField Value="{Binding ClosingPin}" Mask="True" Placeholder="Toucher pour saisir" AutomationProperties.Name="Code de clôture"/>
+            <TextBlock Text="Un écart au-delà de la tolérance exige le code gérant." Style="{StaticResource HelperText}" Margin="4,6,4,0"/>
+
+            <Button Content="Clôturer la caisse" Command="{Binding CloseCommand}" Style="{StaticResource DangerButton}" MinHeight="52" Margin="4,14,4,0"/>
+
+            <TextBlock Text="Encaissements par mode" Style="{StaticResource Eyebrow}" Margin="4,16,4,4"/>
+            <ItemsControl ItemsSource="{Binding CollectedByMode}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Grid Margin="4,3">
+                    <TextBlock Text="{Binding Label}" Foreground="{StaticResource Muted}" FontSize="13"/>
+                    <TextBlock Text="{Binding ValueXof, StringFormat={}{0:N0} FCFA}" Style="{StaticResource Money}" FontSize="13" HorizontalAlignment="Right"/>
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </Border>
+      </Grid>
+
+      <!-- ================= HISTORIQUE ================= -->
+      <StackPanel Grid.Row="3" Margin="4,14,4,0">
+        <TextBlock Text="Clôtures des 31 derniers jours" Style="{StaticResource Eyebrow}" Margin="2,0,0,6"/>
+        <Border Style="{StaticResource Card}" Padding="0">
+          <Grid>
+            <DataGrid ItemsSource="{Binding Closings}" MaxHeight="280" BorderThickness="0">
+              <DataGrid.Columns>
+                <DataGridTextColumn Header="CAISSE" Binding="{Binding Number}" Width="180"/>
+                <DataGridTextColumn Header="OUVERTE" Binding="{Binding OpenedAt, StringFormat=dd/MM HH:mm}" Width="110"/>
+                <DataGridTextColumn Header="CLÔTURÉE" Binding="{Binding ClosedAt, StringFormat=dd/MM HH:mm}" Width="110"/>
+                <DataGridTextColumn Header="ATTENDU" Binding="{Binding ExpectedXof, StringFormat={}{0:N0}}" Width="110"/>
+                <DataGridTextColumn Header="COMPTÉ" Binding="{Binding CountedXof, StringFormat={}{0:N0}}" Width="110"/>
+                <DataGridTextColumn Header="ÉCART" Binding="{Binding DifferenceXof, StringFormat={}{0:N0}}" Width="100"/>
+                <DataGridTextColumn Header="MOTIF" Binding="{Binding Reason}" Width="*"/>
+              </DataGrid.Columns>
+            </DataGrid>
+            <TextBlock Text="Aucune clôture enregistrée sur la période." Style="{StaticResource HelperText}"
+                       HorizontalAlignment="Center" VerticalAlignment="Top" Margin="16,58,16,0" TextAlignment="Center" IsHitTestVisible="False"
+                       Visibility="{Binding Closings.Count, Converter={StaticResource ZeroToVis}}"/>
+          </Grid>
+        </Border>
+        <TextBlock Text="{Binding Status}" Style="{StaticResource StatusText}" Margin="2,10,2,0"/>
+      </StackPanel>
+    </Grid>
+  </ScrollViewer>
+</UserControl>

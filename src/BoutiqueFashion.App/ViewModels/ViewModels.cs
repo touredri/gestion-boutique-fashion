@@ -27,12 +27,13 @@ public partial class ShellViewModel : ObservableObject
     private readonly DashboardViewModel dashboard; private readonly SaleViewModel sale; private readonly CatalogViewModel catalog;
     private readonly StockViewModel stock; private readonly CustomersViewModel customers; private readonly ExpensesViewModel expenses;
     private readonly DocumentsViewModel documents; private readonly ReportsViewModel reports; private readonly SettingsViewModel settings;
+    private readonly CashViewModel cash;
 
-    public ShellViewModel(ManagerSession session, DashboardViewModel dashboard, SaleViewModel sale, CatalogViewModel catalog, StockViewModel stock, CustomersViewModel customers, ExpensesViewModel expenses, DocumentsViewModel documents, ReportsViewModel reports, SettingsViewModel settings)
+    public ShellViewModel(ManagerSession session, DashboardViewModel dashboard, SaleViewModel sale, CatalogViewModel catalog, StockViewModel stock, CustomersViewModel customers, ExpensesViewModel expenses, DocumentsViewModel documents, ReportsViewModel reports, SettingsViewModel settings, CashViewModel cash)
     {
         Session = session;
         this.dashboard = dashboard; this.sale = sale; this.catalog = catalog; this.stock = stock; this.customers = customers;
-        this.expenses = expenses; this.documents = documents; this.reports = reports; this.settings = settings;
+        this.expenses = expenses; this.documents = documents; this.reports = reports; this.settings = settings; this.cash = cash;
         CurrentPage = dashboard;
         Session.PropertyChanged += OnSessionChanged;
     }
@@ -59,7 +60,7 @@ public partial class ShellViewModel : ObservableObject
     {
         // Une navigation forcée (lien direct, retour de verrouillage) ne doit pas ouvrir un écran gérant.
         if (ManagerOnlyPages.Contains(target) && !Session.IsManager) target = "Dashboard";
-        (object Page, string Title) next = target switch { "Sale" => (sale, "Vente / Caisse"), "Catalog" => (catalog, "Produits et variantes"), "Stock" => (stock, "Gestion du stock"), "Customers" => (customers, "Clients et crédits"), "Expenses" => (expenses, "Dépenses"), "Documents" => (documents, "Documents et opérations"), "Reports" => (reports, "Rapports"), "Settings" => (settings, "Paramètres"), _ => (dashboard, "Tableau de bord") };
+        (object Page, string Title) next = target switch { "Sale" => (sale, "Vente"), "Cash" => (cash, "Caisse"), "Catalog" => (catalog, "Produits et variantes"), "Stock" => (stock, "Gestion du stock"), "Customers" => (customers, "Clients et crédits"), "Expenses" => (expenses, "Dépenses"), "Documents" => (documents, "Documents et opérations"), "Reports" => (reports, "Rapports"), "Settings" => (settings, "Paramètres"), _ => (dashboard, "Tableau de bord") };
         CurrentPage = next.Page; PageTitle = next.Title; CurrentTarget = target;
         if (CurrentPage is ILoadable loadable) await loadable.LoadAsync();
     }
@@ -90,9 +91,6 @@ public partial class DashboardViewModel(IReportService reports, ICashSessionServ
     [ObservableProperty] private DashboardSummary summary = new(0, 0, 0, 0, 0, 0);
     [ObservableProperty] private string cashSessionState = "Caisse fermée";
     [ObservableProperty] private bool isCashOpen;
-    [ObservableProperty] private string openingFloat = "0";
-    [ObservableProperty] private string countedCash = "";
-    [ObservableProperty] private string cashDifferenceReason = "";
     [ObservableProperty] private string cashStatus = "";
     /// <summary>Le PIN vient de la session gérant : plus aucun écran ne le redemande.</summary>
     private string ManagerPin => session.Pin;
@@ -155,62 +153,18 @@ public partial class DashboardViewModel(IReportService reports, ICashSessionServ
 
         var openSession = await cash.GetOpenAsync();
         IsCashOpen = openSession is not null;
-        CashSessionState = openSession is null ? "Caisse fermée" : $"Caisse ouverte · {openSession.Number}";
+        // Qui tient la caisse compte autant que le fait qu'elle soit ouverte.
+        CashSessionState = openSession is null
+            ? "Caisse fermée · ouvrez-la pour commencer à encaisser"
+            : $"Caisse ouverte · {openSession.Number} · {openSession.OperatorName}";
         CashStatus = string.Empty;
-    }
-
-    [RelayCommand]
-    private async Task OpenCash()
-    {
-        try
-        {
-            if (!long.TryParse(OpeningFloat, out var val) || val < 0)
-            {
-                CashStatus = "Veuillez indiquer un fond de caisse valide.";
-                return;
-            }
-            var session = await cash.OpenAsync(val);
-            CashStatus = $"Caisse ouverte avec succès ({session.Number}).";
-            CashSessionState = $"Caisse ouverte · {session.Number}";
-            IsCashOpen = true;
-            OpeningFloat = "0";
-            UiFeedback.Success($"Caisse {session.Number} ouverte.");
-        }
-        catch (Exception e)
-        {
-            CashStatus = e.Message;
-            UiFeedback.Error($"Erreur ouverture : {e.Message}");
-        }
-    }
-
-    [RelayCommand]
-    private async Task CloseCash()
-    {
-        try
-        {
-            if (!long.TryParse(CountedCash, out var val) || val < 0)
-            {
-                CashStatus = "Veuillez saisir le montant réel des espèces comptées.";
-                return;
-            }
-            var result = await cash.CloseAsync(val, CashDifferenceReason, ManagerPin);
-            CashStatus = $"Caisse clôturée avec succès. Écart : {result.DifferenceXof:N0} FCFA";
-            CashSessionState = "Caisse fermée";
-            IsCashOpen = false;
-            CountedCash = "";
-            CashDifferenceReason = "";
-            UiFeedback.Success($"Caisse clôturée. Écart : {result.DifferenceXof:N0} FCFA");
-            await LoadAsync();
-        }
-        catch (Exception e)
-        {
-            CashStatus = e.Message;
-            UiFeedback.Error($"Erreur clôture : {e.Message}");
-        }
     }
 
     [RelayCommand] private async Task QuickSell() { if (AppNavigator.Go is not null) await AppNavigator.Go("Sale"); }
     [RelayCommand] private async Task QuickProducts() { if (AppNavigator.Go is not null) await AppNavigator.Go("Catalog"); }
+    /// <summary>L'ouverture et la clôture vivent désormais dans l'écran Caisse : le tableau de
+    /// bord n'en montre plus que l'état, et y renvoie.</summary>
+    [RelayCommand] private async Task QuickCash() { if (AppNavigator.Go is not null) await AppNavigator.Go("Cash"); }
 }
 
 public partial class CartLineViewModel(ProductVariant variant) : ObservableObject
@@ -342,7 +296,7 @@ public partial class SaleViewModel(ICatalogService catalog, ICustomerService cus
         if (CategoryFilters.Count <= 1) foreach (var c in await catalog.CategoriesAsync()) if (!CategoryFilters.Contains(c)) CategoryFilters.Add(c);
         await RefreshCustomersAsync();
         var openSession = await cash.GetOpenAsync();
-        CashSessionState = openSession is null ? "Caisse fermée · ouvrez-la depuis le tableau de bord" : $"Caisse ouverte · {openSession.Number}";
+        CashSessionState = openSession is null ? "Caisse fermée · ouvrez-la depuis l'écran Caisse" : $"Caisse ouverte · {openSession.OperatorName}";
         IsCashOpen = openSession is not null;
         Printers.Clear();
         foreach (var p in printerService.Discover()) Printers.Add(p);
