@@ -23,9 +23,15 @@ public sealed class ServerFixture : WebApplicationFactory<Program>, IAsyncLifeti
     public const string OwnerPassword = "motdepasse-de-test";
     private readonly string database = $"boutique_test_{Guid.NewGuid():N}";
 
+    // Pas de repli codé en dur : un identifiant de secours dans un fichier versionné finit
+    // par ressembler à un secret, et surtout il masque la vraie cause quand la variable
+    // manque — on obtient une erreur de connexion Npgsql au lieu de la consigne à suivre.
     private static string BaseConnectionString =>
         Environment.GetEnvironmentVariable("BOUTIQUE_TEST_POSTGRES")
-        ?? "Host=localhost;Port=5432;Username=boutique;Password=boutique";
+        ?? throw new InvalidOperationException(
+            "BOUTIQUE_TEST_POSTGRES n'est pas définie. Démarrez la base de développement " +
+            "(docker compose -f docker/compose.dev.yml up postgres) puis exportez " +
+            "BOUTIQUE_TEST_POSTGRES=\"Host=localhost;Port=5432;Username=boutique\".");
 
     private string ConnectionString => $"{BaseConnectionString};Database={database}";
 
