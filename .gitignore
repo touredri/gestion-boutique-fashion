@@ -11,3 +11,7 @@ installer/output/
 *.db-shm
 *.db-wal
 
+
+# Secrets et sauvegardes du serveur
+docker/.env
+docker/backups/

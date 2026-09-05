@@ -22,6 +22,24 @@ public sealed class BoutiqueDbContext(DbContextOptions<BoutiqueDbContext> option
         configurationBuilder.Properties<DateTimeOffset?>().HaveConversion<NullableDateTimeOffsetToUtcTicksConverter>();
     }
 
+    /// <summary>
+    /// Tout mouvement de stock est mis en file de synchronisation, quelle que soit son origine.
+    ///
+    /// Interception plutôt qu'appel explicite dans chaque service : les mouvements naissent dans
+    /// six endroits — vente, réception, ajustement, inventaire, retour, remise d'avance — et il
+    /// suffirait d'en oublier un pour que le stock affiché à distance dérive silencieusement.
+    /// C'est aussi la garantie que la ligne de file tombe dans la même transaction.
+    /// </summary>
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        var added = ChangeTracker.Entries<StockMovement>()
+            .Where(x => x.State == EntityState.Added)
+            .Select(x => x.Entity)
+            .ToList();
+        foreach (var movement in added) Outbox.Enqueue(this, Contracts.SyncEntityTypes.StockMovement, movement.Id, Outbox.From(movement));
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
     public DbSet<Category> Categories => Set<Category>();
     public DbSet<Product> Products => Set<Product>();
     public DbSet<ProductImage> ProductImages => Set<ProductImage>();

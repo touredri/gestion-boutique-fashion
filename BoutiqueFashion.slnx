@@ -4,6 +4,8 @@
   <Project Path="src/BoutiqueFashion.Contracts/BoutiqueFashion.Contracts.csproj" />
   <Project Path="src/BoutiqueFashion.Infrastructure/BoutiqueFashion.Infrastructure.csproj" />
   <Project Path="src/BoutiqueFashion.App/BoutiqueFashion.App.csproj" />
+  <Project Path="src/BoutiqueFashion.Server/BoutiqueFashion.Server.csproj" />
   <Project Path="tests/BoutiqueFashion.Tests/BoutiqueFashion.Tests.csproj" />
+  <Project Path="tests/BoutiqueFashion.Server.Tests/BoutiqueFashion.Server.Tests.csproj" />
   <Project Path="tests/BoutiqueFashion.Domain.Tests/BoutiqueFashion.Domain.Tests.csproj" />
 </Solution>

@@ -1,0 +1,5 @@
+{$DOMAIN} {
+	# Le certificat est obtenu et renouvelé par Caddy sans intervention.
+	encode gzip
+	reverse_proxy server:8080
+}

@@ -1,0 +1,34 @@
+# Pile de développement :  docker compose -f docker/compose.dev.yml up
+name: boutique-dev
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: boutique
+      POSTGRES_USER: boutique
+      POSTGRES_PASSWORD: boutique
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U boutique -d boutique"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    # tmpfs plutôt qu'un volume : une base de développement doit repartir propre, et repartir vite.
+    tmpfs:
+      - /var/lib/postgresql/data
+
+  server:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=boutique;Username=boutique;Password=boutique"
+      Admin__ApiKey: "dev-admin-key"
+    ports:
+      - "8080:8080"

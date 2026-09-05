@@ -1,0 +1,81 @@
+# Pile de production. Aucun secret n'est écrit ici : renseigner docker/.env à partir de
+# docker/.env.example, que git ignore.
+#
+#   docker compose -f docker/compose.prod.yml --env-file docker/.env up -d
+name: boutique
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    # Jamais publié sur l'hôte : la base n'est joignable que par le réseau du compose.
+    expose:
+      - "5432"
+
+  server:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      Admin__ApiKey: ${ADMIN_API_KEY}
+    expose:
+      - "8080"
+
+  # Caddy termine le TLS et renouvelle le certificat tout seul. Le serveur n'est donc jamais
+  # exposé en clair, et les terminaux parlent en HTTPS — ils transportent un jeton d'appareil.
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - server
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+  # Sauvegarde quotidienne, conservée 14 jours. Une base sans sauvegarde, c'est deux boutiques
+  # dont l'historique tient à un seul disque.
+  backup:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./backups:/backups
+    entrypoint: >
+      sh -c 'while true; do
+        pg_dump -h postgres -U "$${POSTGRES_USER:-boutique}" -d "$${POSTGRES_DB:-boutique}"
+          | gzip > /backups/boutique-$$(date +%Y%m%d-%H%M%S).sql.gz;
+        find /backups -name "boutique-*.sql.gz" -mtime +14 -delete;
+        sleep 86400;
+      done'
+
+volumes:
+  postgres-data:
+  caddy-data:
+  caddy-config:
