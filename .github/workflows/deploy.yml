@@ -143,6 +143,13 @@ jobs:
           $COMPOSE pull --quiet
           $COMPOSE up -d --remove-orphans
 
+          # Le Caddyfile est monté en volume : « up -d » ne recrée pas le conteneur quand seul
+          # le contenu du fichier change, et Caddy continue donc de servir l'ancienne
+          # configuration. Sans ce rechargement, une route ajoutée ici ne prend jamais effet et
+          # rien ne le signale.
+          $COMPOSE exec -T caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile \
+            || $COMPOSE restart caddy
+
           # Les clés de notification web n'existent qu'une fois le serveur disponible : il les
           # engendre lui-même. Faites une seule fois, elles sont ensuite conservées dans .env.
           if ! grep -q '^VAPID_PUBLIC_KEY=.' .env; then
