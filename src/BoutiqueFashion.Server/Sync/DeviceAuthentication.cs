@@ -51,22 +51,3 @@ internal static class DeviceAuthentication
         return new DeviceContext(device.Id, device.ShopId, device.Shop.Name);
     }
 }
-
-/// <summary>
-/// Protection provisoire des routes de pilotage. Une vraie authentification propriétaire
-/// arrivera avec la PWA du lot 3 ; d'ici là une clé d'administration en configuration suffit à
-/// ne pas laisser la création de boutiques ouverte à tous.
-/// </summary>
-internal static class AdminAuthentication
-{
-    public const string HeaderName = "X-Admin-Key";
-
-    public static bool IsAuthorized(HttpContext context, IConfiguration configuration)
-    {
-        var expected = configuration["Admin:ApiKey"];
-        if (string.IsNullOrWhiteSpace(expected)) return false;
-        var provided = context.Request.Headers[HeaderName].ToString();
-        return !string.IsNullOrEmpty(provided)
-            && CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(provided), Encoding.UTF8.GetBytes(expected));
-    }
-}

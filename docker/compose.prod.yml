@@ -34,7 +34,9 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
-      Admin__ApiKey: ${ADMIN_API_KEY}
+      Bootstrap__Username: ${BOOTSTRAP_USERNAME}
+      Bootstrap__Password: ${BOOTSTRAP_PASSWORD}
+      Bootstrap__DisplayName: ${BOOTSTRAP_DISPLAY_NAME}
     expose:
       - "8080"
 

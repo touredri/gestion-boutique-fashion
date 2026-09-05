@@ -264,6 +264,18 @@ public sealed class SyncService(
             row.UpdatedAt = DateTimeOffset.UtcNow;
         }
 
+        // Articles dont la portée s'est resserrée sur une autre boutique. Ils ne sont pas
+        // supprimés — leur historique de ventes y renvoie — mais désactivés, donc invendables.
+        foreach (var id in page.RetiredProductIds ?? [])
+        {
+            var product = await db.Products.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
+            if (product is null) continue;
+            product.IsActive = false;
+            product.UpdatedAt = DateTimeOffset.UtcNow;
+            foreach (var variant in await db.ProductVariants.Where(x => x.ProductId == id).ToListAsync(cancellationToken))
+                variant.IsActive = false;
+        }
+
         foreach (var dto in page.Settings)
         {
             // Les clés de synchronisation appartiennent au terminal : les laisser être écrasées

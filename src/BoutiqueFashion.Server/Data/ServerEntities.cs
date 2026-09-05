@@ -34,6 +34,32 @@ public sealed class Shop : ServerEntity
     public bool IsActive { get; set; } = true;
 }
 
+/// <summary>Compte de pilotage : la propriétaire, et plus tard qui elle voudra. Distinct des
+/// terminaux, qui s'authentifient par jeton d'appareil et n'ont accès qu'à la synchronisation.</summary>
+public sealed class User : ServerEntity
+{
+    /// <summary>Toujours en minuscules : « Awa » et « awa » doivent désigner le même compte,
+    /// sans quoi deux comptes voisins finiraient par coexister sans qu'on le voie.</summary>
+    [MaxLength(60)] public string Username { get; set; } = string.Empty;
+    [MaxLength(200)] public string PasswordHash { get; set; } = string.Empty;
+    [MaxLength(120)] public string DisplayName { get; set; } = string.Empty;
+    public bool IsActive { get; set; } = true;
+    public DateTimeOffset? LastLoginAt { get; set; }
+    public int FailedAttempts { get; set; }
+    /// <summary>Verrouillage temporaire après échecs répétés : sans lui, un mot de passe faible
+    /// tombe en quelques heures d'essais automatisés.</summary>
+    public DateTimeOffset? LockedUntil { get; set; }
+}
+
+public sealed class UserSession : ServerEntity
+{
+    public Guid UserId { get; set; }
+    public User? User { get; set; }
+    [MaxLength(64)] public string TokenHash { get; set; } = string.Empty;
+    public DateTimeOffset ExpiresAt { get; set; }
+    public DateTimeOffset? RevokedAt { get; set; }
+}
+
 public sealed class Device : ServerEntity
 {
     public Guid ShopId { get; set; }
@@ -79,6 +105,10 @@ public sealed class Category : SyncedDownEntity
 public sealed class Product : SyncedDownEntity
 {
     public Guid CategoryId { get; set; }
+    /// <summary>Portée de l'article. <c>null</c> : catalogue global, présent dans toutes les
+    /// boutiques. Renseigné : exclusif à cette boutique — une pièce qu'on ne vend qu'à Marcory
+    /// n'a rien à faire sur la caisse de Yopougon.</summary>
+    public Guid? ShopId { get; set; }
     [MaxLength(180)] public string Name { get; set; } = string.Empty;
     [MaxLength(120)] public string? Brand { get; set; }
     [MaxLength(500)] public string? Description { get; set; }

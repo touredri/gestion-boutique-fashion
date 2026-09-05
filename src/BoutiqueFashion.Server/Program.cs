@@ -18,19 +18,72 @@ var app = builder.Build();
 if (!app.Environment.IsEnvironment("Testing"))
 {
     await using var scope = app.Services.CreateAsyncScope();
-    await scope.ServiceProvider.GetRequiredService<ServerDbContext>().Database.MigrateAsync();
+    var db = scope.ServiceProvider.GetRequiredService<ServerDbContext>();
+    await db.Database.MigrateAsync();
+    await UserAuthentication.EnsureFirstUserAsync(db, app.Configuration);
 }
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
 // ---------------------------------------------------------------------------
-// Pilotage — création des boutiques et des codes d'appairage.
+// Comptes de pilotage.
+// ---------------------------------------------------------------------------
+
+app.MapPost("/api/auth/login", async (LoginInput input, ServerDbContext db, CancellationToken ct) =>
+{
+    var result = await UserAuthentication.LoginAsync(db, input.Username, input.Password, ct);
+    // Réponse unique quel que soit le motif — compte inexistant, mot de passe faux, compte
+    // verrouillé : détailler aiderait surtout celui qui essaie des identifiants au hasard.
+    return result is null
+        ? Results.Json(new { error = "Identifiant ou mot de passe incorrect." }, statusCode: StatusCodes.Status401Unauthorized)
+        : Results.Ok(new { token = result.Value.Token, expiresAt = result.Value.ExpiresAt, displayName = result.Value.User.DisplayName, username = result.Value.User.Username });
+});
+
+// ---------------------------------------------------------------------------
+// Pilotage — réservé aux comptes authentifiés.
 // ---------------------------------------------------------------------------
 
 var admin = app.MapGroup("/api").AddEndpointFilter(async (context, next) =>
-    AdminAuthentication.IsAuthorized(context.HttpContext, context.HttpContext.RequestServices.GetRequiredService<IConfiguration>())
-        ? await next(context)
-        : Results.Unauthorized());
+{
+    var db = context.HttpContext.RequestServices.GetRequiredService<ServerDbContext>();
+    var user = await UserAuthentication.ResolveAsync(context.HttpContext, db, context.HttpContext.RequestAborted);
+    if (user is null) return Results.Unauthorized();
+    context.HttpContext.Items["user"] = user;
+    return await next(context);
+});
+
+admin.MapGet("/auth/me", (HttpContext http) =>
+{
+    var user = (UserContext)http.Items["user"]!;
+    return Results.Ok(new { user.Username, user.DisplayName });
+});
+
+admin.MapPost("/auth/logout", async (HttpContext http, ServerDbContext db, CancellationToken ct) =>
+{
+    var header = http.Request.Headers.Authorization.ToString();
+    var hash = Passwords.HashToken(header[UserAuthentication.Scheme.Length..].Trim());
+    var session = await db.UserSessions.SingleOrDefaultAsync(x => x.TokenHash == hash, ct);
+    if (session is not null) { session.RevokedAt = DateTimeOffset.UtcNow; await db.SaveChangesAsync(ct); }
+    return Results.NoContent();
+});
+
+admin.MapPost("/auth/password", async (PasswordChangeInput input, HttpContext http, ServerDbContext db, CancellationToken ct) =>
+{
+    var context = (UserContext)http.Items["user"]!;
+    var user = await db.Users.SingleAsync(x => x.Id == context.UserId, ct);
+    if (!Passwords.Verify(input.CurrentPassword, user.PasswordHash))
+        return Results.BadRequest(new { error = "Mot de passe actuel incorrect." });
+
+    Passwords.Validate(input.NewPassword);
+    user.PasswordHash = Passwords.Hash(input.NewPassword);
+
+    // Toutes les autres sessions tombent : changer son mot de passe doit déconnecter l'appareil
+    // qu'on soupçonne, sinon le geste ne sert à rien.
+    var others = await db.UserSessions.Where(x => x.UserId == user.Id).ToListAsync(ct);
+    db.UserSessions.RemoveRange(others);
+    await db.SaveChangesAsync(ct);
+    return Results.NoContent();
+});
 
 admin.MapPost("/shops", async (ShopInput input, ServerDbContext db, CancellationToken ct) =>
 {
@@ -92,11 +145,16 @@ admin.MapPut("/catalog", async (CatalogInput input, ServerDbContext db, Cancella
     }
     foreach (var dto in input.Products ?? [])
     {
+        if (dto.ShopId is { } scope && !await db.Shops.AnyAsync(x => x.Id == scope, ct))
+            return Results.BadRequest(new { error = $"Boutique {scope} inconnue." });
+
         var row = await db.Products.SingleOrDefaultAsync(x => x.Id == dto.Id, ct);
         if (row is null) { row = new Product { Id = dto.Id }; db.Products.Add(row); }
         row.CategoryId = dto.CategoryId; row.Name = dto.Name; row.Brand = dto.Brand; row.Description = dto.Description;
         row.SubCategory = dto.SubCategory; row.Gender = dto.Gender; row.Season = dto.Season;
         row.Type = dto.Type; row.IsActive = dto.IsActive;
+        // null = catalogue global, présent partout ; renseigné = exclusif à cette boutique.
+        row.ShopId = dto.ShopId;
         row.Seq = await db.NextSeqAsync(ct);
     }
     foreach (var dto in input.Variants ?? [])
@@ -185,28 +243,40 @@ app.MapGet("/api/sync/pull", async (long since, HttpContext http, ServerDbContex
     // temps de descendre tout le catalogue. HasMore invite le terminal à repasser.
     const int PageSize = 500;
 
+    // Un terminal ne reçoit que le catalogue global et celui de sa propre boutique.
+    var visible = db.Products.AsNoTracking().Where(x => x.ShopId == null || x.ShopId == device.ShopId);
+
     var categories = await db.Categories.AsNoTracking().Where(x => x.Seq > since).OrderBy(x => x.Seq).Take(PageSize)
         .Select(x => new CategoryDto(x.Id, x.Name, x.IsActive)).ToListAsync(ct);
-    var products = await db.Products.AsNoTracking().Where(x => x.Seq > since).OrderBy(x => x.Seq).Take(PageSize)
-        .Select(x => new ProductDto(x.Id, x.CategoryId, x.Name, x.Brand, x.Description, x.SubCategory, x.Gender, x.Season, x.Type, x.IsActive)).ToListAsync(ct);
-    var variants = await db.Variants.AsNoTracking().Where(x => x.Seq > since).OrderBy(x => x.Seq).Take(PageSize)
+    var products = await visible.Where(x => x.Seq > since).OrderBy(x => x.Seq).Take(PageSize)
+        .Select(x => new ProductDto(x.Id, x.CategoryId, x.Name, x.Brand, x.Description, x.SubCategory, x.Gender, x.Season, x.Type, x.IsActive, x.ShopId)).ToListAsync(ct);
+    var variants = await db.Variants.AsNoTracking()
+        .Where(x => x.Seq > since && visible.Any(p => p.Id == x.ProductId)).OrderBy(x => x.Seq).Take(PageSize)
         .Select(x => new VariantDto(x.Id, x.ProductId, x.Sku, x.Barcode, x.Size, x.Color, x.Material, x.Supplier, x.CostXof, x.PriceXof, x.PromotionalPriceXof, x.PromotionStartsAt, x.PromotionEndsAt, x.LowStockThreshold, x.IsActive)).ToListAsync(ct);
     var settings = await db.ShopSettings.AsNoTracking().Where(x => x.ShopId == device.ShopId && x.Seq > since).OrderBy(x => x.Seq).Take(PageSize)
         .Select(x => new SettingDto(x.Key, x.Value)).ToListAsync(ct);
+
+    // Le filtre ci-dessus cesse d'envoyer un article dont la portée s'est resserrée ailleurs :
+    // sans cette liste, le terminal en garderait une copie fantôme, vendable et invisible du
+    // serveur.
+    var retired = await db.Products.AsNoTracking()
+        .Where(x => x.Seq > since && x.ShopId != null && x.ShopId != device.ShopId)
+        .OrderBy(x => x.Seq).Take(PageSize).Select(x => x.Id).ToListAsync(ct);
 
     // Le curseur n'avance que jusqu'au plus petit reste : avancer plus loin ferait sauter
     // définitivement les lignes des autres tables restées derrière.
     var highest = new[]
     {
         await Ceiling(db.Categories.Where(x => x.Seq > since).Select(x => x.Seq), categories.Count, PageSize, ct),
-        await Ceiling(db.Products.Where(x => x.Seq > since).Select(x => x.Seq), products.Count, PageSize, ct),
-        await Ceiling(db.Variants.Where(x => x.Seq > since).Select(x => x.Seq), variants.Count, PageSize, ct),
+        await Ceiling(visible.Where(x => x.Seq > since).Select(x => x.Seq), products.Count, PageSize, ct),
+        await Ceiling(db.Variants.Where(x => x.Seq > since && visible.Any(p => p.Id == x.ProductId)).Select(x => x.Seq), variants.Count, PageSize, ct),
         await Ceiling(db.ShopSettings.Where(x => x.ShopId == device.ShopId && x.Seq > since).Select(x => x.Seq), settings.Count, PageSize, ct),
+        await Ceiling(db.Products.Where(x => x.Seq > since && x.ShopId != null && x.ShopId != device.ShopId).Select(x => x.Seq), retired.Count, PageSize, ct),
     };
     var truncated = highest.Where(x => x is not null).Select(x => x!.Value).ToArray();
     var cursor = truncated.Length > 0 ? truncated.Min() : await MaxSeqAsync(db, device.ShopId, since, ct);
 
-    return Results.Ok(new SyncPullResponse(cursor, categories, products, variants, settings, truncated.Length > 0));
+    return Results.Ok(new SyncPullResponse(cursor, categories, products, variants, settings, truncated.Length > 0, retired));
 
     static async Task<long?> Ceiling(IQueryable<long> sequences, int returned, int pageSize, CancellationToken ct) =>
         returned < pageSize ? null : await sequences.OrderBy(x => x).Skip(pageSize - 1).FirstAsync(ct);
@@ -227,6 +297,8 @@ app.MapGet("/api/sync/pull", async (long since, HttpContext http, ServerDbContex
 app.Run();
 
 internal sealed record ShopInput(string Name, string? City, string? Address, string? Phone);
+internal sealed record LoginInput(string Username, string Password);
+internal sealed record PasswordChangeInput(string CurrentPassword, string NewPassword);
 
 internal sealed record CatalogInput(
     IReadOnlyList<CategoryDto>? Categories,

@@ -10,6 +10,8 @@ public sealed class ServerDbContext(DbContextOptions<ServerDbContext> options) :
     public const string SyncSequence = "sync_seq";
 
     public DbSet<Shop> Shops => Set<Shop>();
+    public DbSet<User> Users => Set<User>();
+    public DbSet<UserSession> UserSessions => Set<UserSession>();
     public DbSet<Device> Devices => Set<Device>();
     public DbSet<EnrollmentCode> EnrollmentCodes => Set<EnrollmentCode>();
     public DbSet<ProcessedEvent> ProcessedEvents => Set<ProcessedEvent>();
@@ -35,6 +37,9 @@ public sealed class ServerDbContext(DbContextOptions<ServerDbContext> options) :
     {
         modelBuilder.HasSequence<long>(SyncSequence).StartsAt(1).IncrementsBy(1);
 
+        modelBuilder.Entity<User>().HasIndex(x => x.Username).IsUnique();
+        modelBuilder.Entity<UserSession>().HasIndex(x => x.TokenHash).IsUnique();
+        modelBuilder.Entity<UserSession>().HasIndex(x => x.ExpiresAt);
         modelBuilder.Entity<Device>().HasIndex(x => x.TokenHash).IsUnique();
         modelBuilder.Entity<Device>().HasIndex(x => x.ShopId);
         modelBuilder.Entity<EnrollmentCode>().HasIndex(x => x.Code).IsUnique();
@@ -61,7 +66,7 @@ public sealed class ServerDbContext(DbContextOptions<ServerDbContext> options) :
 
         // Le curseur se lit par intervalle sur chaque table descendante.
         modelBuilder.Entity<Category>().HasIndex(x => x.Seq);
-        modelBuilder.Entity<Product>().HasIndex(x => x.Seq);
+        modelBuilder.Entity<Product>().HasIndex(x => new { x.Seq, x.ShopId });
         modelBuilder.Entity<Variant>().HasIndex(x => x.Seq);
         modelBuilder.Entity<ShopSetting>().HasIndex(x => new { x.ShopId, x.Seq });
 

@@ -8,6 +8,22 @@ namespace BoutiqueFashion.Infrastructure;
 
 public sealed class CatalogService(IDbContextFactory<BoutiqueDbContext> factory, IAuthorizationService authorization, AppPaths paths) : ICatalogService
 {
+    /// <summary>
+    /// Le catalogue appartient au serveur dès lors qu'il y en a un. Le laisser modifiable
+    /// localement ferait diverger deux boutiques d'un même référentiel, et la version du terminal
+    /// serait écrasée à la première descente.
+    ///
+    /// La règle ne s'applique qu'une fois le terminal appairé : avant cela, il n'existe aucune
+    /// autre source, et une boutique doit pouvoir travailler sans serveur.
+    /// </summary>
+    private static async Task EnsureCatalogIsEditableAsync(BoutiqueDbContext db, CancellationToken cancellationToken)
+    {
+        var paired = await db.AppSettings.AsNoTracking()
+            .AnyAsync(x => x.Key == "Sync.DeviceToken" && x.Value != "", cancellationToken);
+        if (paired)
+            throw new InvalidOperationException("Ce terminal est rattaché à une boutique : le catalogue se modifie depuis l'application mobile, puis redescend ici automatiquement.");
+    }
+
     public async Task<IReadOnlyList<ProductVariant>> SearchAsync(string? query, CancellationToken cancellationToken = default)
     {
         await using var db = await factory.CreateDbContextAsync(cancellationToken);
@@ -27,6 +43,7 @@ public sealed class CatalogService(IDbContextFactory<BoutiqueDbContext> factory,
         if (priceXof < costXof && (managerPin is null || !await authorization.AuthorizeSensitiveActionAsync(managerPin, "Prix de vente inférieur au coût", cancellationToken: cancellationToken)))
             throw new UnauthorizedAccessException("Prix inférieur au coût d'achat : PIN responsable requis.");
         await using var db = await factory.CreateDbContextAsync(cancellationToken);
+        await EnsureCatalogIsEditableAsync(db, cancellationToken);
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
         if (await db.ProductVariants.AnyAsync(x => x.Sku == sku || (barcode != null && x.Barcode == barcode), cancellationToken))
             throw new InvalidOperationException("Ce SKU ou code-barres existe déjà.");
@@ -110,6 +127,7 @@ public sealed class CatalogService(IDbContextFactory<BoutiqueDbContext> factory,
     {
         if (!await authorization.AuthorizeSensitiveActionAsync(managerPin, "Supprimer variante", cancellationToken: cancellationToken)) throw new UnauthorizedAccessException("PIN responsable invalide.");
         await using var db = await factory.CreateDbContextAsync(cancellationToken);
+        await EnsureCatalogIsEditableAsync(db, cancellationToken);
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
         var variant = await db.ProductVariants.SingleOrDefaultAsync(x => x.Id == variantId, cancellationToken) ?? throw new KeyNotFoundException("Variante introuvable.");
         var hasHistory = await db.StockMovements.AnyAsync(x => x.VariantId == variantId, cancellationToken)
@@ -132,6 +150,7 @@ public sealed class CatalogService(IDbContextFactory<BoutiqueDbContext> factory,
     {
         if (!await authorization.AuthorizeSensitiveActionAsync(managerPin, "Modifier produit", cancellationToken: cancellationToken)) throw new UnauthorizedAccessException("PIN responsable invalide.");
         await using var db = await factory.CreateDbContextAsync(cancellationToken); await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        await EnsureCatalogIsEditableAsync(db, cancellationToken);
         var variant = await db.ProductVariants.Include(x => x.Product).ThenInclude(x => x!.Category).SingleOrDefaultAsync(x => x.Id == update.VariantId, cancellationToken) ?? throw new KeyNotFoundException("Variante introuvable.");
         if (await db.ProductVariants.AnyAsync(x => x.Id != variant.Id && (x.Sku == update.Sku || (update.Barcode != null && x.Barcode == update.Barcode)), cancellationToken)) throw new InvalidOperationException("SKU ou code-barres déjà utilisé.");
         var before = JsonSerializer.Serialize(new { variant.Product!.Name, variant.Sku, variant.Barcode, variant.Size, variant.Color, variant.CostXof, variant.PriceXof, variant.IsActive, variant.Location, variant.Supplier });

@@ -29,6 +29,8 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=boutique;Username=boutique;Password=boutique"
-      Admin__ApiKey: "dev-admin-key"
+      Bootstrap__Username: "proprietaire"
+      Bootstrap__Password: "motdepasse-dev"
+      Bootstrap__DisplayName: "Propriétaire"
     ports:
       - "8080:8080"

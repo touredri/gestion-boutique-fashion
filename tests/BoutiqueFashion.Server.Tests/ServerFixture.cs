@@ -1,8 +1,11 @@
+using System.Net.Http.Json;
+using System.Text.Json;
 using BoutiqueFashion.Server.Data;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Configuration;
 
 namespace BoutiqueFashion.Server.Tests;
 
@@ -16,7 +19,8 @@ namespace BoutiqueFashion.Server.Tests;
 /// </summary>
 public sealed class ServerFixture : WebApplicationFactory<Program>, IAsyncLifetime
 {
-    private const string DefaultAdmin = "test-admin-key";
+    public const string OwnerUsername = "proprietaire";
+    public const string OwnerPassword = "motdepasse-de-test";
     private readonly string database = $"boutique_test_{Guid.NewGuid():N}";
 
     private static string BaseConnectionString =>
@@ -25,13 +29,14 @@ public sealed class ServerFixture : WebApplicationFactory<Program>, IAsyncLifeti
 
     private string ConnectionString => $"{BaseConnectionString};Database={database}";
 
-    public HttpClient Admin { get; private set; } = null!;
+    public HttpClient Admin { get; set; } = null!;
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
         builder.UseSetting("ConnectionStrings:Postgres", ConnectionString);
-        builder.UseSetting("Admin:ApiKey", DefaultAdmin);
+        builder.UseSetting("Bootstrap:Username", OwnerUsername);
+        builder.UseSetting("Bootstrap:Password", OwnerPassword);
     }
 
     public async Task InitializeAsync()
@@ -41,10 +46,25 @@ public sealed class ServerFixture : WebApplicationFactory<Program>, IAsyncLifeti
             var db = scope.ServiceProvider.GetRequiredService<ServerDbContext>();
             await db.Database.EnsureDeletedAsync();
             await db.Database.MigrateAsync();
+            // L'environnement Testing court-circuite la migration au démarrage, donc aussi
+            // l'amorçage du premier compte : on le fait ici avec la même méthode que la production.
+            await Sync.UserAuthentication.EnsureFirstUserAsync(db, scope.ServiceProvider.GetRequiredService<IConfiguration>());
         }
 
-        Admin = CreateClient();
-        Admin.DefaultRequestHeaders.Add("X-Admin-Key", DefaultAdmin);
+        Admin = await SignInAsync(OwnerUsername, OwnerPassword)
+            ?? throw new InvalidOperationException("Le compte de test n'a pas pu se connecter.");
+    }
+
+    /// <summary>Client authentifié, ou <c>null</c> si les identifiants sont refusés.</summary>
+    public async Task<HttpClient?> SignInAsync(string username, string password)
+    {
+        var client = CreateClient();
+        var response = await client.PostAsJsonAsync("/api/auth/login", new { Username = username, Password = password });
+        if (!response.IsSuccessStatusCode) { client.Dispose(); return null; }
+
+        var token = (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("token").GetString();
+        client.DefaultRequestHeaders.Authorization = new("Bearer", token);
+        return client;
     }
 
     public new async Task DisposeAsync()

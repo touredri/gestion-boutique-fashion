@@ -47,15 +47,22 @@ public sealed record SyncPullResponse(
     IReadOnlyList<ProductDto> Products,
     IReadOnlyList<VariantDto> Variants,
     IReadOnlyList<SettingDto> Settings,
-    bool HasMore);
+    bool HasMore,
+    /// Articles qui ne concernent plus cette boutique : leur portée a été restreinte à une autre.
+    /// Sans cette liste, le terminal garderait à jamais une copie devenue invisible côté serveur,
+    /// puisque le filtre de descente cesse justement de la lui envoyer.
+    IReadOnlyList<Guid>? RetiredProductIds = null);
 
 // --- Descendant du serveur -------------------------------------------------
 
 public sealed record CategoryDto(Guid Id, string Name, bool IsActive);
 
+/// <summary><paramref name="ShopId"/> : <c>null</c> pour un article du catalogue global, présent
+/// dans toutes les boutiques ; renseigné pour un article exclusif à l'une d'elles.</summary>
 public sealed record ProductDto(
     Guid Id, Guid CategoryId, string Name, string? Brand, string? Description,
-    string? SubCategory, string? Gender, string? Season, ProductType Type, bool IsActive);
+    string? SubCategory, string? Gender, string? Season, ProductType Type, bool IsActive,
+    Guid? ShopId = null);
 
 /// <summary>Sans quantité : le stock appartient à la boutique et remonte, il ne descend pas.</summary>
 public sealed record VariantDto(

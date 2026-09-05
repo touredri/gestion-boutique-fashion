@@ -473,8 +473,13 @@ public sealed class CustomerChoice
     public bool IsWalkIn { get; }
 }
 
-public partial class CatalogViewModel(ICatalogService catalog, IProductImportService import, IProductDraftService drafts, ManagerSession session) : ObservableObject, ILoadable
+public partial class CatalogViewModel(ICatalogService catalog, IProductImportService import, IProductDraftService drafts, ManagerSession session, SyncAgent sync) : ObservableObject, ILoadable
 {
+    /// <summary>Terminal rattaché : le catalogue vient du serveur et ne se modifie plus ici.
+    /// L'écran devient une liste de consultation, ce que la barre d'information explique.</summary>
+    public bool IsCatalogReadOnly => sync.IsEnrolled;
+    public bool IsCatalogEditable => !sync.IsEnrolled;
+
     public ObservableCollection<ProductVariant> Items { get; } = [];
     public ObservableCollection<ImportIssue> ImportIssues { get; } = [];
     public ManagerSession Session => session;
@@ -506,6 +511,8 @@ public partial class CatalogViewModel(ICatalogService catalog, IProductImportSer
     {
         var rows = await catalog.SearchAsync(null); Items.Clear(); foreach (var row in rows) Items.Add(row);
         RefreshSizeOptions();
+        OnPropertyChanged(nameof(IsCatalogReadOnly));
+        OnPropertyChanged(nameof(IsCatalogEditable));
         Drafts.Clear();
         foreach (var d in await drafts.ListAsync()) Drafts.Add(d);
         OnPropertyChanged(nameof(DraftsTabHeader));
