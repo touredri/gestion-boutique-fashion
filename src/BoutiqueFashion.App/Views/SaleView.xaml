@@ -187,18 +187,74 @@
                 </StackPanel>
               </Grid>
 
-              <Grid Grid.Row="1"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                  <StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding SelectedPaymentMode}" Value="{x:Static domain:PaymentMode.Credit}"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></StackPanel.Style>
-                  <Button Content="+7 j" MinWidth="44" Command="{Binding SetCreditDueCommand}" CommandParameter="7"/>
-                  <Button Content="+15 j" MinWidth="44" Command="{Binding SetCreditDueCommand}" CommandParameter="15"/>
-                  <Button Content="+30 j" MinWidth="44" Command="{Binding SetCreditDueCommand}" CommandParameter="30"/>
-                  <Button Content="+60 j" MinWidth="44" Command="{Binding SetCreditDueCommand}" CommandParameter="60"/>
+              <!-- Bloc « reste à devoir ». Déclenché sur HasCreditPortion et non sur le mode
+                   sélectionné : dans un paiement mixte, le crédit est une ligne parmi d'autres et
+                   le mode principal reste « Espèces ». -->
+              <StackPanel Grid.Row="1">
+                <StackPanel.Style>
+                  <Style TargetType="StackPanel">
+                    <Setter Property="Visibility" Value="Collapsed"/>
+                    <Style.Triggers>
+                      <DataTrigger Binding="{Binding HasCreditPortion}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
+                    </Style.Triggers>
+                  </Style>
+                </StackPanel.Style>
+
+                <Grid>
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Content="+7 j" MinWidth="44" Command="{Binding SetCreditDueCommand}" CommandParameter="7"/>
+                    <Button Content="+15 j" MinWidth="44" Command="{Binding SetCreditDueCommand}" CommandParameter="15"/>
+                    <Button Content="+30 j" MinWidth="44" Command="{Binding SetCreditDueCommand}" CommandParameter="30"/>
+                    <Button Content="+60 j" MinWidth="44" Command="{Binding SetCreditDueCommand}" CommandParameter="60"/>
+                  </StackPanel>
+                  <TextBlock Grid.Column="1" Text="{Binding CreditDueDate}" FontSize="11" Foreground="{StaticResource Muted}" VerticalAlignment="Center" Margin="4,0,2,0"/>
+                </Grid>
+
+                <!-- Emport ou mise de côté. Deux boutons plutôt qu'une case à cocher : le choix
+                     décide si la marchandise sort du magasin, il ne doit pas passer inaperçu. -->
+                <TextBlock Text="La marchandise" Style="{StaticResource FieldLabel}" Margin="4,6,4,1"/>
+                <StackPanel Orientation="Horizontal">
+                  <Button Content="Emportée maintenant" MinWidth="160" Command="{Binding TakeAwayCommand}" AutomationProperties.Name="Marchandise emportée maintenant">
+                    <Button.Style>
+                      <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+                        <Style.Triggers>
+                          <DataTrigger Binding="{Binding ReserveStock}" Value="True">
+                            <Setter Property="Background" Value="{StaticResource Paper}"/>
+                            <Setter Property="Foreground" Value="{StaticResource Muted}"/>
+                            <Setter Property="BorderBrush" Value="{StaticResource LineStrong}"/>
+                          </DataTrigger>
+                        </Style.Triggers>
+                      </Style>
+                    </Button.Style>
+                  </Button>
+                  <Button Content="Réservée jusqu'au solde" MinWidth="180" Command="{Binding ReserveCommand}" AutomationProperties.Name="Marchandise réservée jusqu'au solde">
+                    <Button.Style>
+                      <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                        <Style.Triggers>
+                          <DataTrigger Binding="{Binding ReserveStock}" Value="True">
+                            <Setter Property="Background" Value="{StaticResource Terracotta}"/>
+                            <Setter Property="Foreground" Value="White"/>
+                            <Setter Property="BorderBrush" Value="{StaticResource Terracotta}"/>
+                          </DataTrigger>
+                        </Style.Triggers>
+                      </Style>
+                    </Button.Style>
+                  </Button>
                 </StackPanel>
-                <TextBlock Grid.Column="1" Text="{Binding CreditDueDate}" FontSize="11" VerticalAlignment="Center" Margin="4,0,2,0">
-                  <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Foreground" Value="{StaticResource Muted}"/><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding SelectedPaymentMode}" Value="{x:Static domain:PaymentMode.Credit}"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
+                <TextBlock Margin="4,4,4,0">
+                  <TextBlock.Style>
+                    <Style TargetType="TextBlock" BasedOn="{StaticResource HelperText}">
+                      <Setter Property="Text" Value="Le client repart avec l'article. Code gérant et plafond de crédit requis."/>
+                      <Style.Triggers>
+                        <DataTrigger Binding="{Binding ReserveStock}" Value="True">
+                          <Setter Property="Text" Value="L'article reste en boutique, bloqué au nom du client, et lui sera remis au dernier versement."/>
+                        </DataTrigger>
+                      </Style.Triggers>
+                    </Style>
+                  </TextBlock.Style>
                 </TextBlock>
-              </Grid>
+              </StackPanel>
               <!-- Détail des paiements mixtes -->
               <StackPanel Grid.Row="2">
                 <ScrollViewer MaxHeight="116" VerticalScrollBarVisibility="Auto">

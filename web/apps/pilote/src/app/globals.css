@@ -1,0 +1,74 @@
+@import "tailwindcss";
+
+/*
+  L'identité vient du logiciel de caisse, elle n'est pas réinventée ici : terracotta, or, ivoire
+  et encre. La propriétaire passe de l'un à l'autre dans la même journée ; deux univers visuels
+  lui donneraient le sentiment de deux produits sans rapport.
+
+  Parti pris : la hiérarchie se fait par la taille et le blanc, pas par des aplats de couleur.
+  La couleur ne sert qu'à dire quelque chose — une caisse ouverte, un écart, une alerte. Un outil
+  de gestion qu'on ouvre vingt fois par jour doit se lire, pas se contempler.
+*/
+@theme {
+  --color-ink: #202522;
+  --color-muted: #66706a;
+  --color-faint: #8a938d;
+  --color-paper: #ffffff;
+  --color-ivory: #f7f8f5;
+  --color-canvas: #f1f3f0;
+  --color-line: #e3e8e4;
+  --color-line-strong: #c9d1cb;
+
+  --color-terracotta: #b35f4a;
+  --color-terracotta-dark: #8f4636;
+  --color-terracotta-soft: #f7e9e5;
+  --color-gold: #a9824a;
+  --color-gold-soft: #f6f0e4;
+
+  --color-success: #287158;
+  --color-success-soft: #e5f3ed;
+  --color-danger: #b43c3c;
+  --color-danger-soft: #f9e7e7;
+  --color-warning: #8a6410;
+  --color-warning-soft: #fbf2de;
+
+  /* Serif pour les titres et les nombres qu'on regarde : elle vient du vocabulaire de la mode
+     et distingue immédiatement l'application d'un tableau de bord générique. */
+  --font-display: Georgia, "Iowan Old Style", "Times New Roman", serif;
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+}
+
+:root {
+  color-scheme: light;
+}
+
+html {
+  /* Le pouce atteint le bas de l'écran, pas le haut : la barre de navigation y est ancrée et
+     doit rester au-dessus de la zone d'accueil des iPhone. */
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  /* Empêche l'élastique de rebond iOS de découvrir le fond du navigateur sous une application
+     qui se veut installée. */
+  overscroll-behavior-y: none;
+}
+
+/* Les montants s'alignent en colonne : sans chasse fixe, les chiffres dansent d'une ligne à
+   l'autre et le total devient impossible à comparer d'un coup d'œil. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

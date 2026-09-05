@@ -1,8 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><TargetFramework>net10.0-windows</TargetFramework><EnableWindowsTargeting>true</EnableWindowsTargeting><IsPackable>false</IsPackable><IsTestProject>true</IsTestProject></PropertyGroup>
   <ItemGroup>
+    <!-- Lié plutôt que dupliqué : la règle de rétrocompatibilité de schéma doit avoir une seule
+         formulation, sinon les deux copies divergent et la plus laxiste devient la règle réelle. -->
+    <Compile Include="../Shared/MigrationCompatibility.cs" Link="Shared/MigrationCompatibility.cs" />
     <ProjectReference Include="../../src/BoutiqueFashion.Domain/BoutiqueFashion.Domain.csproj" />
     <ProjectReference Include="../../src/BoutiqueFashion.Application/BoutiqueFashion.Application.csproj" />
+    <ProjectReference Include="../../src/BoutiqueFashion.Contracts/BoutiqueFashion.Contracts.csproj" />
     <ProjectReference Include="../../src/BoutiqueFashion.Infrastructure/BoutiqueFashion.Infrastructure.csproj" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.1" />
     <PackageReference Include="xunit" Version="2.9.3" />

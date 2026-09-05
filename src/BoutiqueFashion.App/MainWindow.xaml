@@ -9,6 +9,9 @@
   <Window.Resources>
     <DataTemplate DataType="{x:Type vm:DashboardViewModel}"><views:DashboardView/></DataTemplate>
     <DataTemplate DataType="{x:Type vm:SaleViewModel}"><views:SaleView/></DataTemplate>
+    <DataTemplate DataType="{x:Type vm:CashViewModel}"><views:CashView/></DataTemplate>
+    <DataTemplate DataType="{x:Type vm:AdvancesViewModel}"><views:AdvancesView/></DataTemplate>
+    <DataTemplate DataType="{x:Type vm:OrdersViewModel}"><views:OrdersView/></DataTemplate>
     <DataTemplate DataType="{x:Type vm:CatalogViewModel}"><views:CatalogView/></DataTemplate>
     <DataTemplate DataType="{x:Type vm:StockViewModel}"><views:StockView/></DataTemplate>
     <DataTemplate DataType="{x:Type vm:CustomersViewModel}"><views:CustomersView/></DataTemplate>
@@ -36,13 +39,28 @@
           </Grid>
           <TextBlock Text="Espace de travail" Foreground="{StaticResource NavMuted}" FontSize="11" FontWeight="SemiBold" Margin="10,0,0,7"/>
           <RadioButton Content="Tableau de bord" Tag="&#xE80F;" GroupName="Navigation" AutomationProperties.Name="Tableau de bord" IsChecked="True" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Dashboard"/>
-          <RadioButton Content="Vente / Caisse" Tag="&#xE719;" GroupName="Navigation" AutomationProperties.Name="Vente / Caisse" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Sale"/>
+          <RadioButton Content="Vente" Tag="&#xE719;" GroupName="Navigation" AutomationProperties.Name="Vente" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Sale"/>
+          <RadioButton Content="Caisse" Tag="&#xE825;" GroupName="Navigation" AutomationProperties.Name="Caisse" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Cash"/>
           <RadioButton Content="Produits" Tag="&#xE7BF;" GroupName="Navigation" AutomationProperties.Name="Produits" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Catalog"/>
           <RadioButton Content="Stock" Tag="&#xE8B7;" GroupName="Navigation" AutomationProperties.Name="Stock" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Stock" Visibility="{Binding Session.IsManager, Converter={StaticResource BoolToVis}}"/>
-          <RadioButton Content="Clients" Tag="&#xE77B;" GroupName="Navigation" AutomationProperties.Name="Clients" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Customers"/>
-          <RadioButton Content="Dépenses" Tag="&#xE8C7;" GroupName="Navigation" AutomationProperties.Name="Dépenses" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Expenses" Visibility="{Binding Session.IsManager, Converter={StaticResource BoolToVis}}"/>
+          <!-- Visible du vendeur : c'est lui qui reçoit la cliente venue chercher sa commande.
+               La pastille compte les commandes en attente, sinon elles passeraient inaperçues. -->
+          <RadioButton Tag="&#xE7BF;" GroupName="Navigation" AutomationProperties.Name="Commandes" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Orders">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Text="Commandes" VerticalAlignment="Center"/>
+              <Border Background="{StaticResource Terracotta}" CornerRadius="9" MinWidth="18" Height="18" Margin="8,0,0,0"
+                      Visibility="{Binding Orders.HasPending, Converter={StaticResource BoolToVis}}">
+                <TextBlock Text="{Binding Orders.PendingCount}" Foreground="White" FontSize="11" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="5,0"/>
+              </Border>
+            </StackPanel>
+          </RadioButton>
+
+          <!-- Visible du vendeur : c'est lui qui reçoit le client venu payer sa tranche. -->
+          <RadioButton Content="Avances" Tag="&#xE8C8;" GroupName="Navigation" AutomationProperties.Name="Avances et crédits" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Advances"/>
+          <RadioButton Content="Clients" Tag="&#xE77B;" GroupName="Navigation" AutomationProperties.Name="Clients" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Customers" Visibility="{Binding Session.IsManager, Converter={StaticResource BoolToVis}}"/>
+          <RadioButton Content="Dépenses" Tag="&#xE8C7;" GroupName="Navigation" AutomationProperties.Name="Dépenses" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Expenses"/>
           <RadioButton Content="Documents" Tag="&#xE8A5;" GroupName="Navigation" AutomationProperties.Name="Documents" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Documents" Visibility="{Binding Session.IsManager, Converter={StaticResource BoolToVis}}"/>
-          <RadioButton Content="Rapports" Tag="&#xE9D2;" GroupName="Navigation" AutomationProperties.Name="Rapports" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Reports"/>
+          <RadioButton Content="Rapports" Tag="&#xE9D2;" GroupName="Navigation" AutomationProperties.Name="Rapports" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Reports" Visibility="{Binding Session.IsManager, Converter={StaticResource BoolToVis}}"/>
           <RadioButton Content="Paramètres" Tag="&#xE713;" GroupName="Navigation" AutomationProperties.Name="Paramètres" Style="{StaticResource NavItem}" Command="{Binding NavigateCommand}" CommandParameter="Settings" Visibility="{Binding Session.IsManager, Converter={StaticResource BoolToVis}}"/>
         </StackPanel>
         <Border DockPanel.Dock="Bottom" VerticalAlignment="Bottom" Background="{StaticResource NavHover}" CornerRadius="8" Padding="12" Margin="0,14,0,0">
@@ -61,18 +79,45 @@
             <TextBlock Text="Boutique Fashion" Foreground="{StaticResource Muted}" FontSize="11" FontWeight="SemiBold"/>
             <TextBlock Text="{Binding PageTitle}" Style="{StaticResource PageTitle}"/>
           </StackPanel>
-          <!-- Indicateur de mode : sans lui, impossible de savoir si la caisse est déverrouillée. -->
-          <Border Grid.Column="1" Background="{StaticResource WarningSoft}" BorderBrush="{StaticResource Warning}" BorderThickness="1" CornerRadius="8" Padding="10,5" VerticalAlignment="Center" Visibility="{Binding Session.IsManager, Converter={StaticResource BoolToVis}}">
-            <StackPanel Orientation="Horizontal">
-              <TextBlock Text="MODE GÉRANT" Foreground="{StaticResource Warning}" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
-              <TextBlock Text="· expire après 15 min d'inactivité" Foreground="{StaticResource Warning}" FontSize="11" VerticalAlignment="Center" Margin="6,0,0,0"/>
-            </StackPanel>
-          </Border>
+          <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+            <!-- État de la synchronisation. Discret par principe : hors ligne est un état normal
+                 en boutique, pas une alarme. Il ne se colore qu'en cas de blocage réel. -->
+            <Border CornerRadius="8" Padding="10,5" Margin="0,0,8,0" ToolTip="{Binding Sync.State.LastError}">
+              <Border.Style>
+                <Style TargetType="Border">
+                  <Setter Property="Background" Value="{StaticResource Ivory}"/>
+                  <Setter Property="BorderBrush" Value="{StaticResource Line}"/>
+                  <Setter Property="BorderThickness" Value="1"/>
+                  <Style.Triggers>
+                    <DataTrigger Binding="{Binding Sync.HasTrouble}" Value="True">
+                      <Setter Property="Background" Value="{StaticResource WarningSoft}"/>
+                      <Setter Property="BorderBrush" Value="{StaticResource Warning}"/>
+                    </DataTrigger>
+                  </Style.Triggers>
+                </Style>
+              </Border.Style>
+              <StackPanel Orientation="Horizontal">
+                <TextBlock Text="&#xE895;" FontFamily="Segoe MDL2 Assets" FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0" Foreground="{StaticResource Muted}"/>
+                <TextBlock Text="{Binding Sync.Label}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource Muted}" VerticalAlignment="Center"/>
+              </StackPanel>
+            </Border>
+
+            <!-- Indicateur de mode : sans lui, impossible de savoir si la caisse est déverrouillée. -->
+            <Border Background="{StaticResource WarningSoft}" BorderBrush="{StaticResource Warning}" BorderThickness="1" CornerRadius="8" Padding="10,5" Visibility="{Binding Session.IsManager, Converter={StaticResource BoolToVis}}">
+              <StackPanel Orientation="Horizontal">
+                <TextBlock Text="MODE GÉRANT" Foreground="{StaticResource Warning}" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
+                <TextBlock Text="· expire après 15 min d'inactivité" Foreground="{StaticResource Warning}" FontSize="11" VerticalAlignment="Center" Margin="6,0,0,0"/>
+              </StackPanel>
+            </Border>
+          </StackPanel>
         </Grid>
       </Border>
       <ContentControl Grid.Row="1" Content="{Binding CurrentPage}" Focusable="False"/>
     </Grid>
     <controls:TouchKeypadOverlay Grid.ColumnSpan="2"/>
     <controls:TouchKeyboardOverlay Grid.ColumnSpan="2"/>
+    <!-- Dernier enfant, donc au-dessus de tout, pavés tactiles compris : un verrou qui laisserait
+         un clavier par-dessus lui ne verrouillerait rien. -->
+    <controls:ShiftLockOverlay Grid.ColumnSpan="2" DataContext="{Binding Shift}"/>
   </Grid>
 </Window>

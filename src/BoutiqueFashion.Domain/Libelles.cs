@@ -56,6 +56,8 @@ public static class Libelles
         StockMovementType.Adjustment => "Ajustement",
         StockMovementType.Inventory => "Inventaire",
         StockMovementType.Reversal => "Contre-passation",
+        StockMovementType.Reservation => "Mise de côté",
+        StockMovementType.ReservationRelease => "Levée de réservation",
         _ => value.ToString()
     };
 
@@ -70,11 +72,33 @@ public static class Libelles
         _ => value.ToString()
     };
 
+    public static string Text(CashMovementDirection value) => value switch
+    {
+        CashMovementDirection.In => "Entrée d'espèces",
+        _ => "Sortie d'espèces"
+    };
+
+    public static string Text(OrderStatus value) => value switch
+    {
+        OrderStatus.Pending => "En cours",
+        OrderStatus.Processed => "Traitée",
+        OrderStatus.Delivered => "Livrée",
+        _ => "Annulée"
+    };
+
+    public static string Text(OrderChannel value) => value switch
+    {
+        OrderChannel.Vitrine => "Site vitrine",
+        OrderChannel.WhatsApp => "WhatsApp",
+        _ => "Téléphone"
+    };
+
     public static string Text(SaleStatus value) => value switch
     {
         SaleStatus.Completed => "Validée",
         SaleStatus.Cancelled => "Annulée",
         SaleStatus.Returned => "Retournée",
+        SaleStatus.Reserved => "Réservée (avance)",
         _ => value.ToString()
     };
 
@@ -87,6 +111,9 @@ public static class Libelles
         StockMovementType v => Text(v),
         CreditStatus v => Text(v),
         SaleStatus v => Text(v),
+        CashMovementDirection v => Text(v),
+        OrderStatus v => Text(v),
+        OrderChannel v => Text(v),
         null => string.Empty,
         _ => value.ToString() ?? string.Empty
     };

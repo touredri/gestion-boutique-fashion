@@ -1,0 +1,153 @@
+@import "tailwindcss";
+
+/*
+  Site vitrine. Même famille que la caisse et l'application de pilotage — terracotta, or, ivoire,
+  encre — mais un registre plus large : ici on ne consulte pas des chiffres, on regarde des
+  vêtements.
+
+  Le mouvement est entièrement natif : animations pilotées au défilement, accroches CSS,
+  transitions. Aucune bibliothèque. Sur un réseau mobile ivoirien, quarante kilo-octets de
+  JavaScript pour animer coûtent plus qu'ils n'apportent, et une animation qui arrive après le
+  contenu n'anime plus rien.
+*/
+@theme {
+  --color-ink: #1a1d1b;
+  --color-muted: #6a746e;
+  --color-faint: #98a09a;
+  --color-paper: #ffffff;
+  --color-ivory: #f7f5f1;
+  --color-sand: #efe9e1;
+  --color-line: #e2ded7;
+
+  --color-terracotta: #b35f4a;
+  --color-terracotta-dark: #8f4636;
+  --color-gold: #a9824a;
+  --color-clay: #d8a892;
+
+  --font-display: Georgia, "Iowan Old Style", "Times New Roman", serif;
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  background: var(--color-ivory);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  overscroll-behavior-y: none;
+}
+
+/* --- Apparitions au défilement ------------------------------------------ */
+
+/*
+  animation-timeline: view() attache l'animation à l'entrée de l'élément dans le champ, sans
+  observateur ni écouteur de défilement : le navigateur l'exécute sur le fil du compositeur,
+  donc sans à-coups même sur un téléphone d'entrée de gamme.
+
+  Le repli n'est pas une animation dégradée mais l'absence d'animation : sur un navigateur qui
+  ne connaît pas cette propriété, le contenu est simplement visible. Un contenu invisible en
+  attendant un script serait le pire des deux mondes.
+*/
+@supports (animation-timeline: view()) {
+  .reveal {
+    animation: reveal-in linear both;
+    animation-timeline: view();
+    animation-range: entry 5% cover 28%;
+  }
+
+  .reveal-slow {
+    animation: reveal-in linear both;
+    animation-timeline: view();
+    animation-range: entry 0% cover 40%;
+  }
+
+  /* Le titre de la couverture s'éloigne pendant qu'on descend : la profondeur naît du décalage
+     entre deux plans, pas d'une image qui bouge toute seule. */
+  .parallax-back {
+    animation: drift-back linear both;
+    animation-timeline: view();
+    animation-range: cover 0% cover 100%;
+  }
+
+  .parallax-front {
+    animation: drift-front linear both;
+    animation-timeline: view();
+    animation-range: cover 0% cover 100%;
+  }
+}
+
+@keyframes reveal-in {
+  from {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes drift-back {
+  from { transform: translateY(0) scale(1.06); }
+  to { transform: translateY(-14%) scale(1); }
+}
+
+@keyframes drift-front {
+  from { transform: translateY(0); }
+  to { transform: translateY(-42%); }
+}
+
+/* --- Rails horizontaux --------------------------------------------------- */
+
+/*
+  Le défilement des articles se fait au doigt, avec accroche. C'est le geste naturel sur un
+  téléphone ; des flèches de navigation y seraient des cibles de 44 px qu'on ne touche jamais.
+*/
+.rail {
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.rail::-webkit-scrollbar {
+  display: none;
+}
+.rail > * {
+  scroll-snap-align: start;
+}
+
+/* --- Bandeau défilant ---------------------------------------------------- */
+
+.marquee {
+  animation: marquee 32s linear infinite;
+}
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+/* --- Respect des préférences -------------------------------------------- */
+
+/*
+  Une préférence système, pas une option : le mouvement doit disparaître, pas ralentir. On coupe
+  aussi les animations liées au défilement, que la durée seule n'atteindrait pas.
+*/
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .reveal,
+  .reveal-slow,
+  .parallax-back,
+  .parallax-front,
+  .marquee {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}

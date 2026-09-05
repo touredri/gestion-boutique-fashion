@@ -1,0 +1,24 @@
+# Analyse de secrets.
+#
+# Les chemins ci-dessous décrivent des piles jetables, pas des services. Ils contiennent par
+# nature des identifiants qui ressemblent à de vrais sans en être, et chaque alerte à leur sujet
+# use l'attention qu'il faudra avoir le jour où l'alerte sera fondée.
+#
+# Ce n'est pas une permission d'y écrire n'importe quoi : les vrais secrets vivent dans
+# docker/.env, que git ignore, et dans les secrets GitHub. Voir docs/deploiement.md.
+
+version: 2
+
+secret:
+  ignored-paths:
+    # Base de développement sur tmpfs, en authentification « trust », publiée sur 127.0.0.1
+    # seulement : il n'y a pas de mot de passe à protéger, donc pas de mot de passe écrit.
+    - docker/compose.dev.yml
+    # Gabarit à recopier en docker/.env. Toutes ses valeurs sont vides à dessein — un gabarit
+    # qui propose un mot de passe finit en production avec celui-là.
+    - docker/.env.example
+    # Bases de test créées puis détruites à chaque exécution, sur le runner.
+    - tests/BoutiqueFashion.Server.Tests/ServerFixture.cs
+    # Fabrique « design-time » : dotnet ef n'ouvre jamais de connexion, il ne lit que la forme
+    # du modèle. Aucun identifiant n'y figure d'ailleurs plus.
+    - src/BoutiqueFashion.Server/Data/ServerDesignTimeFactory.cs

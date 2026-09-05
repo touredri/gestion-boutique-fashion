@@ -76,6 +76,10 @@ public sealed class ProductImportService(IDbContextFactory<BoutiqueDbContext> fa
     {
         if (preview.Issues.Count != 0) throw new InvalidOperationException("Corrigez les erreurs avant l'import.");
         await using var db = await factory.CreateDbContextAsync(cancellationToken);
+        // Même règle que la saisie manuelle : une fois le terminal rattaché, le catalogue vient
+        // du serveur et un import local serait écrasé à la première descente.
+        if (await db.AppSettings.AsNoTracking().AnyAsync(x => x.Key == "Sync.DeviceToken" && x.Value != "", cancellationToken))
+            throw new InvalidOperationException("Ce terminal est rattaché à une boutique : importez le catalogue depuis l'application mobile.");
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
         var skus = preview.Rows.Select(x => x.Sku).ToArray();
         if (await db.ProductVariants.AnyAsync(x => skus.Contains(x.Sku), cancellationToken)) throw new InvalidOperationException("Un SKU du fichier existe déjà.");

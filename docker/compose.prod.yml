@@ -1,0 +1,116 @@
+# Pile de production. Aucun secret n'est écrit ici : renseigner docker/.env à partir de
+# docker/.env.example, que git ignore.
+#
+#   docker compose -f docker/compose.prod.yml --env-file docker/.env up -d
+name: boutique
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    # Jamais publié sur l'hôte : la base n'est joignable que par le réseau du compose.
+    expose:
+      - "5432"
+
+  server:
+    image: ${SERVER_IMAGE:-ghcr.io/touredri/gestion-boutique-fashion/server:latest}
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      Bootstrap__Username: ${BOOTSTRAP_USERNAME}
+      Bootstrap__Password: ${BOOTSTRAP_PASSWORD}
+      Bootstrap__DisplayName: ${BOOTSTRAP_DISPLAY_NAME}
+      Vapid__Subject: ${VAPID_SUBJECT}
+      Vapid__PublicKey: ${VAPID_PUBLIC_KEY}
+      Vapid__PrivateKey: ${VAPID_PRIVATE_KEY}
+      OpenWa__BaseUrl: ${OPENWA_BASE_URL}
+      OpenWa__ApiKey: ${OPENWA_API_KEY}
+      # Publication logicielle (lot 5). Sans clé, les routes de publication répondent 404.
+      Admin__ApiKey: ${ADMIN_API_KEY}
+      Updates__Path: /data/updates
+    volumes:
+      - updates:/data/updates
+    expose:
+      - "8080"
+
+  # Caddy route l'application : /api vers le serveur, /pilote vers la PWA, le reste vers la
+  # vitrine. Il n'est joignable que depuis la machine ; c'est nginx, déjà en place sur ce
+  # serveur, qui termine le TLS et transmet ici. Voir docker/nginx-bana.conf.
+  # Construit la PWA et dépose ses fichiers dans un volume que Caddy sert. Le conteneur
+  # s'arrête une fois la copie faite : il n'y a rien à laisser tourner.
+  pilote:
+    image: ${WEB_IMAGE:-ghcr.io/touredri/gestion-boutique-fashion/web:latest}
+    build:
+      context: ../web
+      dockerfile: Dockerfile
+      target: build
+    command: sh -c "rm -rf /srv/pilote/* /srv/vitrine/* && cp -r /web/apps/pilote/out/. /srv/pilote/ && cp -r /web/apps/vitrine/out/. /srv/vitrine/"
+    volumes:
+      - pilote-dist:/srv/pilote
+      - vitrine-dist:/srv/vitrine
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      server:
+        condition: service_started
+      pilote:
+        condition: service_completed_successfully
+    ports:
+      # Boucle locale uniquement : rien de cette pile n'est joignable directement de l'extérieur.
+      - "127.0.0.1:8081:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - pilote-dist:/srv/pilote:ro
+      - vitrine-dist:/srv/vitrine:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+  # Sauvegarde quotidienne, conservée 14 jours. Une base sans sauvegarde, c'est deux boutiques
+  # dont l'historique tient à un seul disque.
+  backup:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./backups:/backups
+    entrypoint: >
+      sh -c 'while true; do
+        pg_dump -h postgres -U "$${POSTGRES_USER:-boutique}" -d "$${POSTGRES_DB:-boutique}"
+          | gzip > /backups/boutique-$$(date +%Y%m%d-%H%M%S).sql.gz;
+        find /backups -name "boutique-*.sql.gz" -mtime +14 -delete;
+        sleep 86400;
+      done'
+
+volumes:
+  postgres-data:
+  # Paquets de mise à jour des terminaux. Volume nommé : ils doivent survivre à un redéploiement,
+  # sinon un terminal en cours de téléchargement se retrouve devant un fichier disparu.
+  updates:
+  pilote-dist:
+  vitrine-dist:
+  caddy-data:
+  caddy-config:

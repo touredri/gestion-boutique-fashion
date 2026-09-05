@@ -203,6 +203,54 @@
       </TabItem>
 
       <!-- Onglet 5 : Sécurité & Données -->
+      <TabItem Header="Boutique en ligne">
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+          <Border Style="{StaticResource Card}" Margin="0,4,0,0" Padding="18">
+            <StackPanel>
+              <TextBlock Text="RATTACHEMENT À LA BOUTIQUE" Style="{StaticResource Eyebrow}" Margin="0,0,0,4"/>
+              <TextBlock Text="Ce terminal appartient à une boutique et une seule. Créez la boutique depuis l'application mobile, relevez le code d'appairage qu'elle affiche, puis saisissez-le ici. La caisse fonctionne sans réseau : la synchronisation rattrape dès qu'il revient."
+                         Style="{StaticResource HelperText}" Margin="0,0,0,12"/>
+
+              <!-- Terminal déjà appairé -->
+              <Border Background="{StaticResource SuccessSoft}" BorderBrush="{StaticResource Success}" BorderThickness="1" CornerRadius="8" Padding="12,9" Margin="0,0,0,12"
+                      Visibility="{Binding Sync.IsEnrolled, Converter={StaticResource BoolToVis}}">
+                <StackPanel>
+                  <TextBlock Text="{Binding Sync.State.ShopName, StringFormat=Rattaché à « {0} »}" FontWeight="Bold" Foreground="{StaticResource Success}"/>
+                  <TextBlock Text="{Binding Sync.Label}" FontSize="12" Foreground="{StaticResource Success}" Margin="0,2,0,0"/>
+                </StackPanel>
+              </Border>
+
+              <TextBlock Text="Adresse du serveur" Style="{StaticResource FieldLabel}"/>
+              <TextBox Text="{Binding SyncServerUrl}" controls:Placeholder.Text="https://api.exemple.ci"/>
+
+              <Grid Margin="0,8,0,0">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                <StackPanel Margin="0,0,8,0">
+                  <TextBlock Text="Code d'appairage" Style="{StaticResource FieldLabel}"/>
+                  <TextBox Text="{Binding EnrollmentCode}" controls:Placeholder.Text="BANA-XXXX-XXXX" CharacterCasing="Upper"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1">
+                  <TextBlock Text="Nom de ce terminal" Style="{StaticResource FieldLabel}"/>
+                  <TextBox Text="{Binding DeviceName}" controls:Placeholder.Text="Caisse comptoir"/>
+                </StackPanel>
+              </Grid>
+
+              <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+                <Button Content="Appairer ce terminal" Command="{Binding EnrollCommand}" Style="{StaticResource PrimaryButton}" MinWidth="190"/>
+                <Button Content="Synchroniser maintenant" Command="{Binding SyncNowCommand}" MinWidth="190" Visibility="{Binding Sync.IsEnrolled, Converter={StaticResource BoolToVis}}"/>
+                <Button Content="Détacher" Command="{Binding UnpairCommand}" Style="{StaticResource DangerButton}" MinWidth="120" Visibility="{Binding Sync.IsEnrolled, Converter={StaticResource BoolToVis}}"/>
+              </StackPanel>
+
+              <TextBlock Text="{Binding SyncStatus}" Style="{StaticResource StatusText}" Margin="2,12,2,0"/>
+
+              <Separator Margin="0,14,0,10"/>
+              <TextBlock Text="Le code d'appairage ne sert qu'une fois et expire au bout de 24 heures. Détacher un terminal n'efface aucune donnée locale, mais les ventes en attente ne remonteront qu'après un nouvel appairage."
+                         Style="{StaticResource HelperText}"/>
+            </StackPanel>
+          </Border>
+        </ScrollViewer>
+      </TabItem>
+
       <TabItem Header="Sécurité &amp; base de données">
         <ScrollViewer VerticalScrollBarVisibility="Auto">
         <Border Style="{StaticResource Card}" Margin="0,4,0,0" Padding="18">

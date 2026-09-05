@@ -5,6 +5,10 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <Deterministic>true</Deterministic>
+    <!-- Volontairement absurde : un binaire compilé à la main ne doit jamais ressembler à une
+         version publiée. La CI passe -p:Version=<tag> au moment du publish, et c'est le seul
+         chemin par lequel un vrai numéro entre dans l'application. -->
+    <Version>0.0.0-local</Version>
   </PropertyGroup>
 </Project>
 

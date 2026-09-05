@@ -29,92 +29,59 @@
       </StackPanel>
     </Grid>
 
-    <!-- SECTION GESTION & ÉTAT DE LA CAISSE DU JOUR -->
+    <!-- ÉTAT DE LA CAISSE.
+         L'ouverture et la clôture ont migré vers l'écran Caisse : les tenir aux deux endroits
+         aurait fait diverger deux copies de la même règle. Ici on informe, et on y renvoie. -->
     <Border Grid.Row="1" Style="{StaticResource Card}" Margin="4,0,4,12" Padding="16">
       <Grid>
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-        <!-- Cas 1 : Caisse Fermée -->
         <Grid>
-          <Grid.Style>
-            <Style TargetType="Grid">
-              <Setter Property="Visibility" Value="Collapsed"/>
-              <Style.Triggers>
-                <DataTrigger Binding="{Binding IsCashOpen}" Value="False">
-                  <Setter Property="Visibility" Value="Visible"/>
-                </DataTrigger>
-              </Style.Triggers>
-            </Style>
-          </Grid.Style>
           <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto"/>
             <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="220"/>
             <ColumnDefinition Width="Auto"/>
           </Grid.ColumnDefinitions>
-          <StackPanel VerticalAlignment="Center" Margin="0,0,12,0">
-            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-              <Border Background="{StaticResource DangerSoft}" BorderBrush="{StaticResource Danger}" BorderThickness="1" CornerRadius="6" Padding="8,3" Margin="0,0,8,0">
-                <TextBlock Text="● CAISSE FERMÉE" Foreground="{StaticResource Danger}" FontSize="11" FontWeight="Bold"/>
-              </Border>
-              <TextBlock Text="Démarrage de la journée" FontWeight="Bold" FontSize="15" Foreground="{StaticResource Ink}" VerticalAlignment="Center"/>
-            </StackPanel>
-            <TextBlock Text="Indiquez le montant du fond de caisse initial pour ouvrir la session et commencer à encaisser." Style="{StaticResource HelperText}"/>
+
+          <Border CornerRadius="6" Padding="8,4" Margin="0,0,10,0" VerticalAlignment="Center">
+            <Border.Style>
+              <Style TargetType="Border">
+                <Setter Property="Background" Value="{StaticResource DangerSoft}"/>
+                <Setter Property="BorderBrush" Value="{StaticResource Danger}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Style.Triggers>
+                  <DataTrigger Binding="{Binding IsCashOpen}" Value="True">
+                    <Setter Property="Background" Value="{StaticResource SuccessSoft}"/>
+                    <Setter Property="BorderBrush" Value="{StaticResource Success}"/>
+                  </DataTrigger>
+                </Style.Triggers>
+              </Style>
+            </Border.Style>
+            <TextBlock FontSize="11" FontWeight="Bold">
+              <TextBlock.Style>
+                <Style TargetType="TextBlock">
+                  <Setter Property="Text" Value="● CAISSE FERMÉE"/>
+                  <Setter Property="Foreground" Value="{StaticResource Danger}"/>
+                  <Style.Triggers>
+                    <DataTrigger Binding="{Binding IsCashOpen}" Value="True">
+                      <Setter Property="Text" Value="● CAISSE OUVERTE"/>
+                      <Setter Property="Foreground" Value="{StaticResource Success}"/>
+                    </DataTrigger>
+                  </Style.Triggers>
+                </Style>
+              </TextBlock.Style>
+            </TextBlock>
+          </Border>
+
+          <TextBlock Grid.Column="1" Text="{Binding CashSessionState}" FontWeight="SemiBold" FontSize="15" Foreground="{StaticResource Ink}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+
+          <StackPanel Grid.Column="2" Orientation="Horizontal">
+            <Button Content="Aller encaisser une vente" Command="{Binding QuickSellCommand}" Style="{StaticResource PrimaryButton}" MinWidth="200"
+                    Visibility="{Binding IsCashOpen, Converter={StaticResource BoolToVis}}"/>
+            <Button Content="Gérer la caisse" Command="{Binding QuickCashCommand}" MinWidth="160"/>
           </StackPanel>
-          <controls:KeypadField Grid.Column="1" Value="{Binding OpeningFloat}" Title="Fond de caisse initial" Suffix="FCFA" VerticalAlignment="Center" Margin="0,0,10,0"/>
-          <Button Grid.Column="2" Content="Ouvrir la caisse" Command="{Binding OpenCashCommand}" Style="{StaticResource PrimaryButton}" VerticalAlignment="Center" MinWidth="160" MinHeight="50"/>
         </Grid>
 
-        <!-- Cas 2 : Caisse Ouverte -->
-        <Grid>
-          <Grid.Style>
-            <Style TargetType="Grid">
-              <Setter Property="Visibility" Value="Collapsed"/>
-              <Style.Triggers>
-                <DataTrigger Binding="{Binding IsCashOpen}" Value="True">
-                  <Setter Property="Visibility" Value="Visible"/>
-                </DataTrigger>
-              </Style.Triggers>
-            </Style>
-          </Grid.Style>
-          <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-          </Grid.RowDefinitions>
-          <Grid>
-            <Grid.ColumnDefinitions>
-              <ColumnDefinition Width="*"/>
-              <ColumnDefinition Width="Auto"/>
-            </Grid.ColumnDefinitions>
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-              <Border Background="{StaticResource SuccessSoft}" BorderBrush="{StaticResource Success}" BorderThickness="1" CornerRadius="6" Padding="8,4" Margin="0,0,10,0">
-                <TextBlock Text="● CAISSE OUVERTE" Foreground="{StaticResource Success}" FontSize="11" FontWeight="Bold"/>
-              </Border>
-              <TextBlock Text="{Binding CashSessionState}" FontWeight="Bold" FontSize="15" Foreground="{StaticResource Ink}" VerticalAlignment="Center"/>
-              <TextBlock Text="· Les ventes et encaissements sont actifs" Style="{StaticResource HelperText}" VerticalAlignment="Center" Margin="10,0,0,0"/>
-            </StackPanel>
-            <Button Grid.Column="1" Content="Aller encaisser une vente" Command="{Binding QuickSellCommand}" Style="{StaticResource PrimaryButton}" MinWidth="200"/>
-          </Grid>
-
-          <!-- Bloc Clôture en fin de journée (Expander rétractable) -->
-          <Expander Grid.Row="1" Header="Clôturer la caisse en fin de journée" Margin="0,10,0,0">
-            <Border Background="{StaticResource Ivory}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="10" Padding="14" Margin="0,6,0,0">
-              <Grid>
-                <Grid.ColumnDefinitions>
-                  <ColumnDefinition Width="1.2*"/>
-                  <ColumnDefinition Width="2*"/>
-                  <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                <controls:KeypadField Value="{Binding CountedCash}" Title="Espèces réelles comptées" Suffix="FCFA" Margin="0,0,8,0"/>
-                <StackPanel Grid.Column="1" Margin="0,0,8,0">
-                  <TextBlock Text="Motif de l'écart (si constaté)" Style="{StaticResource FieldLabel}" Margin="2,0,2,2"/>
-                  <TextBox Text="{Binding CashDifferenceReason}" controls:Placeholder.Text="Justification de l'écart..."/>
-                </StackPanel>
-                <Button Grid.Column="2" Content="Clôturer la caisse" Command="{Binding CloseCashCommand}" Style="{StaticResource DangerButton}" VerticalAlignment="Bottom" MinWidth="160"/>
-              </Grid>
-            </Border>
-          </Expander>
-        </Grid>
-
-        <!-- Retour d'action de la caisse : sans ce binding, les refus d'ouverture/clôture étaient muets. -->
+        <!-- Retour d'action : sans ce binding, la création du code gérant serait muette. -->
         <TextBlock Grid.Row="1" Text="{Binding CashStatus}" Style="{StaticResource StatusText}" Margin="2,10,2,0"/>
       </Grid>
     </Border>
@@ -140,9 +107,10 @@
       </Border>
     </Grid>
 
-    <!-- Alertes et indicateurs secondaires -->
-    <Grid Grid.Row="3" Margin="0,8,0,0">
-      <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
+    <!-- Alertes et indicateurs secondaires.
+         UniformGrid plutôt que Grid : il ignore les enfants repliés, donc la carte des crédits
+         masquée au vendeur ne laisse pas une colonne vide au milieu du tableau de bord. -->
+    <UniformGrid Grid.Row="3" Rows="1" Margin="0,8,0,0">
       <Border Style="{StaticResource Card}" Background="{StaticResource TerracottaSoft}" BorderBrush="{StaticResource Terracotta}" BorderThickness="1" Padding="16" Margin="4">
         <StackPanel Orientation="Horizontal">
           <Border Background="{StaticResource TerracottaDark}" CornerRadius="10" Width="44" Height="44" VerticalAlignment="Center">
@@ -157,7 +125,27 @@
           </StackPanel>
         </StackPanel>
       </Border>
-      <Border Grid.Column="1" Style="{StaticResource Card}" Background="{StaticResource GoldSoft}" BorderBrush="{StaticResource Gold}" BorderThickness="1" Padding="16" Margin="4">
+      <!-- Article le mieux vendu. Agrégé par produit : « Robe Amina » et non « AMI-M-ROUGE ». -->
+      <Border Style="{StaticResource Card}" Background="{StaticResource SuccessSoft}" BorderBrush="{StaticResource Success}" BorderThickness="1" Padding="16" Margin="4">
+        <StackPanel Orientation="Horizontal">
+          <Border Background="{StaticResource Success}" CornerRadius="10" Width="44" Height="44" VerticalAlignment="Center">
+            <TextBlock Text="&#xE735;" FontFamily="Segoe MDL2 Assets" Foreground="White" FontSize="19" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          </Border>
+          <StackPanel Margin="14,0,0,0" VerticalAlignment="Center">
+            <TextBlock Text="{Binding Summary.BestSeller.Label, TargetNullValue=Aucune vente ce jour, FallbackValue=Aucune vente ce jour}"
+                       FontSize="16" FontWeight="Bold" Foreground="{StaticResource Ink}" TextTrimming="CharacterEllipsis"/>
+            <TextBlock Foreground="{StaticResource Muted}" FontSize="12" Margin="0,2,0,0">
+              <Run Text="Article le mieux vendu ·"/>
+              <Run Text="{Binding Summary.BestSeller.Quantity, StringFormat={}{0:0.##}, TargetNullValue=0, FallbackValue=0, Mode=OneWay}"/>
+              <Run Text="pièce(s)"/>
+            </TextBlock>
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
+      <!-- Encours clients : information de gestion, hors du périmètre du vendeur. -->
+      <Border Style="{StaticResource Card}" Background="{StaticResource GoldSoft}" BorderBrush="{StaticResource Gold}" BorderThickness="1" Padding="16" Margin="4"
+              Visibility="{Binding Session.IsManager, Converter={StaticResource BoolToVis}}">
         <StackPanel Orientation="Horizontal">
           <Border Background="{StaticResource Gold}" CornerRadius="10" Width="44" Height="44" VerticalAlignment="Center">
             <TextBlock Text="FCFA" Foreground="White" FontSize="12" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
@@ -171,7 +159,7 @@
           </StackPanel>
         </StackPanel>
       </Border>
-    </Grid>
+    </UniformGrid>
 
     <!-- Dernières ventes avec en-tête structuré -->
     <Grid Grid.Row="4" Margin="0,12,0,0">

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using BoutiqueFashion.Application;
+using BoutiqueFashion.Contracts;
 using BoutiqueFashion.Domain;
 using Microsoft.EntityFrameworkCore;
 
@@ -7,7 +8,7 @@ namespace BoutiqueFashion.Infrastructure;
 
 public sealed class CreditService(IDbContextFactory<BoutiqueDbContext> factory, IAuthorizationService authorization) : ICreditService
 {
-    public async Task<IReadOnlyList<CreditSummary>> ListAsync(CancellationToken cancellationToken = default) { await using var db = await factory.CreateDbContextAsync(cancellationToken); var rows = await db.CustomerCredits.AsNoTracking().Join(db.Sales, c => c.SaleId, s => s.Id, (c, s) => new { Credit = c, Sale = s }).Join(db.Customers, x => x.Credit.CustomerId, c => c.Id, (x, c) => new { x.Credit, x.Sale, Customer = c }).ToListAsync(cancellationToken); return rows.OrderBy(x => x.Credit.DueAt).Select(x => new CreditSummary(x.Credit.Id, x.Sale.Number, x.Customer.Name, x.Credit.OriginalAmountXof, x.Credit.BalanceXof, x.Credit.DueAt, x.Credit.Status)).ToArray(); }
+    public async Task<IReadOnlyList<CreditSummary>> ListAsync(CancellationToken cancellationToken = default) { await using var db = await factory.CreateDbContextAsync(cancellationToken); var rows = await db.CustomerCredits.AsNoTracking().Join(db.Sales, c => c.SaleId, s => s.Id, (c, s) => new { Credit = c, Sale = s }).Join(db.Customers, x => x.Credit.CustomerId, c => c.Id, (x, c) => new { x.Credit, x.Sale, Customer = c }).ToListAsync(cancellationToken); return rows.OrderBy(x => x.Credit.DueAt).Select(x => new CreditSummary(x.Credit.Id, x.Sale.Number, x.Customer.Name, x.Credit.OriginalAmountXof, x.Credit.BalanceXof, x.Credit.DueAt, x.Credit.Status, x.Sale.Status == SaleStatus.Reserved, x.Customer.Phone)).ToArray(); }
 
     public async Task<IReadOnlyList<CreditPaymentRow>> ListPaymentsAsync(Guid creditId, CancellationToken cancellationToken = default)
     {
@@ -23,17 +24,26 @@ public sealed class CreditService(IDbContextFactory<BoutiqueDbContext> factory, 
         await using var db = await factory.CreateDbContextAsync(cancellationToken); await using var tx = await db.Database.BeginTransactionAsync(cancellationToken);
         var credit = await db.CustomerCredits.SingleOrDefaultAsync(x => x.Id == creditId, cancellationToken) ?? throw new KeyNotFoundException("Crédit introuvable.");
         if (amountXof > credit.BalanceXof) throw new InvalidOperationException("Le versement dépasse le solde.");
-        var sale = await db.Sales.SingleAsync(x => x.Id == credit.SaleId, cancellationToken); var customer = await db.Customers.SingleAsync(x => x.Id == credit.CustomerId, cancellationToken);
+        var sale = await db.Sales.Include(x => x.Lines).SingleAsync(x => x.Id == credit.SaleId, cancellationToken); var customer = await db.Customers.SingleAsync(x => x.Id == credit.CustomerId, cancellationToken);
         var number = await DocumentReceiptFactory.NextNumberAsync(db, DocumentType.CreditPaymentReceipt, cancellationToken);
         var payment = new CreditPayment { CustomerCreditId = credit.Id, Number = number, AmountXof = amountXof, Mode = mode, Actor = "Vendeur boutique" };
         credit.BalanceXof -= amountXof; credit.Status = credit.BalanceXof == 0 ? CreditStatus.Paid : CreditStatus.PartiallyPaid; db.CreditPayments.Add(payment);
+        Outbox.Enqueue(db, SyncEntityTypes.CreditPayment, payment.Id, Outbox.From(payment));
         var paymentDraft = new PaymentDraft(mode, amountXof, reference);
         var receipt = await DocumentReceiptFactory.CreateAsync(db, number, customer.Name, [new ReceiptItem($"Versement crédit {sale.Number}", 1, amountXof, 0, amountXof)], amountXof, 0, amountXof, [paymentDraft], $"Solde restant : {credit.BalanceXof:N0} FCFA", cancellationToken, DocumentType.CreditPaymentReceipt);
         var doc = new DocumentSnapshot { Type = DocumentType.CreditPaymentReceipt, Number = number, JsonPayload = JsonSerializer.Serialize(receipt) }; db.DocumentSnapshots.Add(doc);
         if (credit.BalanceXof == 0)
         {
+            // Avance réservée : c'est ce versement qui déclenche la remise. La réservation est levée
+            // et le stock sort enfin — jusqu'ici la marchandise était comptée présente mais indisponible.
+            var handedOver = sale.Status == SaleStatus.Reserved;
+            if (handedOver) await HandOverReservationAsync(db, sale, credit, cancellationToken);
+
             var balanceNumber = await DocumentReceiptFactory.NextNumberAsync(db, DocumentType.BalanceReceipt, cancellationToken);
-            var balanceReceipt = await DocumentReceiptFactory.CreateAsync(db, balanceNumber, customer.Name, [new ReceiptItem($"Solde crédit {sale.Number} entièrement réglé", 1, amountXof, 0, amountXof)], amountXof, 0, amountXof, [paymentDraft], "Dette entièrement soldée. Merci de votre confiance.", cancellationToken, DocumentType.BalanceReceipt);
+            var footer = handedOver
+                ? "Avance soldée. Marchandise remise au client. Merci de votre confiance."
+                : "Dette entièrement soldée. Merci de votre confiance.";
+            var balanceReceipt = await DocumentReceiptFactory.CreateAsync(db, balanceNumber, customer.Name, [new ReceiptItem($"Solde crédit {sale.Number} entièrement réglé", 1, amountXof, 0, amountXof)], amountXof, 0, amountXof, [paymentDraft], footer, cancellationToken, DocumentType.BalanceReceipt);
             db.DocumentSnapshots.Add(new DocumentSnapshot { Type = DocumentType.BalanceReceipt, Number = balanceNumber, JsonPayload = JsonSerializer.Serialize(balanceReceipt) });
         }
         db.AuditEntries.Add(new AuditEntry { Actor = "Vendeur boutique", Action = "Versement crédit", EntityType = nameof(CustomerCredit), EntityId = credit.Id.ToString(), AfterJson = JsonSerializer.Serialize(new { amountXof, mode, reference, credit.BalanceXof }) });
@@ -51,11 +61,36 @@ public sealed class CreditService(IDbContextFactory<BoutiqueDbContext> factory, 
         var number = await DocumentReceiptFactory.NextNumberAsync(db, DocumentType.CreditNote, cancellationToken);
         var reversal = new CreditPayment { CustomerCreditId = credit.Id, Number = number, AmountXof = -original.AmountXof, Mode = original.Mode, IsReversal = true, ReversesPaymentId = original.Id, Actor = "Responsable" };
         credit.BalanceXof += original.AmountXof; credit.Status = credit.BalanceXof >= credit.OriginalAmountXof ? CreditStatus.Due : CreditStatus.PartiallyPaid; db.CreditPayments.Add(reversal);
+        Outbox.Enqueue(db, SyncEntityTypes.CreditPayment, reversal.Id, Outbox.From(reversal));
         var customer = await db.Customers.SingleAsync(x => x.Id == credit.CustomerId, cancellationToken);
         var receipt = await DocumentReceiptFactory.CreateAsync(db, number, customer.Name, [new ReceiptItem("Contre-écriture de versement", 1, -original.AmountXof, 0, -original.AmountXof)], -original.AmountXof, 0, -original.AmountXof, [new PaymentDraft(original.Mode, -original.AmountXof)], $"Motif : {reason}", cancellationToken, DocumentType.CreditNote);
         var doc = new DocumentSnapshot { Type = DocumentType.CreditNote, Number = number, JsonPayload = JsonSerializer.Serialize(receipt) }; db.DocumentSnapshots.Add(doc);
         db.AuditEntries.Add(new AuditEntry { Actor = "Responsable", Action = "Contre-écriture crédit", EntityType = nameof(CreditPayment), EntityId = original.Id.ToString(), BeforeJson = JsonSerializer.Serialize(new { original.AmountXof, original.Mode }), AfterJson = JsonSerializer.Serialize(new { reason, credit.BalanceXof }) });
         await db.SaveChangesAsync(cancellationToken); await tx.CommitAsync(cancellationToken); return new(reversal.Id, number, credit.BalanceXof, doc.Id);
+    }
+
+    /// <summary>
+    /// Transforme une réservation en sortie réelle de stock. Deux mouvements sont écrits plutôt
+    /// qu'un : la levée compense la mise de côté, la vente porte la sortie. Sommés sur la vie de
+    /// l'article, les mouvements retombent ainsi exactement sur la quantité vendue — un mouvement
+    /// unique laisserait l'historique en déséquilibre.
+    /// </summary>
+    private static async Task HandOverReservationAsync(BoutiqueDbContext db, Sale sale, CustomerCredit credit, CancellationToken cancellationToken)
+    {
+        foreach (var line in sale.Lines)
+        {
+            var variant = await db.ProductVariants.SingleAsync(x => x.Id == line.VariantId, cancellationToken);
+            variant.QuantityReserved -= line.Quantity;
+            variant.QuantityOnHand -= line.Quantity;
+            db.StockMovements.Add(new StockMovement { VariantId = variant.Id, Type = StockMovementType.ReservationRelease, QuantityDelta = line.Quantity, UnitCostXof = line.FrozenUnitCostXof, Reason = $"Levée de réservation {sale.Number}", SourceType = nameof(Sale), SourceId = sale.Id, Actor = sale.SellerName });
+            db.StockMovements.Add(new StockMovement { VariantId = variant.Id, Type = StockMovementType.Sale, QuantityDelta = -line.Quantity, UnitCostXof = line.FrozenUnitCostXof, Reason = $"Remise après avance {sale.Number}", SourceType = nameof(Sale), SourceId = sale.Id, Actor = sale.SellerName });
+        }
+        sale.Status = SaleStatus.Completed;
+        sale.UpdatedAt = DateTimeOffset.UtcNow;
+        // Le serveur doit apprendre le changement d'état, sinon l'avance y resterait
+        // éternellement réservée et le chiffre d'affaires manquerait à distance.
+        Outbox.Enqueue(db, SyncEntityTypes.Sale, sale.Id, Outbox.From(sale, credit));
+        db.AuditEntries.Add(new AuditEntry { Actor = sale.SellerName, Action = "Remettre marchandise réservée", EntityType = nameof(Sale), EntityId = sale.Id.ToString(), AfterJson = JsonSerializer.Serialize(new { sale.Number }) });
     }
 }
 
@@ -166,18 +201,36 @@ public sealed class ReturnService(IDbContextFactory<BoutiqueDbContext> factory, 
         if (!await authorization.AuthorizeSensitiveActionAsync(managerPin, "Annuler vente", cancellationToken: cancellationToken)) throw new UnauthorizedAccessException("PIN invalide.");
         await using var db = await factory.CreateDbContextAsync(cancellationToken); await using var tx = await db.Database.BeginTransactionAsync(cancellationToken);
         var sale = await db.Sales.Include(x => x.Lines).Include(x => x.Payments).Include(x => x.Customer).SingleOrDefaultAsync(x => x.Number == saleNumber, cancellationToken) ?? throw new KeyNotFoundException("Vente introuvable.");
-        if (sale.Status != SaleStatus.Completed) throw new InvalidOperationException("Vente déjà corrigée.");
+        if (sale.Status is not (SaleStatus.Completed or SaleStatus.Reserved)) throw new InvalidOperationException("Vente déjà corrigée.");
+        // Une avance annulée n'a jamais fait sortir la marchandise : il faut lever la réservation,
+        // pas réintégrer du stock. Le faire remonterait QuantityOnHand au-delà du réel.
+        var wasReserved = sale.Status == SaleStatus.Reserved;
         foreach (var line in sale.Lines)
         {
             var v = await db.ProductVariants.SingleAsync(x => x.Id == line.VariantId, cancellationToken);
-            v.QuantityOnHand += line.Quantity;
-            db.StockMovements.Add(new StockMovement { VariantId = v.Id, Type = StockMovementType.Reversal, QuantityDelta = line.Quantity, UnitCostXof = line.FrozenUnitCostXof, Reason = reason, SourceType = nameof(Sale), SourceId = sale.Id, Actor = "Responsable" });
+            if (wasReserved)
+            {
+                v.QuantityReserved -= line.Quantity;
+                db.StockMovements.Add(new StockMovement { VariantId = v.Id, Type = StockMovementType.ReservationRelease, QuantityDelta = line.Quantity, UnitCostXof = line.FrozenUnitCostXof, Reason = reason, SourceType = nameof(Sale), SourceId = sale.Id, Actor = "Responsable" });
+            }
+            else
+            {
+                v.QuantityOnHand += line.Quantity;
+                db.StockMovements.Add(new StockMovement { VariantId = v.Id, Type = StockMovementType.Reversal, QuantityDelta = line.Quantity, UnitCostXof = line.FrozenUnitCostXof, Reason = reason, SourceType = nameof(Sale), SourceId = sale.Id, Actor = "Responsable" });
+            }
         }
-        foreach (var p in sale.Payments.Where(x => !x.IsReversal)) db.Payments.Add(new Payment { SaleId = sale.Id, Mode = p.Mode, AmountXof = -p.AmountXof, IsReversal = true, ReversesPaymentId = p.Id, Actor = "Responsable" });
+        // Matérialisé avant la boucle : ajouter un Payment dont le SaleId pointe sur cette vente
+        // fait que le suivi de changements l'insère dans sale.Payments, et l'énumération en cours
+        // lève « Collection was modified ». L'annulation de vente ne pouvait donc jamais aboutir.
+        var originalPayments = sale.Payments.Where(x => !x.IsReversal).ToList();
+        foreach (var p in originalPayments) db.Payments.Add(new Payment { SaleId = sale.Id, Mode = p.Mode, AmountXof = -p.AmountXof, IsReversal = true, ReversesPaymentId = p.Id, Actor = "Responsable" });
         sale.Status = SaleStatus.Cancelled;
         var credit = await db.CustomerCredits.SingleOrDefaultAsync(x => x.SaleId == sale.Id, cancellationToken); if (credit != null) { credit.Status = CreditStatus.Cancelled; credit.BalanceXof = 0; }
+        // Une vente annulée qui resterait « validée » côté serveur gonflerait le chiffre
+        // d'affaires consulté depuis le téléphone.
+        Outbox.Enqueue(db, SyncEntityTypes.Sale, sale.Id, Outbox.From(sale, credit));
         var number = await DocumentReceiptFactory.NextNumberAsync(db, DocumentType.CreditNote, cancellationToken);
-        var receipt = await DocumentReceiptFactory.CreateAsync(db, number, sale.Customer?.Name, sale.Lines.Select(x => new ReceiptItem($"Annulation {x.Description}", -x.Quantity, x.UnitPriceXof, 0, -x.LineTotalXof)).ToArray(), -sale.TotalXof, 0, -sale.TotalXof, sale.Payments.Where(x => !x.IsReversal).Select(x => new PaymentDraft(x.Mode, -x.AmountXof, x.ExternalReference)).ToArray(), $"Annulation de {sale.Number} · {reason}", cancellationToken, DocumentType.CreditNote);
+        var receipt = await DocumentReceiptFactory.CreateAsync(db, number, sale.Customer?.Name, sale.Lines.Select(x => new ReceiptItem($"Annulation {x.Description}", -x.Quantity, x.UnitPriceXof, 0, -x.LineTotalXof)).ToArray(), -sale.TotalXof, 0, -sale.TotalXof, originalPayments.Select(x => new PaymentDraft(x.Mode, -x.AmountXof, x.ExternalReference)).ToArray(), $"Annulation de {sale.Number} · {reason}", cancellationToken, DocumentType.CreditNote);
         var doc = new DocumentSnapshot { SaleId = sale.Id, Type = DocumentType.CreditNote, Number = number, JsonPayload = JsonSerializer.Serialize(receipt) }; db.DocumentSnapshots.Add(doc);
         db.AuditEntries.Add(new AuditEntry { Actor = "Responsable", Action = "Annuler vente", EntityType = nameof(Sale), EntityId = sale.Id.ToString(), BeforeJson = JsonSerializer.Serialize(new { Status = SaleStatus.Completed }), AfterJson = JsonSerializer.Serialize(new { reason }) });
         await db.SaveChangesAsync(cancellationToken); await tx.CommitAsync(cancellationToken); return new(doc.Id, number, -sale.TotalXof);

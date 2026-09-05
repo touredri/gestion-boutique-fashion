@@ -15,30 +15,45 @@ namespace BoutiqueFashion.App.ViewModels;
 
 public partial class ShellViewModel : ObservableObject
 {
-    /// <summary>Écrans réservés au gérant : quitter le mode doit en faire sortir immédiatement.</summary>
-    private static readonly string[] ManagerOnlyPages = ["Stock", "Expenses", "Documents", "Settings"];
+    /// <summary>
+    /// Écrans réservés au gérant : quitter le mode doit en faire sortir immédiatement.
+    /// Le vendeur ne garde que ce dont il a besoin au comptoir — tableau de bord, vente, produits
+    /// et dépenses. Les rapports et les fiches clients en sortent : ils exposent marges, encours
+    /// et historiques qui ne le concernent pas. Les dépenses y entrent, à l'inverse : c'est lui
+    /// qui règle le taxi ou la recharge d'électricité dans la journée.
+    /// </summary>
+    private static readonly string[] ManagerOnlyPages = ["Stock", "Documents", "Reports", "Customers", "Settings"];
 
     private readonly DashboardViewModel dashboard; private readonly SaleViewModel sale; private readonly CatalogViewModel catalog;
     private readonly StockViewModel stock; private readonly CustomersViewModel customers; private readonly ExpensesViewModel expenses;
     private readonly DocumentsViewModel documents; private readonly ReportsViewModel reports; private readonly SettingsViewModel settings;
+    private readonly CashViewModel cash; private readonly AdvancesViewModel advances; private readonly OrdersViewModel orders;
 
-    public ShellViewModel(ManagerSession session, DashboardViewModel dashboard, SaleViewModel sale, CatalogViewModel catalog, StockViewModel stock, CustomersViewModel customers, ExpensesViewModel expenses, DocumentsViewModel documents, ReportsViewModel reports, SettingsViewModel settings)
+    public ShellViewModel(ManagerSession session, ShiftSession shift, SyncAgent sync, DashboardViewModel dashboard, SaleViewModel sale, CatalogViewModel catalog, StockViewModel stock, CustomersViewModel customers, ExpensesViewModel expenses, DocumentsViewModel documents, ReportsViewModel reports, SettingsViewModel settings, CashViewModel cash, AdvancesViewModel advances, OrdersViewModel orders)
     {
         Session = session;
+        Shift = shift;
+        Sync = sync;
         this.dashboard = dashboard; this.sale = sale; this.catalog = catalog; this.stock = stock; this.customers = customers;
-        this.expenses = expenses; this.documents = documents; this.reports = reports; this.settings = settings;
+        this.expenses = expenses; this.documents = documents; this.reports = reports; this.settings = settings; this.cash = cash; this.advances = advances; this.orders = orders;
         CurrentPage = dashboard;
         Session.PropertyChanged += OnSessionChanged;
     }
 
     public ManagerSession Session { get; }
+    public ShiftSession Shift { get; }
+    public SyncAgent Sync { get; }
+    public OrdersViewModel Orders => orders;
     [ObservableProperty] private object currentPage; [ObservableProperty] private string pageTitle = "Tableau de bord";
     [ObservableProperty] private string currentTarget = "Dashboard";
 
     public async Task InitializeAsync()
     {
         AppNavigator.Go = Navigate;
+        AppNavigator.LoadOrderIntoSale = sale.LoadOrder;
         await Session.RefreshPinStateAsync();
+        // Une caisse protégée laissée ouverte doit être verrouillée dès le redémarrage.
+        await Shift.RefreshAsync();
         await dashboard.LoadAsync();
         await sale.LoadAsync();
     }
@@ -53,7 +68,7 @@ public partial class ShellViewModel : ObservableObject
     {
         // Une navigation forcée (lien direct, retour de verrouillage) ne doit pas ouvrir un écran gérant.
         if (ManagerOnlyPages.Contains(target) && !Session.IsManager) target = "Dashboard";
-        (object Page, string Title) next = target switch { "Sale" => (sale, "Vente / Caisse"), "Catalog" => (catalog, "Produits et variantes"), "Stock" => (stock, "Gestion du stock"), "Customers" => (customers, "Clients et crédits"), "Expenses" => (expenses, "Dépenses"), "Documents" => (documents, "Documents et opérations"), "Reports" => (reports, "Rapports"), "Settings" => (settings, "Paramètres"), _ => (dashboard, "Tableau de bord") };
+        (object Page, string Title) next = target switch { "Sale" => (sale, "Vente"), "Cash" => (cash, "Caisse"), "Advances" => (advances, "Avances et crédits"), "Orders" => (orders, "Commandes"), "Catalog" => (catalog, "Produits et variantes"), "Stock" => (stock, "Gestion du stock"), "Customers" => (customers, "Clients et crédits"), "Expenses" => (expenses, "Dépenses"), "Documents" => (documents, "Documents et opérations"), "Reports" => (reports, "Rapports"), "Settings" => (settings, "Paramètres"), _ => (dashboard, "Tableau de bord") };
         CurrentPage = next.Page; PageTitle = next.Title; CurrentTarget = target;
         if (CurrentPage is ILoadable loadable) await loadable.LoadAsync();
     }
@@ -75,6 +90,11 @@ internal static class UiFeedback
 internal static class AppNavigator
 {
     public static Func<string, Task>? Go { get; set; }
+
+    /// <summary>Charge une commande dans le panier de vente et renvoie les références
+    /// introuvables au catalogue, s'il y en a. Posée ici plutôt qu'en dépendance directe : les
+    /// deux écrans se référenceraient mutuellement.</summary>
+    public static Func<OrderRow, IReadOnlyList<string>>? LoadOrderIntoSale { get; set; }
 }
 
 public partial class DashboardViewModel(IReportService reports, ICashSessionService cash, ManagerSession session) : ObservableObject, ILoadable
@@ -84,9 +104,6 @@ public partial class DashboardViewModel(IReportService reports, ICashSessionServ
     [ObservableProperty] private DashboardSummary summary = new(0, 0, 0, 0, 0, 0);
     [ObservableProperty] private string cashSessionState = "Caisse fermée";
     [ObservableProperty] private bool isCashOpen;
-    [ObservableProperty] private string openingFloat = "0";
-    [ObservableProperty] private string countedCash = "";
-    [ObservableProperty] private string cashDifferenceReason = "";
     [ObservableProperty] private string cashStatus = "";
     /// <summary>Le PIN vient de la session gérant : plus aucun écran ne le redemande.</summary>
     private string ManagerPin => session.Pin;
@@ -149,62 +166,18 @@ public partial class DashboardViewModel(IReportService reports, ICashSessionServ
 
         var openSession = await cash.GetOpenAsync();
         IsCashOpen = openSession is not null;
-        CashSessionState = openSession is null ? "Caisse fermée" : $"Caisse ouverte · {openSession.Number}";
+        // Qui tient la caisse compte autant que le fait qu'elle soit ouverte.
+        CashSessionState = openSession is null
+            ? "Caisse fermée · ouvrez-la pour commencer à encaisser"
+            : $"Caisse ouverte · {openSession.Number} · {openSession.OperatorName}";
         CashStatus = string.Empty;
-    }
-
-    [RelayCommand]
-    private async Task OpenCash()
-    {
-        try
-        {
-            if (!long.TryParse(OpeningFloat, out var val) || val < 0)
-            {
-                CashStatus = "Veuillez indiquer un fond de caisse valide.";
-                return;
-            }
-            var session = await cash.OpenAsync(val);
-            CashStatus = $"Caisse ouverte avec succès ({session.Number}).";
-            CashSessionState = $"Caisse ouverte · {session.Number}";
-            IsCashOpen = true;
-            OpeningFloat = "0";
-            UiFeedback.Success($"Caisse {session.Number} ouverte.");
-        }
-        catch (Exception e)
-        {
-            CashStatus = e.Message;
-            UiFeedback.Error($"Erreur ouverture : {e.Message}");
-        }
-    }
-
-    [RelayCommand]
-    private async Task CloseCash()
-    {
-        try
-        {
-            if (!long.TryParse(CountedCash, out var val) || val < 0)
-            {
-                CashStatus = "Veuillez saisir le montant réel des espèces comptées.";
-                return;
-            }
-            var result = await cash.CloseAsync(val, CashDifferenceReason, ManagerPin);
-            CashStatus = $"Caisse clôturée avec succès. Écart : {result.DifferenceXof:N0} FCFA";
-            CashSessionState = "Caisse fermée";
-            IsCashOpen = false;
-            CountedCash = "";
-            CashDifferenceReason = "";
-            UiFeedback.Success($"Caisse clôturée. Écart : {result.DifferenceXof:N0} FCFA");
-            await LoadAsync();
-        }
-        catch (Exception e)
-        {
-            CashStatus = e.Message;
-            UiFeedback.Error($"Erreur clôture : {e.Message}");
-        }
     }
 
     [RelayCommand] private async Task QuickSell() { if (AppNavigator.Go is not null) await AppNavigator.Go("Sale"); }
     [RelayCommand] private async Task QuickProducts() { if (AppNavigator.Go is not null) await AppNavigator.Go("Catalog"); }
+    /// <summary>L'ouverture et la clôture vivent désormais dans l'écran Caisse : le tableau de
+    /// bord n'en montre plus que l'état, et y renvoie.</summary>
+    [RelayCommand] private async Task QuickCash() { if (AppNavigator.Go is not null) await AppNavigator.Go("Cash"); }
 }
 
 public partial class CartLineViewModel(ProductVariant variant) : ObservableObject
@@ -312,15 +285,56 @@ public partial class SaleViewModel(ICatalogService catalog, ICustomerService cus
     public long PayableXof => TotalXof - BusinessRules.CalculateDiscount(TotalXof, DiscountPercent == 0 ? DiscountKind.None : DiscountKind.Percentage, DiscountPercent);
     public long ChangePreview { get { var sum = Payments.Sum(x => x.AmountXof); return sum > PayableXof ? sum - PayableXof : 0; } }
     public ManagerSession Session => session;
+    /// <summary>Une part de la vente reste à devoir : c'est ce qui ouvre le choix entre emport
+    /// immédiat et mise de côté.</summary>
+    public bool HasCreditPortion => SelectedPaymentMode == PaymentMode.Credit || Payments.Any(x => x.Mode == PaymentMode.Credit);
+
+    /// <summary>Commande du site vitrine que cette vente honore. Elle bascule en « traitée »
+    /// dans la transaction de la vente, jamais avant.</summary>
+    [ObservableProperty] private OrderRow? pendingOrder;
+    partial void OnPendingOrderChanged(OrderRow? value) => OnPropertyChanged(nameof(HasPendingOrder));
+    public bool HasPendingOrder => PendingOrder is not null;
+
+    [RelayCommand] private void ClearOrder() { PendingOrder = null; ClearCart(); }
+
+    /// <summary>Remplit le panier depuis une commande et renvoie les références absentes du
+    /// catalogue : mieux vaut les nommer que laisser passer un panier incomplet.</summary>
+    public IReadOnlyList<string> LoadOrder(OrderRow order)
+    {
+        Cart.Clear();
+        Payments.Clear();
+        var missing = new List<string>();
+        foreach (var line in order.Lines)
+        {
+            var variant = masterProducts.FirstOrDefault(x => x.Id == line.VariantId);
+            if (variant is null) { missing.Add(line.Sku); continue; }
+            var cartLine = new CartLineViewModel(variant) { Quantity = line.Quantity };
+            cartLine.PropertyChanged += (_, _) => RaiseTotals();
+            Cart.Add(cartLine);
+        }
+        PendingOrder = order;
+        Status = $"Commande {order.Number} · {order.CustomerName} · {order.Phone}";
+        RaiseTotals();
+        return missing;
+    }
+
+    /// <summary>Avance « réservé jusqu'au solde » : la marchandise attend en boutique.</summary>
+    [ObservableProperty] private bool reserveStock;
+    partial void OnReserveStockChanged(bool value) => RaiseTotals();
+    [RelayCommand] private void TakeAway() => ReserveStock = false;
+    [RelayCommand] private void Reserve() => ReserveStock = true;
+
     /// <summary>Vente que le service refusera sans PIN valide. Croisé avec Session.IsManager dans la vue,
-    /// car l'état de session change hors de ce ViewModel et ne serait pas notifié ici.</summary>
-    public bool IsSensitiveSale => DiscountPercent != 0 || SelectedPaymentMode == PaymentMode.Credit || Payments.Any(x => x.Mode == PaymentMode.Credit);
+    /// car l'état de session change hors de ce ViewModel et ne serait pas notifié ici.
+    /// L'avance réservée en est exclue : rien ne quitte la boutique, donc rien n'est exposé.</summary>
+    public bool IsSensitiveSale => DiscountPercent != 0 || (HasCreditPortion && !ReserveStock);
     private void RaiseTotals()
     {
         OnPropertyChanged(nameof(TotalXof));
         OnPropertyChanged(nameof(PayableXof));
         OnPropertyChanged(nameof(PaymentTotalXof));
         OnPropertyChanged(nameof(ChangePreview));
+        OnPropertyChanged(nameof(HasCreditPortion));
         OnPropertyChanged(nameof(IsSensitiveSale));
         CompleteCommand.NotifyCanExecuteChanged();
     }
@@ -336,7 +350,7 @@ public partial class SaleViewModel(ICatalogService catalog, ICustomerService cus
         if (CategoryFilters.Count <= 1) foreach (var c in await catalog.CategoriesAsync()) if (!CategoryFilters.Contains(c)) CategoryFilters.Add(c);
         await RefreshCustomersAsync();
         var openSession = await cash.GetOpenAsync();
-        CashSessionState = openSession is null ? "Caisse fermée · ouvrez-la depuis le tableau de bord" : $"Caisse ouverte · {openSession.Number}";
+        CashSessionState = openSession is null ? "Caisse fermée · ouvrez-la depuis l'écran Caisse" : $"Caisse ouverte · {openSession.OperatorName}";
         IsCashOpen = openSession is not null;
         Printers.Clear();
         foreach (var p in printerService.Discover()) Printers.Add(p);
@@ -450,11 +464,16 @@ public partial class SaleViewModel(ICatalogService catalog, ICustomerService cus
             var hasCredit = paymentDrafts.Any(x => x.Mode == PaymentMode.Credit);
             var key = Guid.NewGuid().ToString("N");
             DateTimeOffset? creditDue = hasCredit ? DateTimeOffset.Parse(CreditDueDate) : null;
-            var draft = new SaleDraft(key, Cart.Select(x => new SaleLineDraft(x.Variant.Id, x.Quantity, x.EffectiveDiscountKind, x.DiscountValue)).ToArray(), paymentDrafts, SelectedCustomer?.Id, DiscountPercent == 0 ? DiscountKind.None : DiscountKind.Percentage, DiscountPercent, DiscountReason, ManagerPin, creditDue, null, null);
+            var reserving = hasCredit && ReserveStock;
+            var draft = new SaleDraft(key, Cart.Select(x => new SaleLineDraft(x.Variant.Id, x.Quantity, x.EffectiveDiscountKind, x.DiscountValue)).ToArray(), paymentDrafts, SelectedCustomer?.Id, DiscountPercent == 0 ? DiscountKind.None : DiscountKind.Percentage, DiscountPercent, DiscountReason, ManagerPin, creditDue, null, null, reserving, PendingOrder?.Id);
             var result = await sales.CreateAsync(draft);
             var documentLabel = PrintInvoice ? "Facture" : "Reçu";
-            var message = $"Vente {result.Number} enregistrée · {documentLabel} créé.";
-            Status = $"Vente {result.Number} enregistrée • {documentLabel} créé (visible dans Documents)";
+            var message = reserving
+                ? $"Avance {result.Number} enregistrée · articles mis de côté jusqu'au solde."
+                : $"Vente {result.Number} enregistrée · {documentLabel} créé.";
+            Status = reserving
+                ? $"Avance {result.Number} enregistrée • articles réservés jusqu'au solde"
+                : $"Vente {result.Number} enregistrée • {documentLabel} créé (visible dans Documents)";
             if (result.ChangeXof > 0) { Status += $" • Monnaie à rendre : {result.ChangeXof:N0} FCFA"; message += $"\nMonnaie à rendre : {result.ChangeXof:N0} FCFA."; }
             if (result.HasNegativeStock) { Status += " • Alerte : stock négatif à régulariser"; message += "\nAlerte : stock négatif à régulariser."; }
             if (SelectedPrinter is not null)
@@ -463,7 +482,7 @@ public partial class SaleViewModel(ICatalogService catalog, ICustomerService cus
                 try { var receipt = await documents.GetReceiptAsync(documentId, false); await printerService.PrintReceiptAsync(SelectedPrinter, receipt); await documents.MarkPrintedAsync(documentId); message += $"\n{documentLabel} imprimé."; }
                 catch (Exception e) { Status += $" • Impression: {e.Message}"; message += $"\nImpression échouée : {e.Message}"; }
             }
-            Cart.Clear(); Payments.Clear(); DiscountPercent = 0; SelectedPaymentMode = PaymentMode.Cash; PrintInvoice = false; NewCustomerName = string.Empty; NewCustomerPhone = string.Empty; SelectedCustomer = null;
+            Cart.Clear(); Payments.Clear(); DiscountPercent = 0; SelectedPaymentMode = PaymentMode.Cash; PrintInvoice = false; NewCustomerName = string.Empty; NewCustomerPhone = string.Empty; SelectedCustomer = null; ReserveStock = false; PendingOrder = null;
             RaiseTotals();
             UiFeedback.Success(message);
             await LoadAsync();
@@ -490,8 +509,13 @@ public sealed class CustomerChoice
     public bool IsWalkIn { get; }
 }
 
-public partial class CatalogViewModel(ICatalogService catalog, IProductImportService import, IProductDraftService drafts, ManagerSession session) : ObservableObject, ILoadable
+public partial class CatalogViewModel(ICatalogService catalog, IProductImportService import, IProductDraftService drafts, ManagerSession session, SyncAgent sync) : ObservableObject, ILoadable
 {
+    /// <summary>Terminal rattaché : le catalogue vient du serveur et ne se modifie plus ici.
+    /// L'écran devient une liste de consultation, ce que la barre d'information explique.</summary>
+    public bool IsCatalogReadOnly => sync.IsEnrolled;
+    public bool IsCatalogEditable => !sync.IsEnrolled;
+
     public ObservableCollection<ProductVariant> Items { get; } = [];
     public ObservableCollection<ImportIssue> ImportIssues { get; } = [];
     public ManagerSession Session => session;
@@ -523,6 +547,8 @@ public partial class CatalogViewModel(ICatalogService catalog, IProductImportSer
     {
         var rows = await catalog.SearchAsync(null); Items.Clear(); foreach (var row in rows) Items.Add(row);
         RefreshSizeOptions();
+        OnPropertyChanged(nameof(IsCatalogReadOnly));
+        OnPropertyChanged(nameof(IsCatalogEditable));
         Drafts.Clear();
         foreach (var d in await drafts.ListAsync()) Drafts.Add(d);
         OnPropertyChanged(nameof(DraftsTabHeader));
@@ -1145,7 +1171,7 @@ public partial class ReportsViewModel(IReportService reports) : ObservableObject
     [ObservableProperty] private string toDate = DateTime.Today.ToString("yyyy-MM-dd");
     [ObservableProperty] private string selectedReportKind = "Ventes par jour";
     [ObservableProperty] private string status = string.Empty;
-    public IReadOnlyList<string> ReportKinds { get; } = ["Ventes par jour", "Modes de paiement", "Ventes par vendeur", "Top produits", "Articles sans vente", "Valeur du stock", "Écarts d'inventaire", "Remises et corrections", "Rotation & dormants"];
+    public IReadOnlyList<string> ReportKinds { get; } = ["Ventes par jour", "Modes de paiement", "Ventes par vendeur", "Top produits", "Top produits (toutes tailles)", "Articles sans vente", "Valeur du stock", "Écarts d'inventaire", "Remises et corrections", "Rotation & dormants"];
 
     public async Task LoadAsync()
     {
@@ -1160,6 +1186,9 @@ public partial class ReportsViewModel(IReportService reports) : ObservableObject
                 "Modes de paiement" => await reports.SalesByPaymentModeAsync(from, to),
                 "Ventes par vendeur" => await reports.SalesBySellerAsync(from, to),
                 "Top produits" => await reports.TopProductsAsync(from, to),
+                // Cumule les variantes d'un même article : une robe déclinée en cinq tailles ne
+                // remonterait jamais devant un article unique si on comptait par SKU.
+                "Top produits (toutes tailles)" => await reports.TopProductsByProductAsync(from, to),
                 "Articles sans vente" => await reports.NoSalesProductsAsync(from, to),
                 "Valeur du stock" => await reports.StockValueByCategoryAsync(),
                 "Écarts d'inventaire" => await reports.InventoryVarianceAsync(from, to),
@@ -1206,8 +1235,52 @@ public partial class ReportsViewModel(IReportService reports) : ObservableObject
     }
 }
 
-public partial class SettingsViewModel(IAuthorizationService authorization, IAppSettingsService settings, IBackupService backup, IThermalPrinterService printer, IDocumentService documents, IA4DocumentService a4, ManagerSession session) : ObservableObject, ILoadable
+public partial class SettingsViewModel(IAuthorizationService authorization, IAppSettingsService settings, IBackupService backup, IThermalPrinterService printer, IDocumentService documents, IA4DocumentService a4, ManagerSession session, ISyncService sync, SyncAgent agent) : ObservableObject, ILoadable
 {
+    // --- Appairage du terminal à sa boutique ---
+    [ObservableProperty] private string syncServerUrl = string.Empty;
+    [ObservableProperty] private string enrollmentCode = string.Empty;
+    [ObservableProperty] private string deviceName = Environment.MachineName;
+    [ObservableProperty] private string syncStatus = string.Empty;
+    public SyncAgent Sync => agent;
+
+    [RelayCommand]
+    private async Task Enroll()
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(SyncServerUrl)) { SyncStatus = "Indiquez l'adresse du serveur."; return; }
+            if (string.IsNullOrWhiteSpace(EnrollmentCode)) { SyncStatus = "Saisissez le code d'appairage fourni par l'application mobile."; return; }
+            var state = await sync.EnrollAsync(SyncServerUrl, EnrollmentCode, DeviceName);
+            EnrollmentCode = string.Empty;
+            SyncStatus = $"Terminal rattaché à « {state.ShopName} ».";
+            UiFeedback.Success(SyncStatus);
+            // Premier cycle immédiat : le catalogue de la boutique descend sans attendre.
+            await agent.RunAsync();
+        }
+        catch (Exception e) { SyncStatus = e.Message; UiFeedback.Error($"Appairage impossible : {e.Message}"); }
+    }
+
+    [RelayCommand]
+    private async Task SyncNow()
+    {
+        await agent.RunAsync();
+        SyncStatus = agent.State.LastError ?? agent.Label;
+    }
+
+    [RelayCommand]
+    private async Task Unpair()
+    {
+        if (!UiConfirm.Ask("Détacher ce terminal de sa boutique ? Les ventes non encore remontées resteront en attente jusqu'à un nouvel appairage.")) return;
+        try
+        {
+            await sync.ForgetAsync(session.Pin);
+            SyncStatus = "Terminal détaché.";
+            await agent.RefreshAsync();
+        }
+        catch (Exception e) { SyncStatus = e.Message; }
+    }
+
     public ObservableCollection<PrinterProfile> Printers { get; } = [];
     public ManagerSession Session => session;
     public IReadOnlyList<DocumentType> DocumentTypes { get; } = Enum.GetValues<DocumentType>();
@@ -1243,6 +1316,8 @@ public partial class SettingsViewModel(IAuthorizationService authorization, IApp
         SerialBaud = int.TryParse(await settings.GetAsync("Printer.SerialBaud"), out var baud) && SerialBauds.Contains(baud) ? baud : 9600;
         SelectedPaperWidthOption = (await settings.GetAsync("Printer.PaperWidth") ?? "80") == "58" ? "58 mm" : "80 mm";
         NetworkPrinter = await settings.GetAsync("Printer.Tcp") ?? "";
+        SyncServerUrl = await settings.GetAsync(SyncService.ServerUrlKey) ?? SyncServerUrl;
+        await agent.RefreshAsync();
         await LoadFlagsAsync();
     }
 

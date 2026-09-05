@@ -15,11 +15,22 @@ public sealed record SaleDraft(
     string? ManagerPin = null,
     DateTimeOffset? CreditDueAt = null,
     string? NewCustomerName = null,
-    string? NewCustomerPhone = null);
+    string? NewCustomerPhone = null,
+    // Avance « réservé jusqu'au solde » : la marchandise reste en boutique et n'est que réservée.
+    // Sans ce drapeau, une vente à crédit sort le stock immédiatement.
+    // (commentaire simple et non doc XML : une balise ici déclencherait CS1587, promu en erreur.)
+    bool ReserveStock = false,
+    // Commande du site vitrine que cette vente vient honorer. Renseignée, elle passe en
+    // « traitée » dans la transaction même qui crée la vente : c'est ce qui garantit qu'un
+    // état « traité » correspond toujours à un encaissement réel.
+    Guid? OrderId = null);
 
 public sealed record SaleResult(Guid SaleId, string Number, long TotalXof, Guid DocumentId, bool AlreadyExisted, bool HasNegativeStock, long ChangeXof = 0, Guid? InvoiceDocumentId = null);
 public sealed record StockAdjustment(Guid VariantId, decimal QuantityDelta, StockMovementType Type, long UnitCostXof, string Reason, string Actor);
-public sealed record DashboardSummary(long SalesXof, long CollectedXof, long GrossMarginXof, long ExpensesXof, long CreditBalanceXof, int LowStockCount, long EstimatedProfitXof = 0, bool CostWarning = false, int SalesCount = 0);
+public sealed record DashboardSummary(long SalesXof, long CollectedXof, long GrossMarginXof, long ExpensesXof, long CreditBalanceXof, int LowStockCount, long EstimatedProfitXof = 0, bool CostWarning = false, int SalesCount = 0, BestSeller? BestSeller = null);
+/// <summary>Article le mieux vendu sur la période, agrégé au niveau du produit et non de la
+/// variante : « la robe Amina » parle, « ROBE-AMINA-M-ROUGE » beaucoup moins.</summary>
+public sealed record BestSeller(string Label, decimal Quantity, long ValueXof);
 public sealed record RecentSaleRow(string Number, string Time, string Customer, long TotalXof);
 public sealed record PrinterProfile(string Name, PrinterConnectionKind ConnectionKind, string Address, PaperWidth PaperWidth, bool CutPaper = true);
 public sealed record ReceiptItem(string Description, decimal Quantity, long UnitPriceXof, long DiscountXof, long TotalXof);
@@ -29,7 +40,8 @@ public sealed record ImportRow(string Product, string Category, string? Brand, s
 public sealed record ImportIssue(int Line, string Message);
 public sealed record ImportPreview(IReadOnlyList<ImportRow> Rows, IReadOnlyList<ImportIssue> Issues);
 public sealed record ReportRow(string Label, long ValueXof, decimal Quantity = 0);
-public sealed record CreditSummary(Guid Id, string SaleNumber, string CustomerName, long OriginalXof, long BalanceXof, DateTimeOffset DueAt, CreditStatus Status);
+// IsReserved distingue les deux formes d'avance : marchandise mise de côté, ou déjà emportée.
+public sealed record CreditSummary(Guid Id, string SaleNumber, string CustomerName, long OriginalXof, long BalanceXof, DateTimeOffset DueAt, CreditStatus Status, bool IsReserved = false, string? CustomerPhone = null);
 public sealed record CreditPaymentRow(Guid Id, string Number, long AmountXof, PaymentMode Mode, DateTimeOffset Date, bool IsReversal, bool Reversed);
 public sealed record CreditPaymentResult(Guid PaymentId, string Number, long NewBalanceXof, Guid DocumentId);
 public sealed record ReturnRequest(string SaleNumber, string ReturnedSku, decimal ReturnedQuantity, string? ReplacementSku, decimal ReplacementQuantity, IReadOnlyList<PaymentDraft> DifferencePayments, string Reason, string ManagerPin, bool Restock = true);
@@ -91,11 +103,35 @@ public interface IAuthorizationService
     Task<bool> AuthorizeSensitiveActionAsync(string pin, string action, string actor = "Responsable", CancellationToken cancellationToken = default);
 }
 
+/// <summary>Photographie de la vacation en cours : ce que la caisse devrait contenir, et pourquoi.
+/// Calculée à la demande — rien n'est stocké tant que la caisse n'est pas clôturée.</summary>
+public sealed record CashDeskState(
+    Guid Id, string Number, string OperatorName, DateTimeOffset OpenedAt, bool HasShiftPin,
+    long OpeningFloatXof, long CashSalesXof, long CashCreditPaymentsXof, long CashExpensesXof,
+    long ExpectedCashXof, int SalesCount, long TotalSalesXof,
+    IReadOnlyList<ReportRow> CollectedByMode,
+    long MovementsInXof = 0, long MovementsOutXof = 0,
+    IReadOnlyList<CashMovementRow>? Movements = null);
+
+public sealed record CashMovementRow(Guid Id, CashMovementDirection Direction, long AmountXof, string Reason, string Actor, DateTimeOffset At);
+
 public interface ICashSessionService
 {
-    Task<CashSession> OpenAsync(long openingFloatXof, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Espèces entrant ou sortant du tiroir hors vente et hors dépense. Le motif est obligatoire.
+    /// Au-delà du plafond « Cash.MovementLimitXof », une sortie exige le code gérant : les petits
+    /// mouvements du quotidien passent seuls, emporter la recette non.
+    /// </summary>
+    Task<CashMovement> RecordMovementAsync(CashMovementDirection direction, long amountXof, string reason, string? pin = null, CancellationToken cancellationToken = default);
+    /// <param name="operatorName">Personne qui tient la caisse. Vide : le nom de la boutique.</param>
+    /// <param name="operatorPin">PIN de vacation. Nul : seul le PIN gérant pourra clôturer.</param>
+    Task<CashSession> OpenAsync(long openingFloatXof, string? operatorName = null, string? operatorPin = null, CancellationToken cancellationToken = default);
     Task<CashSession?> GetOpenAsync(CancellationToken cancellationToken = default);
-    Task<CashSession> CloseAsync(long countedCashXof, string? differenceReason, string? managerPin = null, CancellationToken cancellationToken = default);
+    /// <param name="pin">PIN de vacation ou PIN gérant. Un écart hors tolérance exige le PIN gérant.</param>
+    Task<CashSession> CloseAsync(long countedCashXof, string? differenceReason, string? pin = null, CancellationToken cancellationToken = default);
+    /// <summary>Déverrouillage de l'espace vendeur après mise en veille.</summary>
+    Task<bool> VerifyShiftPinAsync(string pin, CancellationToken cancellationToken = default);
+    Task<CashDeskState?> GetStateAsync(CancellationToken cancellationToken = default);
 }
 
 public interface IThermalPrinterService
@@ -140,6 +176,8 @@ public interface IReportService
     Task<IReadOnlyList<ReportRow>> SalesByDayAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<ReportRow>> SalesBySellerAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<ReportRow>> TopProductsAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default);
+    /// <summary>Même classement, mais regroupé par produit plutôt que par variante.</summary>
+    Task<IReadOnlyList<ReportRow>> TopProductsByProductAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<ReportRow>> NoSalesProductsAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<ReportRow>> StockValueByCategoryAsync(CancellationToken cancellationToken = default);
     Task<IReadOnlyList<ReportRow>> InventoryVarianceAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken = default);
@@ -197,6 +235,46 @@ public interface IExpenseService
     Task<IReadOnlyList<Expense>> ListRecentAsync(int count = 20, CancellationToken cancellationToken = default);
 }
 
+/// <summary>Ce que la barre de titre doit pouvoir dire d'un coup d'œil : appairé ou non, combien
+/// d'événements attendent, et si la dernière tentative a échoué.</summary>
+public sealed record SyncState(
+    bool IsEnrolled, string? ShopName, int PendingCount,
+    DateTimeOffset? LastSuccessAt, string? LastError, bool IsRunning);
+
+/// <summary>
+/// Verdict sur la possibilité d'appliquer une mise à jour maintenant. <c>Reason</c> est destiné
+/// au journal et à la remontée vers le téléphone, pas au vendeur : il n'a rien à décider.
+/// </summary>
+public sealed record UpdateReadiness(bool CanApply, string Reason);
+
+/// <summary>État de mise à jour du terminal, tel qu'il remonte au serveur à chaque cycle.</summary>
+public sealed record UpdateStatus(string? CurrentVersion, string? PendingVersion, string? LastError);
+
+/// <summary>
+/// Règles métier de la mise à jour, séparées de la mécanique Velopack pour être testables : la
+/// question « a-t-on le droit d'installer maintenant ? » n'a rien à voir avec WPF.
+/// </summary>
+public interface IUpdateService
+{
+    /// <summary>Une vacation ouverte ou une file de synchronisation non vide interdisent
+    /// d'installer. Prend une sauvegarde quand le verdict est positif — c'est le seul retour
+    /// arrière possible sur les données.</summary>
+    Task<UpdateReadiness> PrepareAsync(CancellationToken cancellationToken = default);
+    Task<UpdateStatus> GetStatusAsync(CancellationToken cancellationToken = default);
+    Task RecordAsync(string? currentVersion, string? pendingVersion, string? lastError, CancellationToken cancellationToken = default);
+}
+
+public interface ISyncService
+{
+    Task<SyncState> GetStateAsync(CancellationToken cancellationToken = default);
+    /// <summary>Échange un code d'appairage contre un jeton d'appareil. Exige le réseau, une fois.</summary>
+    Task<SyncState> EnrollAsync(string serverUrl, string code, string deviceName, CancellationToken cancellationToken = default);
+    /// <summary>Un cycle complet : remontée des faits puis descente du référentiel. Ne lève
+    /// jamais — hors réseau, la file grossit et la boutique continue.</summary>
+    Task<SyncState> RunOnceAsync(CancellationToken cancellationToken = default);
+    Task<SyncState> ForgetAsync(string managerPin, CancellationToken cancellationToken = default);
+}
+
 public interface IAppSettingsService
 {
     Task<string?> GetAsync(string key, CancellationToken cancellationToken = default);
@@ -230,4 +308,19 @@ public interface IDocumentService
     Task<ReceiptData> GetReceiptAsync(Guid documentId, bool duplicate, CancellationToken cancellationToken = default);
     Task<ReceiptData> BuildSampleAsync(DocumentType type, CancellationToken cancellationToken = default);
     Task MarkPrintedAsync(Guid documentId, CancellationToken cancellationToken = default);
+}
+
+public sealed record OrderLineRow(Guid VariantId, string Sku, string Description, decimal Quantity, long UnitPriceXof);
+
+public sealed record OrderRow(
+    Guid Id, string Number, string CustomerName, string Phone, string? Note,
+    OrderChannel Channel, OrderStatus Status, long TotalXof, Guid? SaleId,
+    DateTimeOffset PlacedAt, IReadOnlyList<OrderLineRow> Lines);
+
+public interface IOrderService
+{
+    Task<IReadOnlyList<OrderRow>> ListAsync(bool includeClosed = false, CancellationToken cancellationToken = default);
+    /// <summary>Marque la commande livrée. Seule une commande déjà encaissée peut l'être :
+    /// on ne remet pas une marchandise qui n'a pas été payée.</summary>
+    Task MarkDeliveredAsync(Guid orderId, CancellationToken cancellationToken = default);
 }

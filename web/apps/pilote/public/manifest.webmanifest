@@ -1,0 +1,32 @@
+{
+  "name": "Bana Shop · Pilotage",
+  "short_name": "Bana Shop",
+  "description": "Suivi des boutiques, ventes, stock et caisse.",
+  "start_url": "/pilote/",
+  "scope": "/pilote/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f1f3f0",
+  "theme_color": "#f1f3f0",
+  "lang": "fr",
+  "icons": [
+    {
+      "src": "/pilote/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pilote/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pilote/icon-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

@@ -61,6 +61,9 @@ public sealed class ProductVariant : Entity
     public DateTimeOffset? PromotionStartsAt { get; set; }
     public DateTimeOffset? PromotionEndsAt { get; set; }
     public decimal QuantityOnHand { get; set; }
+    /// <summary>Quantité physiquement présente mais promise à une avance en cours : elle reste
+    /// dans <see cref="QuantityOnHand"/> jusqu'à la remise, et n'est donc pas vendable.</summary>
+    public decimal QuantityReserved { get; set; }
     public decimal WeightedAverageCostXof { get; set; }
     public decimal LowStockThreshold { get; set; }
     public bool IsActive { get; set; } = true;
@@ -68,7 +71,9 @@ public sealed class ProductVariant : Entity
     public ICollection<ProductImage> Images { get; set; } = [];
     [NotMapped] public string? PrimaryImagePath => Images?.FirstOrDefault(x => x.IsPrimary)?.RelativePath ?? Images?.FirstOrDefault()?.RelativePath ?? Product?.PrimaryImagePath;
     [NotMapped] public long MarginXof => PriceXof - CostXof;
-    [NotMapped] public bool IsOutOfStock => QuantityOnHand <= 0;
+    /// <summary>Ce qu'un vendeur peut réellement mettre au panier : le réservé est déjà vendu.</summary>
+    [NotMapped] public decimal QuantityAvailable => QuantityOnHand - QuantityReserved;
+    [NotMapped] public bool IsOutOfStock => QuantityAvailable <= 0;
 }
 
 public sealed class StockMovement : Entity
@@ -172,6 +177,13 @@ public sealed class CreditPayment : Entity
 public sealed class CashSession : Entity
 {
     [MaxLength(40)] public string Number { get; set; } = string.Empty;
+    /// <summary>Personne qui tient la caisse pour cette vacation. Sert de <see cref="Sale.SellerName"/>
+    /// à toutes les ventes de la session ; à défaut de nom saisi, le nom de la boutique.</summary>
+    [MaxLength(80)] public string OperatorName { get; set; } = string.Empty;
+    /// <summary>PIN de vacation, choisi à l'ouverture. Nul si la caisse a été ouverte sans code :
+    /// la clôture n'est alors possible qu'avec le PIN gérant.</summary>
+    [MaxLength(200)] public string? OperatorPinHash { get; set; }
+    [MaxLength(80)] public string? ClosedBy { get; set; }
     public long OpeningFloatXof { get; set; }
     public long? CountedCashXof { get; set; }
     public long? ExpectedCashXof { get; set; }
@@ -181,6 +193,24 @@ public sealed class CashSession : Entity
     public DateTimeOffset? ClosedAt { get; set; }
     public CashSessionStatus Status { get; set; } = CashSessionStatus.Open;
     public ICollection<Sale> Sales { get; set; } = [];
+}
+
+/// <summary>
+/// Espèces qui entrent ou sortent du tiroir sans être une vente ni une dépense : la patronne
+/// emporte la recette, on va faire de la monnaie, on renfloue le fond de caisse.
+///
+/// Distinct d'<see cref="Expense"/> à dessein. Une dépense est un coût qui pèse sur le bénéfice ;
+/// un prélèvement de recette n'en est pas un. Faute de cette distinction, la seule façon de
+/// justifier un retrait était de le saisir en dépense, ce qui effaçait le bénéfice de la journée.
+/// </summary>
+public sealed class CashMovement : Entity
+{
+    public Guid CashSessionId { get; set; }
+    public CashSession? CashSession { get; set; }
+    public CashMovementDirection Direction { get; set; }
+    public long AmountXof { get; set; }
+    [MaxLength(250)] public string Reason { get; set; } = string.Empty;
+    [MaxLength(80)] public string Actor { get; set; } = string.Empty;
 }
 
 public sealed class Expense : Entity
@@ -210,6 +240,39 @@ public sealed class PurchaseOrderLine : Entity
     public decimal ReceivedQuantity { get; set; }
 }
 
+/// <summary>
+/// Commande reçue du site vitrine, descendue sur la caisse de sa boutique.
+///
+/// Elle n'est pas une vente : rien n'est encaissé, rien ne sort du stock tant que le vendeur n'a
+/// pas encaissé. <see cref="SaleId"/> est ce qui distingue une commande réellement traitée d'une
+/// case cochée — il est renseigné dans la transaction même qui crée la vente.
+/// </summary>
+public sealed class Order : Entity
+{
+    [MaxLength(40)] public string Number { get; set; } = string.Empty;
+    [MaxLength(160)] public string CustomerName { get; set; } = string.Empty;
+    [MaxLength(30)] public string Phone { get; set; } = string.Empty;
+    [MaxLength(500)] public string? Note { get; set; }
+    public OrderChannel Channel { get; set; } = OrderChannel.Vitrine;
+    public OrderStatus Status { get; set; } = OrderStatus.Pending;
+    public long TotalXof { get; set; }
+    public Guid? SaleId { get; set; }
+    public DateTimeOffset PlacedAt { get; set; }
+    public ICollection<OrderLine> Lines { get; set; } = [];
+}
+
+public sealed class OrderLine : Entity
+{
+    public Guid OrderId { get; set; }
+    public Order? Order { get; set; }
+    public Guid VariantId { get; set; }
+    [MaxLength(80)] public string Sku { get; set; } = string.Empty;
+    [MaxLength(200)] public string Description { get; set; } = string.Empty;
+    public decimal Quantity { get; set; }
+    /// <summary>Prix figé à la commande : la cliente a réservé à ce prix-là.</summary>
+    public long UnitPriceXof { get; set; }
+}
+
 public sealed class DocumentSnapshot : Entity
 {
     public Guid? SaleId { get; set; }
@@ -227,6 +290,28 @@ public sealed class PrintJob : Entity
     public PrintJobStatus Status { get; set; }
     [MaxLength(500)] public string? Error { get; set; }
     public int Attempts { get; set; }
+}
+
+/// <summary>
+/// File d'attente de synchronisation vers le serveur.
+///
+/// Écrite dans la même transaction que la donnée qu'elle décrit. C'est la seule façon de garantir
+/// à la fois qu'une vente enregistrée finira par remonter, et qu'aucune ne remontera sans avoir
+/// été enregistrée : une file alimentée après coup perdrait tout ce qui se produit entre le
+/// commit et la panne.
+///
+/// La caisse n'attend jamais ces lignes : hors réseau la file grossit, et la boutique continue.
+/// </summary>
+public sealed class SyncOutboxEntry : Entity
+{
+    [MaxLength(60)] public string EntityType { get; set; } = string.Empty;
+    public Guid EntityId { get; set; }
+    public string PayloadJson { get; set; } = string.Empty;
+    public int AttemptCount { get; set; }
+    /// <summary>Renseigné une fois l'événement acquitté par le serveur. Les lignes envoyées sont
+    /// conservées : elles coûtent peu et racontent ce qui est réellement parti.</summary>
+    public DateTimeOffset? SentAt { get; set; }
+    [MaxLength(500)] public string? LastError { get; set; }
 }
 
 public sealed class AuditEntry : Entity

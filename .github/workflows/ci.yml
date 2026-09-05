@@ -1,0 +1,281 @@
+name: CI
+
+# Boucle de validation des branches de travail. Le développement se fait sous macOS, où la
+# solution WPF ne peut ni se compiler ni s'exécuter : c'est ce workflow qui tient lieu de
+# compilateur et de lanceur de tests.
+#
+# Deux jobs, parce que les deux moitiés du produit n'ont pas les mêmes besoins :
+#
+# - « terminal » tourne sous Windows : WPF et l'impression thermique n'existent que là.
+# - « serveur » tourne sous Linux : les conteneurs de service — donc PostgreSQL — n'y sont
+#   disponibles que sur les runners Linux.
+#
+# Chaque job republie son journal complet sur sa propre branche, l'API publique renvoyant 403
+# sur les logs d'un run : sans cela une compilation en échec n'indiquerait que l'étape fautive.
+
+on:
+  push:
+    branches-ignore:
+      - main
+      - ci-logs
+      - ci-logs-server
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  # Renseigner pour produire une migration, puis revider une fois qu'elle est commitée.
+  MIGRATION_NAME: ""
+  SERVER_MIGRATION_NAME: ""
+
+jobs:
+  terminal:
+    name: Terminal (Windows)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ github.ref_name }}
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restaurer
+        id: restore
+        continue-on-error: true
+        run: dotnet restore .\BoutiqueFashion.slnx 2>&1 | Tee-Object -FilePath ci.log -Append
+
+      - name: Compiler
+        id: build
+        continue-on-error: true
+        run: dotnet build .\BoutiqueFashion.slnx --configuration Release --no-restore 2>&1 | Tee-Object -FilePath ci.log -Append
+
+      - name: Générer la migration EF du terminal
+        id: migration
+        if: env.MIGRATION_NAME != '' && steps.build.outcome == 'success'
+        continue-on-error: true
+        run: |
+          dotnet tool install --global dotnet-ef --version 10.* 2>&1 | Tee-Object -FilePath ci.log -Append
+          dotnet ef migrations add $env:MIGRATION_NAME `
+            --project .\src\BoutiqueFashion.Infrastructure\BoutiqueFashion.Infrastructure.csproj `
+            --startup-project .\src\BoutiqueFashion.Infrastructure\BoutiqueFashion.Infrastructure.csproj `
+            --output-dir Migrations 2>&1 | Tee-Object -FilePath ci.log -Append
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add src/BoutiqueFashion.Infrastructure/Migrations
+          git diff --cached --quiet
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "Aucun changement de modèle : pas de migration produite."
+          } else {
+            git commit -m "chore(db): migration $env:MIGRATION_NAME"
+            # Rebase avant de pousser : sans lui, une poussée concurrente fait perdre la
+            # migration tout juste générée, et l'étape échoue sans qu'on sache pourquoi.
+            git pull --rebase origin $env:GITHUB_REF_NAME
+            git push origin HEAD:$env:GITHUB_REF_NAME
+          }
+
+      # Volontairement sans --no-build : l'étape précédente a pu produire une migration, et les
+      # binaires de l'étape « Compiler » ne la contiendraient pas. Les tests serveur sont exclus,
+      # faute de PostgreSQL sur un runner Windows.
+      - name: Tester
+        id: test
+        if: steps.build.outcome == 'success'
+        continue-on-error: true
+        run: |
+          dotnet test .\tests\BoutiqueFashion.Domain.Tests\BoutiqueFashion.Domain.Tests.csproj --configuration Release --no-restore 2>&1 | Tee-Object -FilePath ci.log -Append
+          $domain = $LASTEXITCODE
+          dotnet test .\tests\BoutiqueFashion.Tests\BoutiqueFashion.Tests.csproj --configuration Release --no-restore 2>&1 | Tee-Object -FilePath ci.log -Append
+          if ($domain -ne 0) { exit $domain }
+
+      - name: Publier le journal
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $work = Join-Path $env:RUNNER_TEMP "cilog"
+          Remove-Item -Recurse -Force $work -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $work | Out-Null
+          $header = @(
+            "run     : $env:GITHUB_RUN_ID"
+            "branche : $env:GITHUB_REF_NAME"
+            "commit  : $env:GITHUB_SHA"
+            "restore : ${{ steps.restore.outcome }}"
+            "build   : ${{ steps.build.outcome }}"
+            "migration: ${{ steps.migration.outcome }}"
+            "test    : ${{ steps.test.outcome }}"
+            ("-" * 72)
+          )
+          $body = if (Test-Path ci.log) { Get-Content ci.log } else { "(aucune sortie)" }
+          $header + $body | Set-Content (Join-Path $work "last.log") -Encoding utf8
+          Push-Location $work
+          git init -q
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -q -b ci-logs
+          git add -A
+          git commit -q -m "CI $env:GITHUB_RUN_ID ($env:GITHUB_REF_NAME)"
+          git push -q --force "https://x-access-token:$env:GH_TOKEN@github.com/$env:GITHUB_REPOSITORY.git" ci-logs
+          Pop-Location
+
+      # continue-on-error rend les étapes vertes : ce garde-fou redonne au job son vrai résultat.
+      - name: Résultat
+        if: always()
+        run: |
+          $failed = @()
+          if ('${{ steps.restore.outcome }}'   -notin 'success','skipped') { $failed += 'restore' }
+          if ('${{ steps.build.outcome }}'     -notin 'success','skipped') { $failed += 'build' }
+          if ('${{ steps.migration.outcome }}' -notin 'success','skipped') { $failed += 'migration' }
+          if ('${{ steps.test.outcome }}'      -notin 'success','skipped') { $failed += 'test' }
+          if ('${{ steps.build.outcome }}' -eq 'skipped') { $failed += 'build (non exécuté)' }
+          if ($failed.Count -gt 0) {
+            Write-Host "::error::Étapes en échec : $($failed -join ', '). Journal sur la branche ci-logs."
+            exit 1
+          }
+          Write-Host "Tout est vert."
+
+  pwa:
+    name: PWA et vitrine (Node)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci --no-audit --no-fund
+        working-directory: web
+      - run: npm run typecheck
+        working-directory: web
+      - run: npm run build
+        working-directory: web
+      # Une PWA sans manifeste ni service worker s'installe mal et ne fonctionne pas hors ligne :
+      # l'export doit les contenir, et rien ne le garantit à part cette vérification.
+      - name: Vérifier les exports
+        working-directory: web/apps
+        run: |
+          for f in pilote/out/index.html pilote/out/manifest.webmanifest pilote/out/sw.js pilote/out/icon-512.png vitrine/out/index.html; do
+            [ -f "$f" ] || { echo "::error::$f manquant dans l'export"; exit 1; }
+          done
+          echo "Exports complets."
+
+  serveur:
+    name: Serveur (Linux + PostgreSQL)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: boutique
+          POSTGRES_USER: boutique
+          # Conteneur jetable, détruit avec le runner et joignable de lui seul : il n'y a
+          # aucun mot de passe à protéger, donc aucun à écrire.
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U boutique"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ github.ref_name }}
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Compiler
+        id: build
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          dotnet build src/BoutiqueFashion.Server/BoutiqueFashion.Server.csproj -c Release 2>&1 | tee -a ci.log
+
+      - name: Générer la migration EF du serveur
+        id: migration
+        if: env.SERVER_MIGRATION_NAME != '' && steps.build.outcome == 'success'
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          dotnet tool install --global dotnet-ef --version '10.*' 2>&1 | tee -a ci.log
+          export PATH="$PATH:$HOME/.dotnet/tools"
+          dotnet ef migrations add "$SERVER_MIGRATION_NAME" \
+            --project src/BoutiqueFashion.Server/BoutiqueFashion.Server.csproj \
+            --output-dir Data/Migrations 2>&1 | tee -a ci.log
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add src/BoutiqueFashion.Server/Data/Migrations
+          if git diff --cached --quiet; then
+            echo "Aucun changement de modèle serveur."
+          else
+            git commit -m "chore(db): migration serveur $SERVER_MIGRATION_NAME"
+            # Le job Windows peut avoir commité entre-temps.
+            git pull --rebase origin "$GITHUB_REF_NAME"
+            git push origin "HEAD:$GITHUB_REF_NAME"
+          fi
+
+      - name: Tester
+        id: test
+        if: steps.build.outcome == 'success'
+        continue-on-error: true
+        env:
+          BOUTIQUE_TEST_POSTGRES: "Host=localhost;Port=5432;Username=boutique"
+        run: |
+          set -o pipefail
+          dotnet test tests/BoutiqueFashion.Server.Tests/BoutiqueFashion.Server.Tests.csproj -c Release 2>&1 | tee -a ci.log
+
+      - name: Publier le journal
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          work="$RUNNER_TEMP/cilog"
+          rm -rf "$work" && mkdir -p "$work"
+          {
+            echo "run     : $GITHUB_RUN_ID"
+            echo "branche : $GITHUB_REF_NAME"
+            echo "commit  : $GITHUB_SHA"
+            echo "build   : ${{ steps.build.outcome }}"
+            echo "migration: ${{ steps.migration.outcome }}"
+            echo "test    : ${{ steps.test.outcome }}"
+            printf '%.0s-' {1..72}; echo
+            cat ci.log 2>/dev/null || echo "(aucune sortie)"
+          } > "$work/last.log"
+          cd "$work"
+          git init -q
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -q -b ci-logs-server
+          git add -A
+          git commit -q -m "CI serveur $GITHUB_RUN_ID ($GITHUB_REF_NAME)"
+          git push -q --force "https://x-access-token:$GH_TOKEN@github.com/$GITHUB_REPOSITORY.git" ci-logs-server
+
+      - name: Résultat
+        if: always()
+        run: |
+          failed=""
+          for step in "build:${{ steps.build.outcome }}" "migration:${{ steps.migration.outcome }}" "test:${{ steps.test.outcome }}"; do
+            name="${step%%:*}"; outcome="${step##*:}"
+            if [ "$outcome" != "success" ] && [ "$outcome" != "skipped" ]; then failed="$failed $name"; fi
+          done
+          if [ "${{ steps.build.outcome }}" = "skipped" ]; then failed="$failed build(non-exécuté)"; fi
+          if [ -n "$failed" ]; then
+            echo "::error::Étapes en échec :$failed. Journal sur la branche ci-logs-server."
+            exit 1
+          fi
+          echo "Tout est vert."

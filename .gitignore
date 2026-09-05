@@ -11,3 +11,18 @@ installer/output/
 *.db-shm
 *.db-wal
 
+
+# Secrets et sauvegardes du serveur.
+# La règle porte sur tout .env, où qu'il soit : docker/.env était couvert, mais un
+# web/apps/pilote/.env.local ou un .env à la racine seraient passés sans rien signaler.
+.env
+.env.*
+!.env.example
+!*.env.example
+docker/backups/
+
+.DS_Store
+
+# Sorties de contrôle visuel Playwright
+.playwright-mcp/
+*.png.tmp

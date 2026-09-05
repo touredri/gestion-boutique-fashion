@@ -1,6 +1,7 @@
 <UserControl x:Class="BoutiqueFashion.App.Views.CatalogView" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:controls="clr-namespace:BoutiqueFashion.App.Controls">
   <Grid Margin="16">
-    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+    <!-- Trois rangées : en-tête, bandeau du mode consultation, onglets. -->
+    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
     
     <!-- En-tête -->
     <Grid Margin="4,0,4,12">
@@ -9,12 +10,38 @@
         <TextBlock Text="PRODUITS &amp; CATALOGUE" Style="{StaticResource Eyebrow}" Margin="0,0,0,2"/>
         <TextBlock Text="Gestion des articles, variantes et prix" Style="{StaticResource SectionTitle}"/>
       </StackPanel>
-      <Button Grid.Column="1" Content="Importer un CSV" Command="{Binding BrowseImportFileCommand}" VerticalAlignment="Center" MinWidth="130"/>
+      <!-- L'import de masse écrit directement au catalogue : il reste au gérant. Le vendeur garde
+           l'onglet de saisie, qui n'envoie qu'une proposition à valider. -->
+      <Button Grid.Column="1" Content="Importer un CSV" Command="{Binding BrowseImportFileCommand}" VerticalAlignment="Center" MinWidth="130">
+        <Button.Style>
+          <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Visibility" Value="Collapsed"/>
+            <Style.Triggers>
+              <MultiDataTrigger>
+                <MultiDataTrigger.Conditions>
+                  <Condition Binding="{Binding Session.IsManager}" Value="True"/>
+                  <Condition Binding="{Binding IsCatalogEditable}" Value="True"/>
+                </MultiDataTrigger.Conditions>
+                <Setter Property="Visibility" Value="Visible"/>
+              </MultiDataTrigger>
+            </Style.Triggers>
+          </Style>
+        </Button.Style>
+      </Button>
     </Grid>
 
-    <TabControl Grid.Row="1" SelectedIndex="{Binding SelectedTab}" Padding="0">
-      <!-- Onglet 1 : Ajouter / Modifier -->
-      <TabItem Header="Ajouter / Modifier un produit">
+    <Border Grid.Row="1" Background="{StaticResource InfoSoft}" BorderBrush="{StaticResource Info}" BorderThickness="1" CornerRadius="8" Padding="12,9" Margin="4,0,4,10"
+            Visibility="{Binding IsCatalogReadOnly, Converter={StaticResource BoolToVis}}">
+      <StackPanel Orientation="Horizontal">
+        <TextBlock Text="&#xE946;" FontFamily="Segoe MDL2 Assets" FontSize="14" Foreground="{StaticResource Info}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+        <TextBlock Text="Catalogue géré depuis l'application mobile. Les articles et les prix redescendent ici automatiquement ; le stock, lui, reste piloté depuis cette caisse."
+                   Foreground="{StaticResource Info}" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center"/>
+      </StackPanel>
+    </Border>
+
+    <TabControl Grid.Row="2" SelectedIndex="{Binding SelectedTab}" Padding="0">
+      <!-- Onglet 1 : Ajouter / Modifier. Disparaît dès que le serveur est maître du catalogue. -->
+      <TabItem Header="Ajouter / Modifier un produit" Visibility="{Binding IsCatalogEditable, Converter={StaticResource BoolToVis}}">
         <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,4,0,0">
           <StackPanel>
             <!-- Bloc 1 : Informations générales -->
@@ -99,7 +126,7 @@
       </TabItem>
 
       <!-- Onglet Brouillons : propositions des vendeurs à valider -->
-      <TabItem Header="{Binding DraftsTabHeader}" Visibility="{Binding Session.IsManager, Converter={StaticResource BoolToVis}}">
+      <TabItem Header="{Binding DraftsTabHeader}" Visibility="{Binding IsCatalogEditable, Converter={StaticResource BoolToVis}}">
         <Grid Margin="0,4,0,0">
           <ItemsControl ItemsSource="{Binding Drafts}">
             <ItemsControl.Template>
@@ -155,7 +182,22 @@
           </Border>
 
           <!-- Barre d'action sur sélection : modifier, archiver et supprimer sont des actions gérant. -->
-          <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,0,0,8" Padding="12" Visibility="{Binding Session.IsManager, Converter={StaticResource BoolToVis}}">
+          <!-- Style porté par l'élément et non l'attribut : les deux à la fois lèvent MC3024. -->
+          <Border Grid.Row="1" Margin="0,0,0,8" Padding="12">
+            <Border.Style>
+              <Style TargetType="Border" BasedOn="{StaticResource Card}">
+                <Setter Property="Visibility" Value="Collapsed"/>
+                <Style.Triggers>
+                  <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                      <Condition Binding="{Binding Session.IsManager}" Value="True"/>
+                      <Condition Binding="{Binding IsCatalogEditable}" Value="True"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Visibility" Value="Visible"/>
+                  </MultiDataTrigger>
+                </Style.Triggers>
+              </Style>
+            </Border.Style>
             <Grid>
               <StackPanel Orientation="Horizontal" Visibility="{Binding HasSelection, Converter={StaticResource BoolToVis}}">
                 <Button Content="Modifier le produit" Command="{Binding EditSelectedCommand}" Style="{StaticResource PrimaryButton}" MinWidth="140" Margin="0,0,8,0"/>

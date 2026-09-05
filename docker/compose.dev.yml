@@ -1,0 +1,41 @@
+# Pile de développement :  docker compose -f docker/compose.dev.yml up
+name: boutique-dev
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: boutique
+      POSTGRES_USER: boutique
+      # Pas de mot de passe en développement, et donc aucun à écrire ici. Le port n'est
+      # publié que sur 127.0.0.1 (voir ci-dessous) : la base n'est joignable que depuis
+      # cette machine. Un mot de passe en clair dans un fichier versionné aurait fini,
+      # un jour, recopié dans un compose de production.
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U boutique -d boutique"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    # tmpfs plutôt qu'un volume : une base de développement doit repartir propre, et repartir vite.
+    tmpfs:
+      - /var/lib/postgresql/data
+
+  server:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=boutique;Username=boutique"
+      Bootstrap__Username: "proprietaire"
+      # Surchargeable par docker/.env, qui n'est pas versionné.
+      Bootstrap__Password: ${BOOTSTRAP_PASSWORD:-mot-de-passe-de-developpement}
+      Bootstrap__DisplayName: "Propriétaire"
+    ports:
+      - "127.0.0.1:8080:8080"
