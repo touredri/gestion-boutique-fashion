@@ -1,5 +1,6 @@
 using BoutiqueFashion.Contracts;
 using BoutiqueFashion.Server.Data;
+using BoutiqueFashion.Server.Endpoints;
 using BoutiqueFashion.Server.Sync;
 using Microsoft.EntityFrameworkCore;
 
@@ -51,6 +52,8 @@ var admin = app.MapGroup("/api").AddEndpointFilter(async (context, next) =>
     context.HttpContext.Items["user"] = user;
     return await next(context);
 });
+
+admin.MapReporting();
 
 admin.MapGet("/auth/me", (HttpContext http) =>
 {
@@ -136,6 +139,26 @@ admin.MapDelete("/devices/{deviceId:guid}", async (Guid deviceId, ServerDbContex
 // Référentiel — autorité serveur. Chaque écriture avance le curseur, ce qui suffit
 // à faire redescendre la modification sur tous les terminaux au prochain passage.
 // ---------------------------------------------------------------------------
+
+admin.MapGet("/catalog", async (ServerDbContext db, CancellationToken ct) => Results.Ok(new
+{
+    Categories = await db.Categories.AsNoTracking().OrderBy(x => x.Name)
+        .Select(x => new CategoryDto(x.Id, x.Name, x.IsActive)).ToListAsync(ct),
+    Products = await db.Products.AsNoTracking().OrderBy(x => x.Name)
+        .Select(x => new ProductDto(x.Id, x.CategoryId, x.Name, x.Brand, x.Description, x.SubCategory, x.Gender, x.Season, x.Type, x.IsActive, x.ShopId)).ToListAsync(ct),
+    Variants = await db.Variants.AsNoTracking().OrderBy(x => x.Sku)
+        .Select(x => new VariantDto(x.Id, x.ProductId, x.Sku, x.Barcode, x.Size, x.Color, x.Material, x.Supplier, x.CostXof, x.PriceXof, x.PromotionalPriceXof, x.PromotionStartsAt, x.PromotionEndsAt, x.LowStockThreshold, x.IsActive)).ToListAsync(ct),
+}));
+
+admin.MapGet("/shops/{shopId:guid}/devices", async (Guid shopId, ServerDbContext db, CancellationToken ct) =>
+    Results.Ok(await db.Devices.AsNoTracking().Where(x => x.ShopId == shopId)
+        .OrderByDescending(x => x.LastSeenAt)
+        .Select(x => new { x.Id, x.Name, x.CreatedAt, x.LastSeenAt, Revoked = x.RevokedAt != null })
+        .ToListAsync(ct)));
+
+admin.MapGet("/shops/{shopId:guid}/settings", async (Guid shopId, ServerDbContext db, CancellationToken ct) =>
+    Results.Ok(await db.ShopSettings.AsNoTracking().Where(x => x.ShopId == shopId).OrderBy(x => x.Key)
+        .Select(x => new SettingDto(x.Key, x.Value)).ToListAsync(ct)));
 
 admin.MapPut("/catalog", async (CatalogInput input, ServerDbContext db, CancellationToken ct) =>
 {
