@@ -12,6 +12,11 @@
 
 	# L'application de pilotage, sous son propre chemin. Elle est privée : c'est la vitrine qui
 	# occupe la racine, parce que c'est elle que les clientes atteignent.
+	#
+	# handle_path ne capte que /pilote/*, jamais /pilote tout court : sans cette redirection,
+	# l'adresse que la propriétaire tape de mémoire tomberait sur la vitrine.
+	redir /pilote /pilote/ 308
+
 	handle_path /pilote/* {
 		root * /srv/pilote
 		@sw path /sw.js
