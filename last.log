@@ -1,0 +1,48 @@
+run     : 33980792803
+branche : feat/vitrine-mali
+commit  : 4b62a01a82db51c90d992041f96deb02c324457c
+restore : success
+build   : success
+migration: skipped
+test    : success
+------------------------------------------------------------------------
+  Determining projects to restore...
+  Restored D:\a\gestion-boutique-fashion\gestion-boutique-fashion\src\BoutiqueFashion.Application\BoutiqueFashion.Application.csproj (in 250 ms).
+  Restored D:\a\gestion-boutique-fashion\gestion-boutique-fashion\src\BoutiqueFashion.App\BoutiqueFashion.App.csproj (in 26.33 sec).
+  Restored D:\a\gestion-boutique-fashion\gestion-boutique-fashion\tests\BoutiqueFashion.Domain.Tests\BoutiqueFashion.Domain.Tests.csproj (in 35 ms).
+  Restored D:\a\gestion-boutique-fashion\gestion-boutique-fashion\tests\BoutiqueFashion.Server.Tests\BoutiqueFashion.Server.Tests.csproj (in 25.97 sec).
+  Restored D:\a\gestion-boutique-fashion\gestion-boutique-fashion\src\BoutiqueFashion.Domain\BoutiqueFashion.Domain.csproj (in 2 ms).
+  Restored D:\a\gestion-boutique-fashion\gestion-boutique-fashion\src\BoutiqueFashion.Contracts\BoutiqueFashion.Contracts.csproj (in 2 ms).
+  Restored D:\a\gestion-boutique-fashion\gestion-boutique-fashion\tests\BoutiqueFashion.Tests\BoutiqueFashion.Tests.csproj (in 33 ms).
+  Restored D:\a\gestion-boutique-fashion\gestion-boutique-fashion\src\BoutiqueFashion.Server\BoutiqueFashion.Server.csproj (in 29.66 sec).
+  Restored D:\a\gestion-boutique-fashion\gestion-boutique-fashion\src\BoutiqueFashion.Infrastructure\BoutiqueFashion.Infrastructure.csproj (in 29.66 sec).
+  BoutiqueFashion.Domain -> D:\a\gestion-boutique-fashion\gestion-boutique-fashion\src\BoutiqueFashion.Domain\bin\Release\net10.0\BoutiqueFashion.Domain.dll
+  BoutiqueFashion.Application -> D:\a\gestion-boutique-fashion\gestion-boutique-fashion\src\BoutiqueFashion.Application\bin\Release\net10.0\BoutiqueFashion.Application.dll
+  BoutiqueFashion.Contracts -> D:\a\gestion-boutique-fashion\gestion-boutique-fashion\src\BoutiqueFashion.Contracts\bin\Release\net10.0\BoutiqueFashion.Contracts.dll
+  BoutiqueFashion.Domain.Tests -> D:\a\gestion-boutique-fashion\gestion-boutique-fashion\tests\BoutiqueFashion.Domain.Tests\bin\Release\net10.0\BoutiqueFashion.Domain.Tests.dll
+  BoutiqueFashion.Infrastructure -> D:\a\gestion-boutique-fashion\gestion-boutique-fashion\src\BoutiqueFashion.Infrastructure\bin\Release\net10.0-windows\BoutiqueFashion.Infrastructure.dll
+  BoutiqueFashion.Server -> D:\a\gestion-boutique-fashion\gestion-boutique-fashion\src\BoutiqueFashion.Server\bin\Release\net10.0\BoutiqueFashion.Server.dll
+  BoutiqueFashion.Tests -> D:\a\gestion-boutique-fashion\gestion-boutique-fashion\tests\BoutiqueFashion.Tests\bin\Release\net10.0-windows\BoutiqueFashion.Tests.dll
+  BoutiqueFashion.Server.Tests -> D:\a\gestion-boutique-fashion\gestion-boutique-fashion\tests\BoutiqueFashion.Server.Tests\bin\Release\net10.0\BoutiqueFashion.Server.Tests.dll
+  BoutiqueFashion.App -> D:\a\gestion-boutique-fashion\gestion-boutique-fashion\src\BoutiqueFashion.App\bin\Release\net10.0-windows\BanaShop.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:28.15
+  BoutiqueFashion.Domain -> D:\a\gestion-boutique-fashion\gestion-boutique-fashion\src\BoutiqueFashion.Domain\bin\Release\net10.0\BoutiqueFashion.Domain.dll
+  BoutiqueFashion.Domain.Tests -> D:\a\gestion-boutique-fashion\gestion-boutique-fashion\tests\BoutiqueFashion.Domain.Tests\bin\Release\net10.0\BoutiqueFashion.Domain.Tests.dll
+Test run for D:\a\gestion-boutique-fashion\gestion-boutique-fashion\tests\BoutiqueFashion.Domain.Tests\bin\Release\net10.0\BoutiqueFashion.Domain.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+
+Passed!  - Failed:     0, Passed:    10, Skipped:     0, Total:    10, Duration: 71 ms - BoutiqueFashion.Domain.Tests.dll (net10.0)
+  BoutiqueFashion.Domain -> D:\a\gestion-boutique-fashion\gestion-boutique-fashion\src\BoutiqueFashion.Domain\bin\Release\net10.0\BoutiqueFashion.Domain.dll
+  BoutiqueFashion.Application -> D:\a\gestion-boutique-fashion\gestion-boutique-fashion\src\BoutiqueFashion.Application\bin\Release\net10.0\BoutiqueFashion.Application.dll
+  BoutiqueFashion.Contracts -> D:\a\gestion-boutique-fashion\gestion-boutique-fashion\src\BoutiqueFashion.Contracts\bin\Release\net10.0\BoutiqueFashion.Contracts.dll
+  BoutiqueFashion.Infrastructure -> D:\a\gestion-boutique-fashion\gestion-boutique-fashion\src\BoutiqueFashion.Infrastructure\bin\Release\net10.0-windows\BoutiqueFashion.Infrastructure.dll
+  BoutiqueFashion.Tests -> D:\a\gestion-boutique-fashion\gestion-boutique-fashion\tests\BoutiqueFashion.Tests\bin\Release\net10.0-windows\BoutiqueFashion.Tests.dll
+Test run for D:\a\gestion-boutique-fashion\gestion-boutique-fashion\tests\BoutiqueFashion.Tests\bin\Release\net10.0-windows\BoutiqueFashion.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+
+Passed!  - Failed:     0, Passed:    82, Skipped:     0, Total:    82, Duration: 34 s - BoutiqueFashion.Tests.dll (net10.0)
