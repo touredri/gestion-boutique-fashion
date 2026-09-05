@@ -78,15 +78,22 @@ public sealed class UpdateService(
     private static async Task SetAsync(BoutiqueDbContext db, string key, string? value, CancellationToken cancellationToken)
     {
         var row = await db.AppSettings.SingleOrDefaultAsync(x => x.Key == key, cancellationToken);
+
+        // Une valeur absente ne se stocke pas, et une valeur effacée se retire. Écrire une chaîne
+        // vide ferait remonter "" au lieu de null jusqu'au téléphone, où « dernière erreur : »
+        // suivi de rien est pire que pas de ligne du tout.
+        if (string.IsNullOrEmpty(value))
+        {
+            if (row is not null) db.AppSettings.Remove(row);
+            return;
+        }
+
         if (row is null)
         {
-            // Une valeur absente ne se stocke pas : mieux vaut pas de ligne qu'une ligne vide,
-            // que la lecture aurait ensuite à distinguer de « jamais renseigné ».
-            if (string.IsNullOrEmpty(value)) return;
             db.AppSettings.Add(new Domain.AppSetting { Key = key, Value = value });
             return;
         }
-        row.Value = value ?? string.Empty;
+        row.Value = value;
         row.UpdatedAt = DateTimeOffset.UtcNow;
     }
 }

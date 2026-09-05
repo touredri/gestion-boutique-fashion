@@ -60,12 +60,15 @@ public class UpdateTests(ServerFixture fixture) : IClassFixture<ServerFixture>
             Channel = "win",
             Assets = new[]
             {
-                new { PackageId = "BanaShop", Version = version, Type = "Full", FileName = fileName, SHA1 = "AA", SHA256 = (string?)null, Size = (long)bytes.Length, NotesMarkdown = (string?)null },
+                new { PackageId = "BanaShop", Version = version, Type = "Full", FileName = fileName, SHA1 = Sha1(bytes), SHA256 = (string?)null, Size = (long)bytes.Length, NotesMarkdown = (string?)null },
             },
             ShopIds = shopIds,
         });
         declare.EnsureSuccessStatusCode();
     }
+
+    private static string Sha1(byte[] bytes) =>
+        Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(bytes));
 
     private static async Task<string[]> VersionsAsync(HttpClient device)
     {
@@ -155,7 +158,7 @@ public class UpdateTests(ServerFixture fixture) : IClassFixture<ServerFixture>
         var response = await AsPublisher().PostAsJsonAsync("/api/releases", new
         {
             Channel = "win",
-            Assets = new[] { new { PackageId = "BanaShop", Version = "9.9.9", Type = "Full", FileName = "absent-9.9.9-full.nupkg", SHA1 = "AA", SHA256 = (string?)null, Size = 10L, NotesMarkdown = (string?)null } },
+            Assets = new[] { new { PackageId = "BanaShop", Version = "9.9.9", Type = "Full", FileName = "absent-9.9.9-full.nupkg", SHA1 = "00", SHA256 = (string?)null, Size = 10L, NotesMarkdown = (string?)null } },
             ShopIds = (Guid[]?)null,
         });
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -176,9 +179,35 @@ public class UpdateTests(ServerFixture fixture) : IClassFixture<ServerFixture>
         var declare = await publisher.PostAsJsonAsync("/api/releases", new
         {
             Channel = "win",
-            Assets = new[] { new { PackageId = "BanaShop", Version = "9.8.0", Type = "Full", FileName = fileName, SHA1 = "AA", SHA256 = (string?)null, Size = 9999L, NotesMarkdown = (string?)null } },
+            Assets = new[] { new { PackageId = "BanaShop", Version = "9.8.0", Type = "Full", FileName = fileName, SHA1 = "00", SHA256 = (string?)null, Size = 9999L, NotesMarkdown = (string?)null } },
             ShopIds = (Guid[]?)null,
         });
+        Assert.Equal(HttpStatusCode.BadRequest, declare.StatusCode);
+    }
+
+    /// <summary>
+    /// Une empreinte fausse ne se manifesterait que sur un terminal, à trois heures de route, par
+    /// un refus de Velopack sans cause visible : il n'a aucun moyen de savoir que c'est le flux
+    /// qui ment. Le serveur recalcule donc l'empreinte au dépôt, seul moment où on peut encore
+    /// distinguer les deux.
+    /// </summary>
+    [Fact]
+    public async Task A_wrong_checksum_is_refused()
+    {
+        var publisher = AsPublisher();
+        const string fileName = "BanaShop-9.7.0-full.nupkg";
+        var bytes = System.Text.Encoding.UTF8.GetBytes("paquet factice 9.7.0");
+
+        var upload = await publisher.PutAsync($"/api/releases/files/{fileName}", new ByteArrayContent(bytes));
+        upload.EnsureSuccessStatusCode();
+
+        var declare = await publisher.PostAsJsonAsync("/api/releases", new
+        {
+            Channel = "win",
+            Assets = new[] { new { PackageId = "BanaShop", Version = "9.7.0", Type = "Full", FileName = fileName, SHA1 = Sha1([1, 2, 3]), SHA256 = (string?)null, Size = (long)bytes.Length, NotesMarkdown = (string?)null } },
+            ShopIds = (Guid[]?)null,
+        });
+
         Assert.Equal(HttpStatusCode.BadRequest, declare.StatusCode);
     }
 

@@ -9,6 +9,12 @@
 #   DOMAIN=api.exemple.ci sh docker/bootstrap.sh
 set -eu
 
+# Avant toute création de fichier. Sans lui, le .env.tmp naît avec l'umask du shell appelant —
+# souvent 022 — et le mv transmet ces droits au .env : les mots de passe de la base deviennent
+# lisibles par tout compte de la machine. Le chmod qui suit ne rattraperait que le dernier état,
+# pas la fenêtre pendant laquelle le fichier a existé en clair.
+umask 077
+
 cd "$(dirname "$0")"
 ENV_FILE=".env"
 touch "$ENV_FILE"
@@ -23,8 +29,10 @@ set_default() {
     return
   fi
   grep -v "^${key}=" "$ENV_FILE" > "$ENV_FILE.tmp" 2>/dev/null || true
+  chmod 600 "$ENV_FILE.tmp"
   mv "$ENV_FILE.tmp" "$ENV_FILE"
   printf '%s=%s\n' "$key" "$value" >> "$ENV_FILE"
+  chmod 600 "$ENV_FILE"
   echo "  + $key engendré"
 }
 

@@ -51,8 +51,9 @@ services:
     expose:
       - "8080"
 
-  # Caddy termine le TLS et renouvelle le certificat tout seul. Le serveur n'est donc jamais
-  # exposé en clair, et les terminaux parlent en HTTPS — ils transportent un jeton d'appareil.
+  # Caddy route l'application : /api vers le serveur, /pilote vers la PWA, le reste vers la
+  # vitrine. Il n'est joignable que depuis la machine ; c'est nginx, déjà en place sur ce
+  # serveur, qui termine le TLS et transmet ici. Voir docker/nginx-bana.conf.
   # Construit la PWA et dépose ses fichiers dans un volume que Caddy sert. Le conteneur
   # s'arrête une fois la copie faite : il n'y a rien à laisser tourner.
   pilote:
@@ -75,10 +76,8 @@ services:
       pilote:
         condition: service_completed_successfully
     ports:
-      - "80:80"
-      - "443:443"
-    environment:
-      DOMAIN: ${DOMAIN}
+      # Boucle locale uniquement : rien de cette pile n'est joignable directement de l'extérieur.
+      - "127.0.0.1:8081:80"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - pilote-dist:/srv/pilote:ro

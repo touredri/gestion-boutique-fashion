@@ -105,6 +105,7 @@ jobs:
           '
           scp -i ~/.ssh/id_deploy \
             docker/compose.prod.yml docker/Caddyfile docker/bootstrap.sh docker/.env.example \
+            docker/nginx-bana.conf \
             "$CIBLE:bana/docker/"
 
       - name: Amorcer, tirer les images et démarrer
@@ -167,8 +168,7 @@ jobs:
           set -euo pipefail
           for essai in 1 2 3 4 5 6 7 8 9 10; do
             if ssh -i ~/.ssh/id_deploy "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
-                 'docker compose -f ~/bana/docker/compose.prod.yml --env-file ~/bana/docker/.env.effectif exec -T caddy wget -qO- http://server:8080/health' \
-                 | grep -q '"status":"ok"'; then
+                 'curl -fsS http://127.0.0.1:8081/health' | grep -q '"status":"ok"'; then
               echo "Le serveur répond."
               exit 0
             fi
@@ -179,6 +179,48 @@ jobs:
           ssh -i ~/.ssh/id_deploy "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
             'docker compose -f ~/bana/docker/compose.prod.yml --env-file ~/bana/docker/.env.effectif logs --tail 60 server'
           exit 1
+
+      # nginx est déjà la porte d'entrée de cette machine. On ne la remplace pas : on y ajoute un
+      # bloc qui transmet le domaine à Caddy, resté sur la boucle locale.
+      - name: Installer le bloc nginx
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/id_deploy "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" 'bash -s' <<'DISTANT'
+          set -euo pipefail
+          cd ~/bana/docker
+          DOMAINE=$(grep "^DOMAIN=" .env | cut -d= -f2-)
+          sed "s/VOTRE_DOMAINE/$DOMAINE/g" nginx-bana.conf > bana.conf.rendu
+
+          # Déjà installé et identique : ne rien toucher. Un reload inutile de nginx sur une
+          # machine qui sert peut-être d'autres sites n'apporte rien et peut coûter cher.
+          if sudo -n test -f /etc/nginx/sites-available/bana.conf 2>/dev/null \
+             && sudo -n cmp -s bana.conf.rendu /etc/nginx/sites-available/bana.conf; then
+            echo "Bloc nginx déjà à jour."
+            exit 0
+          fi
+
+          # certbot réécrit le bloc pour y poser le TLS : une fois qu'il est passé, on ne
+          # réécrase plus rien, sinon chaque déploiement retirerait le certificat.
+          if sudo -n grep -q "ssl_certificate" /etc/nginx/sites-available/bana.conf 2>/dev/null; then
+            echo "Bloc nginx déjà complété par certbot : laissé intact."
+            exit 0
+          fi
+
+          if ! sudo -n true 2>/dev/null; then
+            echo "::warning::sudo sans mot de passe indisponible. À lancer une fois à la main :"
+            echo "  sudo cp ~/bana/docker/bana.conf.rendu /etc/nginx/sites-available/bana.conf"
+            echo "  sudo ln -sf /etc/nginx/sites-available/bana.conf /etc/nginx/sites-enabled/bana.conf"
+            echo "  sudo nginx -t && sudo systemctl reload nginx"
+            echo "  sudo certbot --nginx -d $DOMAINE"
+            exit 0
+          fi
+
+          sudo cp bana.conf.rendu /etc/nginx/sites-available/bana.conf
+          sudo ln -sf /etc/nginx/sites-available/bana.conf /etc/nginx/sites-enabled/bana.conf
+          sudo nginx -t
+          sudo systemctl reload nginx
+          echo "Bloc nginx installé. Pour le certificat :  sudo certbot --nginx -d $DOMAINE"
+          DISTANT
 
       - name: Rappeler les identifiants du premier compte
         if: success()

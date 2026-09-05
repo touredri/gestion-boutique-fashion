@@ -11,7 +11,8 @@ sauvegardes — est déployé par [.github/workflows/deploy.yml](../.github/work
 | PostgreSQL 17 | conteneur `postgres` | image officielle, volume nommé |
 | Site vitrine (`/`) | fichiers statiques servis par Caddy | image `web`, recopiée dans un volume |
 | Pilotage (`/pilote/`) | fichiers statiques servis par Caddy | idem |
-| TLS et routage | conteneur `caddy` | certificat obtenu et renouvelé tout seul |
+| Routage de l'application | conteneur `caddy`, sur `127.0.0.1:8081` | image officielle |
+| TLS et porte d'entrée | **nginx de l'hôte** | bloc ajouté par le déploiement, certificat par certbot |
 | Sauvegarde quotidienne | conteneur `backup` | `pg_dump` gzippé, 14 jours de rétention |
 | Paquets de mise à jour des terminaux | volume `updates` | déposés par [build-windows.yml](../.github/workflows/build-windows.yml) sur tag |
 
@@ -19,15 +20,24 @@ sauvegardes — est déployé par [.github/workflows/deploy.yml](../.github/work
 serveur .NET demande plus de mémoire qu'un petit VPS n'en a, pour un résultat identique à celui
 que le runner produit gratuitement. Le serveur ne fait que tirer et démarrer.
 
+**nginx reste la porte d'entrée.** Il occupe déjà 80 et 443 sur cette machine, et sert peut-être
+d'autres sites : on ne le remplace pas. Caddy écoute sur `127.0.0.1:8081` et nginx lui transmet
+le domaine. Tout le routage de l'application — chemin `/pilote`, repli SPA, en-têtes de cache,
+service worker non mis en cache — reste dans le Caddyfile, où il est déjà écrit et vérifié. Le
+réécrire dans nginx aurait été une seconde chance de se tromper, sur la partie la plus fragile.
+
 ## Prérequis
 
 1. **Docker et docker compose v2** sur le VPS. Le déploiement s'arrête avec un message clair
    sinon, plutôt que d'échouer trente lignes plus loin.
 2. **Un enregistrement DNS A** pointant le domaine vers l'adresse du VPS, et les ports **80 et
-   443** ouverts. Caddy ne peut pas obtenir de certificat sans les deux.
+   443** ouverts — certbot a besoin des deux.
 3. **Trois secrets GitHub** : `SSH_PRIVATE_KEY`, `SSH_HOST`, `SSH_USER`. La clé publique
    correspondante doit être dans `~/.ssh/authorized_keys` de l'utilisateur sur le VPS, et cet
    utilisateur doit pouvoir lancer `docker` sans `sudo` (groupe `docker`).
+4. **`sudo` sans mot de passe**, si vous voulez que le bloc nginx soit posé automatiquement.
+   Sans lui le déploiement continue et affiche les quatre commandes à lancer une fois à la main :
+   c'est une gêne de première installation, pas un échec.
 
 ## Premier déploiement
 
@@ -43,6 +53,20 @@ Domaine    : api.exemple.ci
 Pilotage   : https://api.exemple.ci/pilote/
 Identifiant: proprietaire
 ```
+
+### Le certificat
+
+Le déploiement installe le bloc nginx en HTTP. Une fois qu'il répond, une seule commande sur le
+VPS pose le certificat et la redirection :
+
+```sh
+sudo certbot --nginx -d api.exemple.ci
+```
+
+certbot réécrit le bloc pour y ajouter le TLS. Les déploiements suivants le détectent et ne
+l'écrasent plus — sans quoi chaque mise en ligne retirerait le certificat.
+
+### Les identifiants
 
 Le mot de passe initial et la clé de publication sont dans `~/bana/docker/.env` sur le VPS :
 
@@ -90,8 +114,11 @@ docker compose -f compose.prod.yml --env-file .env.effectif logs --tail 100 serv
 docker compose -f compose.prod.yml --env-file .env.effectif logs --tail 50 caddy
 ```
 
-**Le certificat n'est pas émis** — regardez les journaux de Caddy. Presque toujours : le DNS ne
-pointe pas encore, ou le port 80 est fermé. Let's Encrypt a besoin des deux.
+**Le certificat n'est pas émis** — `sudo certbot --nginx -d votre-domaine`, et lisez ce qu'il
+dit. Presque toujours : le DNS ne pointe pas encore, ou le port 80 est fermé.
+
+**nginx renvoie 502** — la pile ne répond pas sur la boucle locale. Vérifiez avec
+`curl -v http://127.0.0.1:8081/health` depuis le VPS, puis les journaux du conteneur `caddy`.
 
 **Une sauvegarde à restaurer** — elles sont dans `~/bana/docker/backups`, une par jour :
 

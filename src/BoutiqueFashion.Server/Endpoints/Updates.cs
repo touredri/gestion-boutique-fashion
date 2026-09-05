@@ -138,17 +138,23 @@ public static class UpdateEndpoints
                 if (!File.Exists(path))
                     return Results.BadRequest(new { error = $"{dto.FileName} n'a pas été téléversé." });
 
-                // La taille annoncée est confrontée au fichier réellement présent : c'est le
-                // contrôle qui attrape un transfert coupé, cas bien plus probable qu'une
-                // falsification.
+                // La taille et l'empreinte sont confrontées au fichier réellement présent. C'est
+                // le seul moment où on peut encore le faire : une fois la version publiée, une
+                // empreinte fausse ne se manifeste que sur un terminal, à trois heures de route,
+                // par un échec sans cause visible. Velopack refuse le paquet et ne dit pas
+                // pourquoi — il n'a aucun moyen de savoir que c'est le flux qui ment.
                 var actual = new FileInfo(path).Length;
                 if (actual != dto.Size)
                     return Results.BadRequest(new { error = $"{dto.FileName} fait {actual} octets, {dto.Size} annoncés." });
 
+                var sha1 = await Sha1Async(path, ct);
+                if (!string.Equals(sha1, dto.SHA1, StringComparison.OrdinalIgnoreCase))
+                    return Results.BadRequest(new { error = $"{dto.FileName} : empreinte SHA1 {sha1}, {dto.SHA1} annoncée." });
+
                 var row = await db.ReleaseAssets.SingleOrDefaultAsync(x => x.FileName == dto.FileName, ct);
                 if (row is null) { row = new ReleaseAsset { FileName = dto.FileName }; db.ReleaseAssets.Add(row); }
                 row.PackageId = dto.PackageId; row.Version = dto.Version; row.Channel = channel;
-                row.Type = dto.Type; row.Sha1 = dto.SHA1; row.Sha256 = dto.SHA256; row.Size = dto.Size;
+                row.Type = dto.Type; row.Sha1 = sha1; row.Sha256 = dto.SHA256; row.Size = dto.Size;
                 row.NotesMarkdown = dto.NotesMarkdown; row.IsWithdrawn = false;
             }
 
