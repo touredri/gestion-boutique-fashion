@@ -6,12 +6,18 @@
   chacune correspond à une situation réelle de la propriétaire.
 */
 
-const VERSION = "bana-pilote-v1";
+const VERSION = "bana-pilote-v2";
 const SHELL = `${VERSION}-shell`;
+
+// Racine de montage, déduite de l'emplacement du fichier plutôt qu'écrite en dur : ce worker vit
+// sous /pilote/ en production, et à la racine si on le sert autrement. L'écrire en dur ici aurait
+// été la troisième copie de la même information — et celle qu'on aurait oublié de changer.
+const BASE = self.location.pathname.replace(/sw\.js$/, "");
 
 // Coquille minimale : de quoi ouvrir l'application dans un taxi sans réseau. Les données, elles,
 // viennent du cache local que gère l'application (voir useResource).
-const PRECACHE = ["/", "/commandes/", "/catalogue/", "/rapports/", "/boutiques/", "/boutiques/alertes/", "/manifest.webmanifest"];
+const PRECACHE = ["", "commandes/", "catalogue/", "rapports/", "boutiques/", "boutiques/alertes/", "manifest.webmanifest"]
+  .map((path) => BASE + path);
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -55,7 +61,7 @@ self.addEventListener("fetch", (event) => {
           caches.open(SHELL).then((cache) => cache.put(request, copy));
           return response;
         })
-        .catch(() => caches.match(request).then((hit) => hit ?? caches.match("/"))),
+        .catch(() => caches.match(request).then((hit) => hit ?? caches.match(BASE))),
     );
     return;
   }
@@ -86,8 +92,8 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification("Bana Shop", {
       body: "Nouvelle activité dans vos boutiques.",
-      icon: "/icon-192.png",
-      badge: "/icon-192.png",
+      icon: `${BASE}icon-192.png`,
+      badge: `${BASE}icon-192.png`,
       // Une seule notification empilée : cinq ventes ne doivent pas produire cinq bandeaux.
       tag: "bana-activite",
       renotify: true,
@@ -102,7 +108,7 @@ self.addEventListener("notificationclick", (event) => {
       // Une fenêtre déjà ouverte est ramenée au premier plan plutôt que dupliquée.
       const existing = windows.find((w) => w.url.includes(self.location.origin));
       if (existing) return existing.focus();
-      return self.clients.openWindow("/");
+      return self.clients.openWindow(BASE);
     }),
   );
 });

@@ -2,12 +2,16 @@ import type { Metadata, Viewport } from "next";
 import { ServiceWorker } from "@/components/ServiceWorker";
 import "./globals.css";
 
+/** Doit correspondre à basePath dans next.config.ts. Les métadonnées ne sont pas réécrites
+ *  par Next avec la même fiabilité que les liens : on préfixe explicitement. */
+const BASE = "/pilote";
+
 export const metadata: Metadata = {
   title: "Bana Shop · Pilotage",
   description: "Suivi des boutiques, ventes, stock et caisse.",
-  manifest: "/manifest.webmanifest",
+  manifest: `${BASE}/manifest.webmanifest`,
   appleWebApp: { capable: true, statusBarStyle: "default", title: "Bana Shop" },
-  icons: { icon: "/favicon.png", apple: "/apple-touch-icon.png" },
+  icons: { icon: `${BASE}/favicon.png`, apple: `${BASE}/apple-touch-icon.png` },
 };
 
 export const viewport: Viewport = {
