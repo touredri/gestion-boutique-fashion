@@ -183,7 +183,7 @@ public sealed class SyncOutboxTests : IAsyncLifetime
         var article = await provider.GetRequiredService<ICatalogService>()
             .CreateVariantAsync("Boubou", "Vêtements", "SYNC-07", null, "L", "Or", 10_000, 30_000, 3, 0);
         var customer = await provider.GetRequiredService<ICustomerService>().CreateAsync("Aïcha", "0700000003", 0);
-        var sale = await Sales.CreateAsync(new SaleDraft(
+        var sale = await provider.GetRequiredService<ISaleService>().CreateAsync(new SaleDraft(
             "sync-remise", [new SaleLineDraft(article.Id, 1)],
             [new PaymentDraft(PaymentMode.Cash, 10_000), new PaymentDraft(PaymentMode.Credit, 20_000)],
             customer.Id, CreditDueAt: DateTimeOffset.Now.AddDays(30), ReserveStock: true));
@@ -203,7 +203,7 @@ public sealed class SyncOutboxTests : IAsyncLifetime
     {
         var article = await provider.GetRequiredService<ICatalogService>()
             .CreateVariantAsync("Écharpe", "Accessoires", "SYNC-08", null, null, "Rouge", 3_000, 8_000, 4, 0);
-        var sale = await Sales.CreateAsync(new SaleDraft(
+        var sale = await provider.GetRequiredService<ISaleService>().CreateAsync(new SaleDraft(
             "sync-annulation", [new SaleLineDraft(article.Id, 1)], [new PaymentDraft(PaymentMode.Cash, 8_000)]));
 
         await provider.GetRequiredService<IReturnService>().CancelSaleAsync(sale.Number, "Erreur de saisie", ManagerPin);
