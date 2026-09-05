@@ -182,7 +182,8 @@
           </Border>
 
           <!-- Barre d'action sur sélection : modifier, archiver et supprimer sont des actions gérant. -->
-          <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,0,0,8" Padding="12">
+          <!-- Style porté par l'élément et non l'attribut : les deux à la fois lèvent MC3024. -->
+          <Border Grid.Row="1" Margin="0,0,0,8" Padding="12">
             <Border.Style>
               <Style TargetType="Border" BasedOn="{StaticResource Card}">
                 <Setter Property="Visibility" Value="Collapsed"/>

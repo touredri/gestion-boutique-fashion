@@ -74,7 +74,10 @@ admin.MapPost("/auth/password", async (PasswordChangeInput input, HttpContext ht
     if (!Passwords.Verify(input.CurrentPassword, user.PasswordHash))
         return Results.BadRequest(new { error = "Mot de passe actuel incorrect." });
 
-    Passwords.Validate(input.NewPassword);
+    // Validation traduite en réponse plutôt qu'en exception : un mot de passe trop court est
+    // une saisie à corriger, pas une panne du serveur.
+    try { Passwords.Validate(input.NewPassword); }
+    catch (ArgumentException e) { return Results.BadRequest(new { error = e.Message }); }
     user.PasswordHash = Passwords.Hash(input.NewPassword);
 
     // Toutes les autres sessions tombent : changer son mot de passe doit déconnecter l'appareil
