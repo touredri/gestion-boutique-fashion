@@ -11,7 +11,7 @@ const SHELL = `${VERSION}-shell`;
 
 // Coquille minimale : de quoi ouvrir l'application dans un taxi sans réseau. Les données, elles,
 // viennent du cache local que gère l'application (voir useResource).
-const PRECACHE = ["/", "/commandes/", "/catalogue/", "/rapports/", "/boutiques/", "/manifest.webmanifest"];
+const PRECACHE = ["/", "/commandes/", "/catalogue/", "/rapports/", "/boutiques/", "/boutiques/alertes/", "/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -74,6 +74,35 @@ self.addEventListener("fetch", (event) => {
         })
         .catch(() => hit);
       return hit ?? network;
+    }),
+  );
+});
+
+/*
+  Notifications. Le message reçu ne porte aucune charge utile — voir Notifier côté serveur pour
+  la raison — donc la notification est volontairement sobre : elle signale, l'application détaille.
+*/
+self.addEventListener("push", (event) => {
+  event.waitUntil(
+    self.registration.showNotification("Bana Shop", {
+      body: "Nouvelle activité dans vos boutiques.",
+      icon: "/icon-192.png",
+      badge: "/icon-192.png",
+      // Une seule notification empilée : cinq ventes ne doivent pas produire cinq bandeaux.
+      tag: "bana-activite",
+      renotify: true,
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((windows) => {
+      // Une fenêtre déjà ouverte est ramenée au premier plan plutôt que dupliquée.
+      const existing = windows.find((w) => w.url.includes(self.location.origin));
+      if (existing) return existing.focus();
+      return self.clients.openWindow("/");
     }),
   );
 });

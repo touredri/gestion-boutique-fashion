@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { BottomNav } from "@/components/BottomNav";
 import { ResourceState, StaleNote, useResource } from "@/components/DataScreen";
 import { Badge, Button, Card, ErrorNote, Field, Row, Screen, SectionLabel, inputClass } from "@/components/ui";
+import Link from "next/link";
+import { ShopSettings } from "@/components/ShopSettings";
 import { api, readIdentity, signOut } from "@/lib/api";
 import { dateAndTime, isStale, sinceNow } from "@/lib/format";
 import type { Device, Shop, StockRow } from "@/lib/types";
@@ -71,11 +73,14 @@ function ShopPanel({ shop, expanded, onToggle }: { shop: Shop; expanded: boolean
   );
 }
 
+type Panel = "terminaux" | "stock" | "reglages";
+
 function ShopDetail({ shopId }: { shopId: string }) {
   const devices = useResource<Device[]>(`/api/shops/${shopId}/devices`, `cache.devices.${shopId}`);
   const stock = useResource<StockRow[]>(`/api/shops/${shopId}/stock-detail?lowOnly=true`, `cache.lowstock.${shopId}`);
   const [code, setCode] = useState<{ code: string; expiresAt: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [panel, setPanel] = useState<Panel>("terminaux");
 
   async function generateCode() {
     setError(null);
@@ -94,6 +99,25 @@ function ShopDetail({ shopId }: { shopId: string }) {
 
   return (
     <div className="mt-4 border-t border-line pt-4">
+      {/* Trois volets plutôt qu'une longue page : les réglages d'une boutique sont nombreux et
+          ne se consultent pas en même temps que son stock. */}
+      <div className="mb-3 flex rounded-xl border border-line bg-ivory p-0.5">
+        {(["terminaux", "stock", "reglages"] as const).map((key) => (
+          <button
+            key={key}
+            onClick={() => setPanel(key)}
+            className={`min-h-9 flex-1 rounded-[10px] text-xs font-semibold capitalize transition-colors ${
+              panel === key ? "bg-paper text-ink shadow-sm" : "text-muted"
+            }`}
+          >
+            {key === "reglages" ? "réglages" : key}
+          </button>
+        ))}
+      </div>
+
+      {panel === "reglages" && <ShopSettings shopId={shopId} />}
+
+      {panel === "terminaux" && (<>
       <SectionLabel>Terminaux</SectionLabel>
       {(devices.data ?? []).map((device) => (
         <Row
@@ -128,7 +152,9 @@ function ShopDetail({ shopId }: { shopId: string }) {
         </Button>
       )}
       {error && <div className="mt-2"><ErrorNote>{error}</ErrorNote></div>}
+      </>)}
 
+      {panel === "stock" && (<>
       <SectionLabel>Stock en alerte</SectionLabel>
       {(stock.data ?? []).slice(0, 10).map((row) => (
         <Row
@@ -140,6 +166,7 @@ function ShopDetail({ shopId }: { shopId: string }) {
         />
       ))}
       {(stock.data ?? []).length === 0 && <p className="py-2 text-sm text-muted">Aucune alerte de stock.</p>}
+      </>)}
     </div>
   );
 }
@@ -205,6 +232,17 @@ function AccountCard() {
 
   return (
     <>
+      <SectionLabel>Alertes</SectionLabel>
+      <Card>
+        <Link href="/boutiques/alertes/" className="flex items-center justify-between gap-3 py-1">
+          <span className="min-w-0">
+            <span className="block text-sm text-ink">Être prévenue</span>
+            <span className="block text-xs text-muted">WhatsApp et notifications du téléphone</span>
+          </span>
+          <span aria-hidden className="text-faint">›</span>
+        </Link>
+      </Card>
+
       <SectionLabel>Compte</SectionLabel>
       <Card>
         <Row label={identity?.displayName ?? "—"} hint={identity?.username} value="" />
