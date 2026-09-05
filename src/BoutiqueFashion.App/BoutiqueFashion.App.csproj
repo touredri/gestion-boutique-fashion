@@ -6,7 +6,15 @@
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <AssemblyName>BanaShop</AssemblyName>
     <ApplicationIcon>Assets\logo.ico</ApplicationIcon>
+    <!-- WPF génère normalement le Main. On le reprend pour que VelopackApp.Build().Run()
+         s'exécute avant toute autre chose : c'est lui qui traite les relances qui suivent une
+         installation, et il doit voir les arguments avant que l'application ne démarre. -->
+    <StartupObject>BoutiqueFashion.App.App</StartupObject>
   </PropertyGroup>
+  <ItemGroup>
+    <ApplicationDefinition Remove="App.xaml" />
+    <Page Include="App.xaml" />
+  </ItemGroup>
   <ItemGroup>
     <Resource Include="Assets\logo-nav.png" />
   </ItemGroup>
@@ -15,5 +23,6 @@
     <ProjectReference Include="../BoutiqueFashion.Infrastructure/BoutiqueFashion.Infrastructure.csproj" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.11" />
+    <PackageReference Include="Velopack" Version="1.2.0" />
   </ItemGroup>
 </Project>

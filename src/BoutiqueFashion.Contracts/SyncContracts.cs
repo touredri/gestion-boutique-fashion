@@ -125,6 +125,10 @@ public sealed record StockMovementPayload(Guid Id, Guid VariantId, StockMovement
 
 // --- Appairage d'un terminal ----------------------------------------------
 
+/// <summary>Battement de cœur du terminal : ce qui tourne, ce qui attend d'être installé, et
+/// ce qui a échoué. Voir docs/lot5-mises-a-jour-a-distance.md, §4.</summary>
+public sealed record DeviceStatusRequest(string? AppVersion, string? PendingVersion, string? UpdateError);
+
 public sealed record EnrollRequest(string Code, string DeviceName);
 
 public sealed record EnrollResponse(Guid ShopId, string ShopName, Guid DeviceId, string DeviceToken);

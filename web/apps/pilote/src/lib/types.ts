@@ -105,6 +105,12 @@ export type Device = {
   createdAt: string;
   lastSeenAt: string | null;
   revoked: boolean;
+  /** Version du logiciel en service, telle que le terminal la déclare à chaque synchronisation. */
+  appVersion: string | null;
+  appVersionSince: string | null;
+  /** Version téléchargée, qui s'installera à la prochaine fermeture de l'application. */
+  pendingVersion: string | null;
+  updateError: string | null;
 };
 
 export type Category = { id: string; name: string; isActive: boolean };

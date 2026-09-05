@@ -139,6 +139,7 @@ public sealed class SyncService(
             {
                 await PushAsync(db, baseUrl, token, cancellationToken);
                 await PullAsync(db, baseUrl, token, settings.GetValueOrDefault(CursorKey), cancellationToken);
+                await ReportStatusAsync(db, baseUrl, token, cancellationToken);
                 lastSuccessAt = DateTimeOffset.Now;
                 lastError = null;
             }
@@ -156,6 +157,36 @@ public sealed class SyncService(
             isRunning = false;
             gate.Release();
         }
+    }
+
+    /// <summary>
+    /// Déclare la version en service, celle qui attend, et le dernier échec de mise à jour.
+    ///
+    /// Le terminal ne calcule rien ici : il relit ce que <c>UpdateAgent</c> a écrit dans les
+    /// réglages. La mécanique Velopack est une affaire de l'application WPF, la synchronisation
+    /// n'en est que le facteur — c'est ce qui permet à cette couche de rester compilable et
+    /// testable hors Windows.
+    /// </summary>
+    private async Task ReportStatusAsync(BoutiqueDbContext db, string baseUrl, string token, CancellationToken cancellationToken)
+    {
+        var keys = new[] { UpdateService.CurrentVersionKey, UpdateService.PendingVersionKey, UpdateService.LastErrorKey };
+        var rows = await db.AppSettings.AsNoTracking().Where(x => keys.Contains(x.Key))
+            .ToDictionaryAsync(x => x.Key, x => x.Value, cancellationToken);
+
+        var payload = new DeviceStatusRequest(
+            Empty(rows.GetValueOrDefault(UpdateService.CurrentVersionKey)),
+            Empty(rows.GetValueOrDefault(UpdateService.PendingVersionKey)),
+            Empty(rows.GetValueOrDefault(UpdateService.LastErrorKey)));
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl.TrimEnd('/')}/api/devices/status")
+        {
+            Content = JsonContent.Create(payload, options: Json),
+        };
+        request.Headers.Add("Authorization", $"Bearer {token}");
+        using var response = await http.SendAsync(request, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        static string? Empty(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
     }
 
     private async Task PushAsync(BoutiqueDbContext db, string baseUrl, string token, CancellationToken cancellationToken)

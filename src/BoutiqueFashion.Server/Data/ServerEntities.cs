@@ -99,6 +99,19 @@ public sealed class Device : ServerEntity
     [MaxLength(64)] public string TokenHash { get; set; } = string.Empty;
     public DateTimeOffset? LastSeenAt { get; set; }
     public DateTimeOffset? RevokedAt { get; set; }
+
+    /// <summary>Version en service sur ce terminal, telle qu'il la déclare à chaque cycle de
+    /// synchronisation. Sans elle, « est-ce que la mise à jour s'est installée ? » est une
+    /// question sans réponse depuis Abidjan.</summary>
+    [MaxLength(40)] public string? AppVersion { get; set; }
+    public DateTimeOffset? AppVersionSince { get; set; }
+
+    /// <summary>Version téléchargée qui s'installera à la prochaine fermeture de l'application.</summary>
+    [MaxLength(40)] public string? PendingVersion { get; set; }
+
+    /// <summary>Dernier échec de mise à jour. Renseigné, il vaut mieux ne pas promouvoir la
+    /// version aux autres boutiques.</summary>
+    [MaxLength(400)] public string? UpdateError { get; set; }
 }
 
 /// <summary>Code d'appairage à usage unique et à durée limitée. Court, parce qu'il se recopie à
@@ -367,4 +380,46 @@ public sealed class OrderLine
     /// <summary>Prix figé au moment de la commande : une cliente ne doit pas découvrir en
     /// boutique que l'article a augmenté depuis qu'elle l'a réservé.</summary>
     public long UnitPriceXof { get; set; }
+}
+
+// ---------------------------------------------------------------------------
+// Publication logicielle (lot 5). Voir docs/lot5-mises-a-jour-a-distance.md.
+// ---------------------------------------------------------------------------
+
+/// <summary>
+/// Un fichier de mise à jour tel que « vpk pack » l'a produit : paquet complet ou delta. Les
+/// champs reprennent exactement ceux que Velopack attend dans releases.{canal}.json — le serveur
+/// ne réinvente pas ce format, il le stocke et le refiltre.
+/// </summary>
+public sealed class ReleaseAsset : ServerEntity
+{
+    [MaxLength(60)] public string PackageId { get; set; } = string.Empty;
+    [MaxLength(40)] public string Version { get; set; } = string.Empty;
+    /// <summary>« win » pour les terminaux Windows. Velopack demande releases.{Channel}.json.</summary>
+    [MaxLength(20)] public string Channel { get; set; } = "win";
+    /// <summary>« Full » ou « Delta ».</summary>
+    [MaxLength(10)] public string Type { get; set; } = "Full";
+    [MaxLength(200)] public string FileName { get; set; } = string.Empty;
+    [MaxLength(64)] public string Sha1 { get; set; } = string.Empty;
+    [MaxLength(64)] public string? Sha256 { get; set; }
+    public long Size { get; set; }
+    public string? NotesMarkdown { get; set; }
+    public DateTimeOffset PublishedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>Version retirée : les terminaux qui ne l'ont pas encore prise ne la prendront
+    /// plus. On ne peut pas rappeler ce qui est déjà installé — pour cela, on republie.</summary>
+    public bool IsWithdrawn { get; set; }
+}
+
+/// <summary>
+/// Qui reçoit quelle version. C'est ici, et nulle part ailleurs, que vit l'échelonnement : le
+/// terminal ne connaît aucune règle, il demande seulement « qu'est-ce qu'il y a pour moi ».
+/// </summary>
+public sealed class ReleaseTarget : ServerEntity
+{
+    [MaxLength(40)] public string Version { get; set; } = string.Empty;
+    [MaxLength(20)] public string Channel { get; set; } = "win";
+    /// <summary>Null = toutes les boutiques. Renseigné = cette boutique seulement.</summary>
+    public Guid? ShopId { get; set; }
+    public Shop? Shop { get; set; }
 }

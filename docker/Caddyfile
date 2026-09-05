@@ -1,4 +1,7 @@
-{$DOMAIN} {
+# nginx occupe déjà 80 et 443 sur le serveur : Caddy écoute donc en clair sur la boucle locale
+# et ne gère plus le TLS. Tout le routage de l'application reste ici, où il est déjà écrit et
+# vérifié — le réécrire dans nginx aurait été une seconde chance de se tromper.
+:80 {
 	encode gzip zstd
 
 	# L'API d'abord. Tout le reste est servi en fichiers statiques depuis la même origine :

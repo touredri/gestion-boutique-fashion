@@ -250,7 +250,11 @@ admin.MapGet("/catalog", async (ServerDbContext db, CancellationToken ct) => Res
 admin.MapGet("/shops/{shopId:guid}/devices", async (Guid shopId, ServerDbContext db, CancellationToken ct) =>
     Results.Ok(await db.Devices.AsNoTracking().Where(x => x.ShopId == shopId)
         .OrderByDescending(x => x.LastSeenAt)
-        .Select(x => new { x.Id, x.Name, x.CreatedAt, x.LastSeenAt, Revoked = x.RevokedAt != null })
+        .Select(x => new
+        {
+            x.Id, x.Name, x.CreatedAt, x.LastSeenAt, Revoked = x.RevokedAt != null,
+            x.AppVersion, x.AppVersionSince, x.PendingVersion, x.UpdateError,
+        })
         .ToListAsync(ct)));
 
 admin.MapGet("/shops/{shopId:guid}/settings", async (Guid shopId, ServerDbContext db, CancellationToken ct) =>
@@ -428,6 +432,35 @@ app.MapGet("/api/sync/pull", async (long since, HttpContext http, ServerDbContex
         };
         return Math.Max(since, candidates.Max());
     }
+});
+
+// ---------------------------------------------------------------------------
+// Publication logicielle (lot 5) : flux Velopack pour les terminaux, dépôt et
+// ciblage pour le développeur.
+// ---------------------------------------------------------------------------
+
+app.MapUpdates();
+
+// Battement de cœur du terminal, envoyé à chaque cycle de synchronisation. C'est la seule
+// source d'information sur ce qui tourne réellement dans une boutique : sans elle, « est-ce que
+// la mise à jour est passée ? » se répond en téléphonant.
+app.MapPost("/api/devices/status", async (DeviceStatusRequest input, HttpContext http, ServerDbContext db, CancellationToken ct) =>
+{
+    var context = await DeviceAuthentication.ResolveAsync(http, db, ct);
+    if (context is null) return Results.Unauthorized();
+
+    var device = await db.Devices.SingleAsync(x => x.Id == context.DeviceId, ct);
+    // La date ne bouge qu'au changement de version : c'est « depuis quand cette boutique tourne
+    // en 1.4.2 », pas « quand a-t-elle parlé pour la dernière fois » — LastSeenAt le dit déjà.
+    if (device.AppVersion != input.AppVersion)
+    {
+        device.AppVersion = input.AppVersion;
+        device.AppVersionSince = DateTimeOffset.UtcNow;
+    }
+    device.PendingVersion = input.PendingVersion;
+    device.UpdateError = input.UpdateError;
+    await db.SaveChangesAsync(ct);
+    return Results.NoContent();
 });
 
 app.Run();
