@@ -26,8 +26,8 @@ permissions:
 
 env:
   # Renseigner pour produire une migration, puis revider une fois qu'elle est commitée.
-  MIGRATION_NAME: "Orders"
-  SERVER_MIGRATION_NAME: "OrderProcessedAt"
+  MIGRATION_NAME: ""
+  SERVER_MIGRATION_NAME: ""
 
 jobs:
   terminal:
