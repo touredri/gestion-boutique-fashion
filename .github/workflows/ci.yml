@@ -25,7 +25,7 @@ permissions:
 
 env:
   # Renseigner pour produire une migration, puis revider une fois qu'elle est commitée.
-  MIGRATION_NAME: "CashShiftAndReservations"
+  MIGRATION_NAME: ""
 
 jobs:
   build:
@@ -77,11 +77,14 @@ jobs:
             git push origin HEAD:$env:GITHUB_REF_NAME
           }
 
+      # Volontairement sans --no-build : l'étape précédente a pu produire une migration, et les
+      # binaires de l'étape « Compiler » ne la contiendraient pas. EF refuserait alors de démarrer
+      # sur un modèle « en attente de migration ».
       - name: Tester
         id: test
         if: steps.build.outcome == 'success'
         continue-on-error: true
-        run: dotnet test .\BoutiqueFashion.slnx --configuration Release --no-build 2>&1 | Tee-Object -FilePath ci.log -Append
+        run: dotnet test .\BoutiqueFashion.slnx --configuration Release --no-restore 2>&1 | Tee-Object -FilePath ci.log -Append
 
       # Publié quoi qu'il arrive : c'est la seule façon de lire les erreurs depuis un
       # poste non authentifié auprès de l'API GitHub.
